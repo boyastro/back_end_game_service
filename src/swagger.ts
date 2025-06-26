@@ -9,7 +9,7 @@ const options = {
       version: "1.0.0",
     },
   },
-  apis: ["./src/routes/*.ts"], // hoặc chỉ định file chứa swagger comment
+  apis: ["./src/routes/*.{ts,js}", "./dist/routes/*.js"], // Đảm bảo swagger đọc được cả khi chạy dev và production
 };
 
 const specs = swaggerJsdoc(options);
