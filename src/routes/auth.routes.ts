@@ -11,6 +11,8 @@ router.use(logger);
  * /auth/register:
  *   post:
  *     summary: Đăng ký tài khoản
+ *     tags:
+ *       - Auth
  *     requestBody:
  *       required: true
  *       content:
@@ -34,6 +36,8 @@ router.post("/register", register as any);
  * /auth/login:
  *   post:
  *     summary: Đăng nhập
+ *     tags:
+ *       - Auth
  *     requestBody:
  *       required: true
  *       content:

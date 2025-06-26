@@ -7,10 +7,23 @@ const userSchema = new mongoose.Schema({
   avatar: String,
   score: { type: Number, default: 0 },
   level: { type: Number, default: 1 },
-  achievements: [String],
-  friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-  friendRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-  blocked: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+  achievements: { type: [String], default: [] },
+  friends: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    default: [],
+  },
+  friendRequests: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    default: [],
+  },
+  blocked: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    default: [],
+  },
+  sentFriendRequests: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    default: [],
+  },
 });
 
 const User = mongoose.model("User", userSchema);

@@ -1,6 +1,5 @@
 import { Router } from "express";
 import {
-  createUser,
   getAllUsers,
   getUserById,
   deleteUser,
@@ -8,6 +7,9 @@ import {
   sendFriendRequest,
   acceptFriendRequest,
   blockUser,
+  getSentFriendRequests,
+  getReceivedFriendRequests,
+  getBlockedUsers,
 } from "../controllers/user.controller.js";
 import { logger } from "../middleware/logger.js";
 
@@ -19,29 +21,10 @@ router.use(logger);
 /**
  * @swagger
  * /users:
- *   post:
- *     summary: Tạo user mẫu
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               username:
- *                 type: string
- *               password:
- *                 type: string
- *     responses:
- *       201:
- *         description: User đã được tạo
- */
-router.post("/", createUser);
-/**
- * @swagger
- * /users:
  *   get:
  *     summary: Lấy danh sách user
+ *     tags:
+ *       - User
  *     responses:
  *       200:
  *         description: Danh sách user
@@ -52,6 +35,8 @@ router.get("/", getAllUsers);
  * /users/{id}:
  *   get:
  *     summary: Lấy user theo id
+ *     tags:
+ *       - User
  *     parameters:
  *       - in: path
  *         name: id
@@ -68,6 +53,8 @@ router.get("/:id", getUserById as any);
  * /users/{id}:
  *   delete:
  *     summary: Xóa user theo id
+ *     tags:
+ *       - User
  *     parameters:
  *       - in: path
  *         name: id
@@ -79,13 +66,13 @@ router.get("/:id", getUserById as any);
  *         description: Xóa thành công
  */
 router.delete("/:id", deleteUser as any);
-
-// API mở rộng
 /**
  * @swagger
  * /users/{id}/profile:
  *   put:
  *     summary: Cập nhật profile
+ *     tags:
+ *       - User
  *     parameters:
  *       - in: path
  *         name: id
@@ -110,15 +97,11 @@ router.delete("/:id", deleteUser as any);
 router.put("/:id/profile", updateProfile as any);
 /**
  * @swagger
- * /users/{id}/friend-request:
+ * /users/friend-request:
  *   post:
  *     summary: Gửi lời mời kết bạn
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *     tags:
+ *       - Friend
  *     requestBody:
  *       required: true
  *       content:
@@ -126,24 +109,22 @@ router.put("/:id/profile", updateProfile as any);
  *           schema:
  *             type: object
  *             properties:
+ *               fromUserId:
+ *                 type: string
  *               targetId:
  *                 type: string
  *     responses:
  *       200:
  *         description: Đã gửi lời mời kết bạn
  */
-router.post("/:id/friend-request", sendFriendRequest as any);
+router.post("/friend-request", sendFriendRequest as any);
 /**
  * @swagger
- * /users/{id}/accept-friend:
+ * /users/accept-friend:
  *   post:
  *     summary: Chấp nhận lời mời kết bạn
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *     tags:
+ *       - Friend
  *     requestBody:
  *       required: true
  *       content:
@@ -151,24 +132,22 @@ router.post("/:id/friend-request", sendFriendRequest as any);
  *           schema:
  *             type: object
  *             properties:
+ *               fromUserId:
+ *                 type: string
  *               targetId:
  *                 type: string
  *     responses:
  *       200:
  *         description: Đã chấp nhận kết bạn
  */
-router.post("/:id/accept-friend", acceptFriendRequest as any);
+router.post("/accept-friend", acceptFriendRequest as any);
 /**
  * @swagger
- * /users/{id}/block:
+ * /users/block:
  *   post:
  *     summary: Block user
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
+ *     tags:
+ *       - Friend
  *     requestBody:
  *       required: true
  *       content:
@@ -176,12 +155,68 @@ router.post("/:id/accept-friend", acceptFriendRequest as any);
  *           schema:
  *             type: object
  *             properties:
+ *               fromUserId:
+ *                 type: string
  *               targetId:
  *                 type: string
  *     responses:
  *       200:
  *         description: Đã block user
  */
-router.post("/:id/block", blockUser as any);
+router.post("/block", blockUser as any);
+/**
+ * @swagger
+ * /users/{id}/sent-friend-requests:
+ *   get:
+ *     summary: Lấy danh sách user đã gửi lời mời kết bạn
+ *     tags:
+ *       - Friend
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Danh sách user đã gửi lời mời kết bạn
+ */
+router.get("/:id/sent-friend-requests", getSentFriendRequests as any);
+/**
+ * @swagger
+ * /users/{id}/friend-requests:
+ *   get:
+ *     summary: Lấy danh sách user đã gửi lời mời kết bạn đến tôi
+ *     tags:
+ *       - Friend
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Danh sách user đã gửi lời mời kết bạn đến tôi
+ */
+router.get("/:id/friend-requests", getReceivedFriendRequests as any);
+/**
+ * @swagger
+ * /users/{id}/blocked:
+ *   get:
+ *     summary: Lấy danh sách user đã block
+ *     tags:
+ *       - Friend
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Danh sách user đã block
+ */
+router.get("/:id/blocked", getBlockedUsers as any);
 
 export default router;
