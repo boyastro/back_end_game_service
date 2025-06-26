@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import userRoutes from "./routes/user.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import { swaggerUi, specs } from "./swagger.js";
 
 const app = express();
 const PORT = 3000;
@@ -18,7 +19,7 @@ app.use(express.json());
 app.get("/", (req, res) => {
   res.send("Hello from TypeScript + Express!");
 });
-
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
 app.use("/users", userRoutes);
 app.use("/auth", authRoutes);
 
