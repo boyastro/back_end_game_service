@@ -51,50 +51,7 @@ docker build -t my-ts-app .
 docker-compose up --build
 ```
 
-## Ví dụ tài liệu API
-
-### Đăng ký
-
-- **POST** `/auth/register`
-- **Body:**
-  ```json
-  { "username": "user1", "password": "yourpass" }
-  ```
-- **Response:** 201 Created | 400 Bad Request
-
-### Đăng nhập
-
-- **POST** `/auth/login`
-- **Body:**
-  ```json
-  { "username": "user1", "password": "yourpass" }
-  ```
-- **Response:** 200 OK (JWT Token)
-
-### Lấy danh sách user
-
-- **GET** `/users`
-- **Response:** 200 OK, trả về mảng user
-
-### Cập nhật profile
-
-- **PUT** `/users/:id/profile`
-- **Body:** `{ "avatar": "...", "score": ... }`
-- **Response:** 200 OK
-
-### Gửi lời mời kết bạn
-
-- **POST** `/users/:id/friend-request`
-- **Body:** `{ "targetId": "..." }`
-- **Response:** 200 OK
-
-### Block user
-
-- **POST** `/users/:id/block`
-- **Body:** `{ "targetId": "..." }`
-- **Response:** 200 OK
-
 ## Ghi chú
 
 - Để bảo mật, luôn giữ bí mật file `.env`.
-- Có thể mở rộng tài liệu API bằng Swagger/OpenAPI nếu cần.
+- Có thể bổ sung tài liệu API chi tiết (Swagger/OpenAPI, markdown...) sau.
