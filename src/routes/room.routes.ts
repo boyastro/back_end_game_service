@@ -7,8 +7,11 @@ import {
   getRoom,
   listRooms,
 } from "../controllers/room.controller.js";
+import { logger } from "../middleware/logger.js";
 
 const router = express.Router();
+// Middleware ghi log request
+router.use(logger);
 
 /**
  * @swagger
