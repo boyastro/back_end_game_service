@@ -1,60 +1,85 @@
 # My TypeScript Node.js Game Backend
 
-## Giới thiệu
+## Mô tả
 
-Dự án backend RESTful API cho game, sử dụng Node.js, Express, TypeScript, MongoDB (Mongoose), JWT. Hỗ trợ quản lý user, đăng nhập bảo mật, bạn bè, block, mở rộng dễ dàng.
+Backend RESTful API cho game, sử dụng Node.js, Express, TypeScript, MongoDB. Hỗ trợ quản lý user, bạn bè, phòng chơi, chat, bảo mật JWT, tài liệu API Swagger, chạy được bằng Docker Compose.
+
+## Chức năng chính
+
+- Đăng ký, đăng nhập, bảo mật JWT
+- Quản lý user: profile, bạn bè, block, lời mời kết bạn
+- Quản lý phòng chơi (Game Room): tạo phòng, mời bạn, chat, trạng thái phòng
+- Chỉ thành viên phòng mới được chat, chống spam
+- Tài liệu API tự động với Swagger
 
 ## Cấu trúc thư mục
 
 ```
 my-ts-app/
 ├── src/
-│   ├── controllers/      # Xử lý logic cho route
+│   ├── controllers/      # Xử lý logic API
+│   ├── model/            # Định nghĩa schema MongoDB
+│   ├── routes/           # Định nghĩa các route Express
 │   ├── middleware/       # Middleware (logger, auth...)
-│   ├── model/            # Định nghĩa schema mongoose
-│   ├── routes/           # Định nghĩa các route
+│   ├── swagger.ts        # Cấu hình Swagger
 │   └── index.ts          # Điểm khởi động app
+├── Dockerfile
+├── docker-compose.yml
 ├── package.json
 ├── tsconfig.json
-├── Dockerfile
-├── .env                  # Thông tin môi trường (KHÔNG commit)
-└── ...
+└── README.md
 ```
 
-## Hướng dẫn cài đặt & chạy
+## Hướng dẫn chạy nhanh với Docker Compose
 
-1. Cài Node.js >= 18, Docker (nếu muốn chạy MongoDB bằng container)
+```sh
+docker compose up --build
+```
+
+- App chạy tại: http://localhost:3000
+- Swagger UI: http://localhost:3000/api-docs
+- MongoDB: mongodb://localhost:27017/test
+
+## Hướng dẫn phát triển local (không cần Docker)
+
+1. Cài Node.js >= 18, MongoDB local
 2. Cài package:
    ```sh
    npm install
    ```
-3. Chạy MongoDB bằng Docker:
-   ```sh
-   docker run -d -p 27017:27017 --name mongo mongo
-   ```
-4. Tạo file `.env`:
+3. Tạo file `.env` (nếu dùng):
    ```env
-   MONGODB_URI=mongodb://localhost:27017/mydb
+   MONGO_URI=mongodb://localhost:27017/test
    JWT_SECRET=your_secret
    ```
-5. Chạy dev:
+4. Chạy dev:
    ```sh
    npm run dev
    ```
 
-## Chạy bằng Docker Compose
+## Một số API tiêu biểu
 
-```sh
-docker build -t my-ts-app .
-docker-compose up --build
-```
+- `POST   /auth/register` : Đăng ký user
+- `POST   /auth/login` : Đăng nhập, nhận JWT
+- `GET    /users` : Lấy danh sách user
+- `POST   /users/friend-request` : Gửi lời mời kết bạn
+- `POST   /users/block` : Block user
+- `POST   /rooms` : Tạo phòng chơi
+- `POST   /rooms/:id/join` : Tham gia phòng
+- `POST   /rooms/:id/invite`: Mời bạn vào phòng
+- `POST   /rooms/:id/chat` : Gửi chat trong phòng (chỉ thành viên)
+- `GET    /rooms/:id` : Lấy thông tin phòng
 
 ## Tài liệu API
 
-- Truy cập Swagger UI tại: `http://localhost:3000/api-docs`
+- Truy cập [http://localhost:3000/api-docs](http://localhost:3000/api-docs) để xem và thử API trực tiếp.
 
-## Ghi chú
+## Lưu ý
 
+- Dữ liệu MongoDB được lưu trong volume docker, không mất khi restart container (chỉ mất khi xóa volume).
 - Không commit file `.env` lên git.
-- Có thể mở rộng tài liệu API bằng Swagger/OpenAPI hoặc markdown.
-- Nếu gặp lỗi, kiểm tra lại cấu hình ESM, import/export, hoặc liên hệ người phát triển.
+- Nếu gặp lỗi, kiểm tra lại cấu hình ESM, import/export, hoặc xem log container.
+
+---
+
+Nếu cần hỗ trợ, hãy liên hệ dev hoặc tạo issue!
