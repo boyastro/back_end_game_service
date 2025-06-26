@@ -1,30 +1,30 @@
 # My TypeScript Node.js Game Backend
 
-## Mô tả
+## Giới thiệu
 
-Backend RESTful API cho game, sử dụng Node.js, Express, TypeScript, MongoDB (Mongoose), JWT, bảo mật đăng nhập, quản lý user, bạn bè, block, v.v.
+Dự án backend RESTful API cho game, sử dụng Node.js, Express, TypeScript, MongoDB (Mongoose), JWT. Hỗ trợ quản lý user, đăng nhập bảo mật, bạn bè, block, mở rộng dễ dàng.
 
-## Cấu trúc dự án
+## Cấu trúc thư mục
 
 ```
 my-ts-app/
 ├── src/
-│   ├── controllers/
-│   ├── middleware/
-│   ├── model/
-│   ├── routes/
-│   └── index.ts
+│   ├── controllers/      # Xử lý logic cho route
+│   ├── middleware/       # Middleware (logger, auth...)
+│   ├── model/            # Định nghĩa schema mongoose
+│   ├── routes/           # Định nghĩa các route
+│   └── index.ts          # Điểm khởi động app
 ├── package.json
 ├── tsconfig.json
 ├── Dockerfile
-├── .env
+├── .env                  # Thông tin môi trường (KHÔNG commit)
 └── ...
 ```
 
-## Hướng dẫn chạy
+## Hướng dẫn cài đặt & chạy
 
-1. Cài đặt Node.js, Docker (nếu dùng container)
-2. Cài đặt package:
+1. Cài Node.js >= 18, Docker (nếu muốn chạy MongoDB bằng container)
+2. Cài package:
    ```sh
    npm install
    ```
@@ -42,16 +42,19 @@ my-ts-app/
    npm run dev
    ```
 
-## Docker
-
-Build và chạy bằng Docker:
+## Chạy bằng Docker Compose
 
 ```sh
 docker build -t my-ts-app .
 docker-compose up --build
 ```
 
+## Tài liệu API
+
+- Truy cập Swagger UI tại: `http://localhost:3000/api-docs`
+
 ## Ghi chú
 
-- Để bảo mật, luôn giữ bí mật file `.env`.
-- Có thể bổ sung tài liệu API chi tiết (Swagger/OpenAPI, markdown...) sau.
+- Không commit file `.env` lên git.
+- Có thể mở rộng tài liệu API bằng Swagger/OpenAPI hoặc markdown.
+- Nếu gặp lỗi, kiểm tra lại cấu hình ESM, import/export, hoặc liên hệ người phát triển.
