@@ -1,8 +1,9 @@
 import MatchHistory from "../model/matchHistory.js";
 import GameRoom from "../model/room.js";
+import User from "../model/user.js";
 import { Request, Response } from "express";
 
-// Lưu lịch sử trận đấu (chỉ cho phép user thuộc phòng)
+// Lưu lịch sử trận đấu (chỉ cho phép user thuộc phòng và cập nhật điểm số)
 export const saveMatchHistory = async (req: Request, res: Response) => {
   try {
     const { players, roomId } = req.body;
@@ -31,6 +32,18 @@ export const saveMatchHistory = async (req: Request, res: Response) => {
             error: `Missing result for user ${memberId} in match history`,
           });
         }
+      }
+    }
+    // Cập nhật điểm số, win/lose/draw cho từng user
+    for (const p of players) {
+      const user = await User.findById(p.user);
+      if (user) {
+        user.totalScore = (user.totalScore || 0) + (p.score || 0);
+        user.highestScore = Math.max(user.highestScore || 0, p.score || 0);
+        if (p.result === "win") user.winCount = (user.winCount || 0) + 1;
+        if (p.result === "lose") user.loseCount = (user.loseCount || 0) + 1;
+        if (p.result === "draw") user.drawCount = (user.drawCount || 0) + 1;
+        await user.save();
       }
     }
     const match = new MatchHistory({ players, roomId });

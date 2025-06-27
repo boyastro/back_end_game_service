@@ -4,6 +4,7 @@ import userRoutes from "./routes/user.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import roomRoutes from "./routes/room.routes.js";
 import matchHistoryRoutes from "./routes/matchHistory.routes.js";
+import leaderboardRoutes from "./routes/leaderboard.routes.js";
 import { swaggerUi, specs } from "./swagger.js";
 
 const app = express();
@@ -26,6 +27,7 @@ app.use("/users", userRoutes);
 app.use("/auth", authRoutes);
 app.use("/rooms", roomRoutes);
 app.use("/match-history", matchHistoryRoutes);
+app.use("/leaderboard", leaderboardRoutes);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);

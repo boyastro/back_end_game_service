@@ -24,6 +24,11 @@ const userSchema = new mongoose.Schema({
     type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     default: [],
   },
+  highestScore: { type: Number, default: 0 },
+  totalScore: { type: Number, default: 0 },
+  winCount: { type: Number, default: 0 },
+  loseCount: { type: Number, default: 0 },
+  drawCount: { type: Number, default: 0 },
 });
 
 const User = mongoose.model("User", userSchema);
