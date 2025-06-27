@@ -2,7 +2,7 @@
 
 ## Mô tả
 
-Backend RESTful API cho game, sử dụng Node.js, Express, TypeScript, MongoDB. Hỗ trợ quản lý user, bạn bè, phòng chơi, chat, bảo mật JWT, tài liệu API Swagger, chạy được bằng Docker Compose.
+Backend RESTful API cho game, sử dụng Node.js, Express, TypeScript, MongoDB. Hỗ trợ quản lý user, bạn bè, phòng chơi, chat, bảo mật JWT, tài liệu API Swagger, quản lý vật phẩm, phần thưởng, leaderboard, chạy được bằng Docker Compose.
 
 ## Chức năng chính
 
@@ -10,6 +10,9 @@ Backend RESTful API cho game, sử dụng Node.js, Express, TypeScript, MongoDB.
 - Quản lý user: profile, bạn bè, block, lời mời kết bạn
 - Quản lý phòng chơi (Game Room): tạo phòng, mời bạn, chat, trạng thái phòng
 - Chỉ thành viên phòng mới được chat, chống spam
+- Quản lý vật phẩm (item): mua, sử dụng, nhận thưởng
+- Hệ thống phần thưởng hàng ngày, nhiệm vụ, thành tích
+- Lưu lịch sử trận đấu, thống kê điểm số, leaderboard
 - Tài liệu API tự động với Swagger
 
 ## Cấu trúc thư mục
@@ -38,7 +41,7 @@ docker compose up --build
 
 - App chạy tại: http://localhost:3000
 - Swagger UI: http://localhost:3000/api-docs
-- MongoDB: mongodb://localhost:27017/test
+- MongoDB: mongodb://localhost:27017/test (hoặc MongoDB Atlas nếu cấu hình)
 
 ## Hướng dẫn phát triển local (không cần Docker)
 
@@ -64,15 +67,23 @@ docker compose up --build
 - `GET    /users` : Lấy danh sách user
 - `POST   /users/friend-request` : Gửi lời mời kết bạn
 - `POST   /users/block` : Block user
+- `GET    /users/inventory` : Lấy vật phẩm user sở hữu
+- `POST   /items/buy` : Mua vật phẩm
+- `POST   /items/use` : Sử dụng vật phẩm
+- `GET    /items` : Lấy danh sách vật phẩm
+- `POST   /reward/daily` : Nhận thưởng hàng ngày (cộng điểm, nhận vật phẩm random)
+- `GET    /leaderboard` : Xem bảng xếp hạng
 - `POST   /rooms` : Tạo phòng chơi
 - `POST   /rooms/:id/join` : Tham gia phòng
 - `POST   /rooms/:id/invite`: Mời bạn vào phòng
 - `POST   /rooms/:id/chat` : Gửi chat trong phòng (chỉ thành viên)
 - `GET    /rooms/:id` : Lấy thông tin phòng
+- `POST   /match-history` : Lưu lịch sử trận đấu
+- `GET    /match-history/:userId` : Lấy lịch sử trận đấu của user
 
 ## Tài liệu API
 
-- Truy cập [http://localhost:3000/api-docs](http://localhost:3000/api-docs) để xem và thử API trực tiếp.
+- Truy cập [http://localhost:3000/api-docs](http://localhost:3000/api-docs) để xem và thử API trực tiếp (Swagger UI).
 
 ## Lưu ý
 
