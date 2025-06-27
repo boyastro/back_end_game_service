@@ -9,7 +9,12 @@ const options = {
       version: "1.0.0",
     },
   },
-  apis: ["./src/routes/*.{ts,js}", "./dist/routes/*.js"], // Đảm bảo swagger đọc được cả khi chạy dev và production
+  apis: [
+    "./src/routes/*.{ts,js}",
+    "./dist/routes/*.js",
+    "./src/games/turnbased/caro/*.ts",
+    "./dist/games/turnbased/caro/*.js",
+  ], // Đảm bảo swagger đọc được cả khi chạy dev và production
 };
 
 const specs = swaggerJsdoc(options);
