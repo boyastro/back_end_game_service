@@ -2,18 +2,19 @@
 
 ## Mô tả
 
-Backend RESTful API cho game, sử dụng Node.js, Express, TypeScript, MongoDB. Hỗ trợ quản lý user, bạn bè, phòng chơi, chat, bảo mật JWT, tài liệu API Swagger, quản lý vật phẩm, phần thưởng, leaderboard, chạy được bằng Docker Compose.
+Backend RESTful API cho game, sử dụng Node.js, Express, TypeScript, MongoDB. Hỗ trợ quản lý user, bạn bè, phòng chơi, chat realtime (Socket.io), bảo mật JWT, tài liệu API Swagger, quản lý vật phẩm, phần thưởng, leaderboard, chạy được bằng Docker Compose.
 
 ## Chức năng chính
 
 - Đăng ký, đăng nhập, bảo mật JWT
 - Quản lý user: profile, bạn bè, block, lời mời kết bạn
-- Quản lý phòng chơi (Game Room): tạo phòng, mời bạn, chat, trạng thái phòng
+- Quản lý phòng chơi (Game Room): tạo phòng, mời bạn, chat realtime, trạng thái phòng
 - Chỉ thành viên phòng mới được chat, chống spam
 - Quản lý vật phẩm (item): mua, sử dụng, nhận thưởng
 - Hệ thống phần thưởng hàng ngày, nhiệm vụ, thành tích
 - Lưu lịch sử trận đấu, thống kê điểm số, leaderboard
 - Tài liệu API tự động với Swagger
+- Hỗ trợ realtime (Socket.io) cho chat/game
 
 ## Cấu trúc thư mục
 
@@ -24,6 +25,7 @@ my-ts-app/
 │   ├── model/            # Định nghĩa schema MongoDB
 │   ├── routes/           # Định nghĩa các route Express
 │   ├── middleware/       # Middleware (logger, auth...)
+│   ├── socket/           # Logic realtime (Socket.io)
 │   ├── swagger.ts        # Cấu hình Swagger
 │   └── index.ts          # Điểm khởi động app
 ├── Dockerfile
@@ -42,6 +44,7 @@ docker compose up --build
 - App chạy tại: http://localhost:3000
 - Swagger UI: http://localhost:3000/api-docs
 - MongoDB: mongodb://localhost:27017/test (hoặc MongoDB Atlas nếu cấu hình)
+- Socket.io: ws://localhost:3000 (dùng cho chat/game realtime)
 
 ## Hướng dẫn phát triển local (không cần Docker)
 
