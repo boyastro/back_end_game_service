@@ -11,7 +11,9 @@ import itemRoutes from "./routes/item.routes.js";
 import rewardRoutes from "./routes/reward.routes.js";
 import { swaggerUi, specs } from "./swagger.js";
 import { registerChatSocket } from "./socket/chat.socket.js";
+import { registerCaroSocket } from "./games/turnbased/caro/caro.socket.js";
 import cors from "cors";
+import caroRoutes from "./games/turnbased/caro/caro.routes.js";
 
 const app = express();
 const PORT = 3000;
@@ -37,6 +39,7 @@ app.use("/match-history", matchHistoryRoutes);
 app.use("/leaderboard", leaderboardRoutes);
 app.use("/items", itemRoutes);
 app.use("/rewards", rewardRoutes);
+app.use("/games/caro", caroRoutes);
 
 // Create HTTP server and integrate with Socket.io
 const server = http.createServer(app);
@@ -44,6 +47,7 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 // Register chat socket logic
 registerChatSocket(io);
+registerCaroSocket(io);
 
 server.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
