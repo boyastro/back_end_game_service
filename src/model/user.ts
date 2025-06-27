@@ -29,6 +29,13 @@ const userSchema = new mongoose.Schema({
   winCount: { type: Number, default: 0 },
   loseCount: { type: Number, default: 0 },
   drawCount: { type: Number, default: 0 },
+  inventory: [
+    {
+      item: { type: mongoose.Schema.Types.ObjectId, ref: "Item" },
+      quantity: { type: Number, default: 1 },
+    },
+  ],
+  dailyRewardAt: { type: Date }, // thời điểm nhận thưởng hàng ngày gần nhất
 });
 
 const User = mongoose.model("User", userSchema);

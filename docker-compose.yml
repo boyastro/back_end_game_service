@@ -5,17 +5,15 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - MONGO_URI=mongodb://mongo:27017/test
-    depends_on:
-      - mongo
+      - MONGO_URI=mongodb+srv://game:Thanhdat%401234@cluster0.l4tli.mongodb.net/gamedata
     restart: always
-  mongo:
-    image: mongo:6
-    container_name: mongo
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    restart: always
-volumes:
-  mongo_data:
+#  mongo:
+#    image: mongo:6
+#    container_name: mongo
+#    ports:
+#      - "27017:27017"
+#    volumes:
+#      - mongo_data:/data/db
+#    restart: always
+#volumes:
+#  mongo_data:
