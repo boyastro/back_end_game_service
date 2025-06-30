@@ -12,16 +12,22 @@ export function registerChatSocket(io: Server) {
 
     socket.on(
       "sendMessage",
-      async (data: { roomId: string; userId: string; text: string }) => {
-        const { roomId, userId, text } = data;
+      async (data: {
+        roomId: string;
+        userId: string;
+        name: string;
+        text: string;
+      }) => {
+        const { roomId, userId, name, text } = data;
         const room = await GameRoom.findById(roomId);
         if (!room) return;
         if (!room.members.some((id: any) => String(id) === String(userId)))
           return;
-        room.chatMessages.push({ user: userId, message: text });
+        room.chatMessages.push({ user: userId, name, message: text });
         await room.save();
         io.to(roomId).emit("receiveMessage", {
           user: userId,
+          name,
           message: text,
           time: new Date(),
         });

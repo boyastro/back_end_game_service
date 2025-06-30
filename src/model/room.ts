@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 const chatMessageSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  name: { type: String, required: true }, // Thêm trường name
   message: { type: String, required: true },
   time: { type: Date, default: Date.now },
 });

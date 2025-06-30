@@ -78,7 +78,10 @@ export const sendRoomChat = async (req: Request, res: Response) => {
     ) {
       return res.status(429).json({ error: "Spam detected" });
     }
-    room.chatMessages.push({ user: userId, message });
+    // Lấy tên user từ DB
+    const user = await User.findById(userId);
+    const name = user?.name || "Unknown";
+    room.chatMessages.push({ user: userId, name, message });
     await room.save();
     res.json(room.chatMessages);
   } catch (err) {
