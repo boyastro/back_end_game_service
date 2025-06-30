@@ -8,10 +8,14 @@ import {
   listRooms,
 } from "../controllers/room.controller.js";
 import { logger } from "../middleware/logger.js";
+import { authenticateToken } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 // Middleware ghi log request
 router.use(logger);
+
+// Bảo vệ tất cả các route phía dưới bằng JWT
+router.use(authenticateToken as any);
 
 /**
  * @swagger

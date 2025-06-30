@@ -3,8 +3,12 @@ import {
   saveMatchHistory,
   getUserMatchHistory,
 } from "../controllers/matchHistory.controller.js";
+import { authenticateToken } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
+
+// Bảo vệ tất cả các route match-history bằng JWT
+router.use(authenticateToken as express.RequestHandler);
 
 /**
  * @swagger

@@ -12,8 +12,11 @@ import {
   getBlockedUsers,
 } from "../controllers/user.controller.js";
 import { logger } from "../middleware/logger.js";
+import { authenticateToken } from "../middleware/auth.middleware.js";
 
 const router = Router();
+// Bảo vệ tất cả các route phía dưới bằng JWT
+router.use(authenticateToken as any);
 
 // Middleware ghi log request
 router.use(logger);

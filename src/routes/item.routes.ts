@@ -5,8 +5,11 @@ import {
   useItem,
   createItem,
 } from "../controllers/item.controller.js";
+import { authenticateToken } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
+// Bảo vệ tất cả các route item bằng JWT
+router.use(authenticateToken as express.RequestHandler);
 
 /**
  * @swagger

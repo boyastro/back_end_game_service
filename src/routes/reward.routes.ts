@@ -1,7 +1,10 @@
 import express from "express";
 import { claimDailyReward } from "../controllers/reward.controller.js";
+import { authenticateToken } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
+// Bảo vệ tất cả các route reward bằng JWT
+router.use(authenticateToken as express.RequestHandler);
 
 /**
  * @swagger
