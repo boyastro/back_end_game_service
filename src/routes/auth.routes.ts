@@ -1,10 +1,12 @@
 import { Router } from "express";
 import { register, login, logout } from "../controllers/auth.controller.js";
 import { logger } from "../middleware/logger.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 
 const router = Router();
 // Middleware ghi log request
 router.use(logger);
+router.use(rateLimit);
 
 /**
  * @swagger

@@ -1,11 +1,13 @@
 import express from "express";
 import { getLeaderboard } from "../controllers/leaderboard.controller.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 
 const router = express.Router();
 
 // Bảo vệ tất cả các route leaderboard bằng JWT
 router.use(authenticateToken as express.RequestHandler);
+router.use(rateLimit);
 
 /**
  * @swagger
@@ -32,5 +34,4 @@ router.use(authenticateToken as express.RequestHandler);
  */
 router.get("/", getLeaderboard as any);
 
-// Bảo vệ tất cả các route leaderboard bằng JWT
 export default router;
