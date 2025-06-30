@@ -15,6 +15,7 @@ import { registerCaroSocket } from "./games/turnbased/caro/caro.socket.js";
 import cors from "cors";
 import caroRoutes from "./games/turnbased/caro/caro.routes.js";
 import redisClient from "./utils/redisClient.js";
+import client from "prom-client";
 
 const app = express();
 const PORT = 3000;
@@ -46,6 +47,13 @@ mongoose
   app.use("/items", itemRoutes);
   app.use("/rewards", rewardRoutes);
   app.use("/games/caro", caroRoutes);
+
+  // Prometheus metrics
+  client.collectDefaultMetrics();
+  app.get("/metrics", async (req, res) => {
+    res.set("Content-Type", client.register.contentType);
+    res.end(await client.register.metrics());
+  });
 
   // Create HTTP server and integrate with Socket.io
   const server = http.createServer(app);
