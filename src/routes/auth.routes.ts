@@ -20,8 +20,10 @@ router.use(logger);
  *           schema:
  *             type: object
  *             properties:
- *               username:
+ *               name:
  *                 type: string
+ *               age:
+ *                 type: integer
  *               password:
  *                 type: string
  *     responses:

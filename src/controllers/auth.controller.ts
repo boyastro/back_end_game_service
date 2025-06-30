@@ -2,7 +2,7 @@ import User from "../model/user.js";
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import redisClient from "../utils/redisClient";
+import redisClient from "../utils/redisClient.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey";
 

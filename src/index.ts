@@ -14,7 +14,7 @@ import { registerChatSocket } from "./socket/chat.socket.js";
 import { registerCaroSocket } from "./games/turnbased/caro/caro.socket.js";
 import cors from "cors";
 import caroRoutes from "./games/turnbased/caro/caro.routes.js";
-import redisClient from "./utils/redisClient";
+import redisClient from "./utils/redisClient.js";
 
 const app = express();
 const PORT = 3000;
