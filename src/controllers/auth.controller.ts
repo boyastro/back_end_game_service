@@ -2,6 +2,7 @@ import User from "../model/user.js";
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import redisClient from "../utils/redisClient";
 
 const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey";
 
@@ -11,12 +12,10 @@ export const register = async (req: Request, res: Response) => {
   const strongPassword =
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-={}\[\]:;"'<>,.?/]).{8,}$/;
   if (!strongPassword.test(password)) {
-    return res
-      .status(400)
-      .json({
-        error:
-          "Mật khẩu phải ≥8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.",
-      });
+    return res.status(400).json({
+      error:
+        "Mật khẩu phải ≥8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.",
+    });
   }
   const hashedPassword = await bcrypt.hash(password, 10);
   const user = new User({ name, age, password: hashedPassword });
@@ -34,5 +33,15 @@ export const login = async (req: Request, res: Response) => {
   const token = jwt.sign({ userId: user._id, name: user.name }, JWT_SECRET, {
     expiresIn: "1h",
   });
+  // Lưu token vào Redis với TTL 1h
+  await redisClient.set(`token:${token}`, user._id.toString(), { EX: 3600 });
   res.json({ message: "Đăng nhập thành công", token });
+};
+
+export const logout = async (req: Request, res: Response) => {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "No token provided" });
+  await redisClient.del(`token:${token}`);
+  res.json({ message: "Đăng xuất thành công" });
 };

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { register, login } from "../controllers/auth.controller.js";
+import { register, login, logout } from "../controllers/auth.controller.js";
 import { logger } from "../middleware/logger.js";
 
 const router = Router();
@@ -56,5 +56,21 @@ router.post("/register", register as any);
  *         description: Sai thông tin đăng nhập
  */
 router.post("/login", login as any);
+/**
+ * @swagger
+ * /auth/logout:
+ *   post:
+ *     summary: Đăng xuất (thu hồi token)
+ *     tags:
+ *       - Auth
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Đăng xuất thành công
+ *       401:
+ *         description: Không có token hoặc token không hợp lệ
+ */
+router.post("/logout", logout as any);
 
 export default router;

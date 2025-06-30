@@ -14,6 +14,7 @@ import { registerChatSocket } from "./socket/chat.socket.js";
 import { registerCaroSocket } from "./games/turnbased/caro/caro.socket.js";
 import cors from "cors";
 import caroRoutes from "./games/turnbased/caro/caro.routes.js";
+import redisClient from "./utils/redisClient";
 
 const app = express();
 const PORT = 3000;
@@ -25,32 +26,38 @@ mongoose
   .then(() => console.log("✅ Connected to MongoDB"))
   .catch((err: unknown) => console.error("❌ MongoDB connection error:", err));
 
-app.use(express.json());
-app.use(cors({ origin: "*" }));
+// Kết nối Redis trước khi start app
+(async () => {
+  await redisClient.connect();
+  console.log("✅ Connected to Redis");
 
-app.get("/", (req, res) => {
-  res.send("Hello from TypeScript + Express!");
-});
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
-app.use("/users", userRoutes);
-app.use("/auth", authRoutes);
-app.use("/rooms", roomRoutes);
-app.use("/match-history", matchHistoryRoutes);
-app.use("/leaderboard", leaderboardRoutes);
-app.use("/items", itemRoutes);
-app.use("/rewards", rewardRoutes);
-app.use("/games/caro", caroRoutes);
+  app.use(express.json());
+  app.use(cors({ origin: "*" }));
 
-// Create HTTP server and integrate with Socket.io
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+  app.get("/", (req, res) => {
+    res.send("Hello from TypeScript + Express!");
+  });
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+  app.use("/users", userRoutes);
+  app.use("/auth", authRoutes);
+  app.use("/rooms", roomRoutes);
+  app.use("/match-history", matchHistoryRoutes);
+  app.use("/leaderboard", leaderboardRoutes);
+  app.use("/items", itemRoutes);
+  app.use("/rewards", rewardRoutes);
+  app.use("/games/caro", caroRoutes);
 
-// Register chat socket logic
-registerChatSocket(io);
-registerCaroSocket(io);
+  // Create HTTP server and integrate with Socket.io
+  const server = http.createServer(app);
+  const io = new Server(server, { cors: { origin: "*" } });
 
-server.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
-});
+  // Register chat socket logic
+  registerChatSocket(io);
+  registerCaroSocket(io);
+
+  server.listen(PORT, () => {
+    console.log(`🚀 Server running at http://localhost:${PORT}`);
+  });
+})();
 
 export default app;
