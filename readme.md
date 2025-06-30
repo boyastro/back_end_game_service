@@ -2,7 +2,7 @@
 
 ## Introduction
 
-A RESTful API backend for multi-genre games, built with Node.js, Express, TypeScript, MongoDB, and Redis. Supports user management, game rooms, realtime chat (Socket.io), items, rewards, leaderboard, JWT authentication, API documentation (Swagger), and socket event documentation (AsyncAPI). Easy deployment with Docker Compose.
+A RESTful API backend for multi-genre games, built with Node.js, Express, TypeScript, MongoDB, and Redis. Supports user management, game rooms, realtime chat (Socket.io), items, rewards, leaderboard, JWT authentication, API documentation (Swagger), socket event documentation (AsyncAPI), and monitoring with Prometheus & Grafana. Easy deployment with Docker Compose.
 
 ## Key Features
 
@@ -18,6 +18,7 @@ A RESTful API backend for multi-genre games, built with Node.js, Express, TypeSc
 - Advanced security: token validation via Redis, active token revocation
 - Scalable, easy to extend, Docker Compose integration (MongoDB, Redis)
 - **Rate Limiting:** Prevents abuse and spam by limiting the number of requests per user/IP using Redis.
+- **Monitoring:** Built-in Prometheus metrics endpoint and Grafana dashboard support for real-time monitoring and alerting.
 
 ## Project Structure
 
@@ -47,6 +48,20 @@ my-ts-app/
 - By default, each IP is limited to 10 requests per minute for sensitive routes (such as authentication).
 - If the limit is exceeded, the API will respond with HTTP 429 (Too Many Requests).
 - You can adjust the rate limit and time window in `src/middleware/rateLimit.ts`.
+
+## Monitoring with Prometheus & Grafana
+
+- The backend exposes a `/metrics` endpoint (Prometheus format) using `prom-client`.
+- Prometheus scrapes metrics from the app and stores them for analysis.
+- Grafana connects to Prometheus and provides dashboards for:
+  - Request rate, error rate, latency, memory, CPU, event loop lag, etc.
+- To use:
+  1. Start all services with Docker Compose (see below).
+  2. Access Prometheus at [http://localhost:9090](http://localhost:9090)
+  3. Access Grafana at [http://localhost:3001](http://localhost:3001) (default user/pass: admin/admin)
+  4. Add Prometheus as a data source in Grafana (`http://prometheus:9090`)
+  5. Create dashboards or import community dashboards for Node.js/Express/Prometheus.
+- You can add custom metrics in code using `prom-client` if needed.
 
 ## Quick Start with Docker Compose
 
