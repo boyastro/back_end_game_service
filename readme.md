@@ -1,20 +1,22 @@
 # My TypeScript Node.js Game Backend
 
-## Mô tả
+## Giới thiệu
 
-Backend RESTful API cho game, sử dụng Node.js, Express, TypeScript, MongoDB. Hỗ trợ quản lý user, bạn bè, phòng chơi, chat realtime (Socket.io), bảo mật JWT, tài liệu API Swagger, quản lý vật phẩm, phần thưởng, leaderboard, chạy được bằng Docker Compose.
+Hệ thống backend RESTful API cho game đa thể loại, xây dựng với Node.js, Express, TypeScript, MongoDB, Redis. Hỗ trợ quản lý user, phòng chơi, chat realtime (Socket.io), vật phẩm, phần thưởng, leaderboard, bảo mật JWT, tài liệu hóa API (Swagger) và sự kiện socket (AsyncAPI). Dễ dàng triển khai với Docker Compose.
 
-## Chức năng chính
+## Tính năng nổi bật
 
-- Đăng ký, đăng nhập, bảo mật JWT
-- Quản lý user: profile, bạn bè, block, lời mời kết bạn
-- Quản lý phòng chơi (Game Room): tạo phòng, mời bạn, chat realtime, trạng thái phòng
+- Đăng ký, đăng nhập, xác thực JWT, thu hồi token tức thì với Redis
+- Quản lý user: hồ sơ, bạn bè, block, lời mời kết bạn
+- Quản lý phòng chơi: tạo phòng, mời bạn, chat realtime, trạng thái phòng
 - Chỉ thành viên phòng mới được chat, chống spam
-- Quản lý vật phẩm (item): mua, sử dụng, nhận thưởng
+- Quản lý vật phẩm: mua, sử dụng, nhận thưởng
 - Hệ thống phần thưởng hàng ngày, nhiệm vụ, thành tích
 - Lưu lịch sử trận đấu, thống kê điểm số, leaderboard
-- Tài liệu API tự động với Swagger
-- Hỗ trợ realtime (Socket.io) cho chat/game
+- Tài liệu API tự động với Swagger, tài liệu socket với AsyncAPI
+- Hỗ trợ realtime (Socket.io) cho chat và game (ví dụ: caro)
+- Bảo mật nâng cao: xác thực token qua Redis, thu hồi token chủ động
+- Dễ dàng mở rộng, tích hợp Docker Compose (MongoDB, Redis)
 
 ## Cấu trúc thư mục
 
@@ -24,10 +26,13 @@ my-ts-app/
 │   ├── controllers/      # Xử lý logic API
 │   ├── model/            # Định nghĩa schema MongoDB
 │   ├── routes/           # Định nghĩa các route Express
-│   ├── middleware/       # Middleware (logger, auth...)
+│   ├── middleware/       # Middleware (logger, auth, ...)
 │   ├── socket/           # Logic realtime (Socket.io)
+│   ├── games/            # Logic game (ví dụ: caro)
+│   ├── utils/            # Tiện ích (kết nối Redis, ...)
 │   ├── swagger.ts        # Cấu hình Swagger
 │   └── index.ts          # Điểm khởi động app
+├── asyncapi.yaml         # Tài liệu hóa sự kiện socket
 ├── Dockerfile
 ├── docker-compose.yml
 ├── package.json
@@ -41,32 +46,35 @@ my-ts-app/
 docker compose up --build
 ```
 
-- App chạy tại: http://localhost:3000
+- App: http://localhost:3000
 - Swagger UI: http://localhost:3000/api-docs
-- MongoDB: mongodb://localhost:27017/test (hoặc MongoDB Atlas nếu cấu hình)
-- Socket.io: ws://localhost:3000 (dùng cho chat/game realtime)
+- MongoDB: mongodb://localhost:27017/test (hoặc MongoDB Atlas)
+- Redis: redis://localhost:6379
+- Socket.io: ws://localhost:3000
 
 ## Hướng dẫn phát triển local (không cần Docker)
 
-1. Cài Node.js >= 18, MongoDB local
+1. Cài Node.js >= 18, MongoDB, Redis local
 2. Cài package:
    ```sh
    npm install
    ```
-3. Tạo file `.env` (nếu dùng):
+3. Tạo file `.env`:
    ```env
    MONGO_URI=mongodb://localhost:27017/test
    JWT_SECRET=your_secret
+   REDIS_URL=redis://localhost:6379
    ```
 4. Chạy dev:
    ```sh
    npm run dev
    ```
 
-## Một số API tiêu biểu
+## API tiêu biểu
 
-- `POST   /auth/register` : Đăng ký user
+- `POST   /auth/register` : Đăng ký user (name, age, password)
 - `POST   /auth/login` : Đăng nhập, nhận JWT
+- `POST   /auth/logout` : Đăng xuất, thu hồi token
 - `GET    /users` : Lấy danh sách user
 - `POST   /users/friend-request` : Gửi lời mời kết bạn
 - `POST   /users/block` : Block user
@@ -74,7 +82,7 @@ docker compose up --build
 - `POST   /items/buy` : Mua vật phẩm
 - `POST   /items/use` : Sử dụng vật phẩm
 - `GET    /items` : Lấy danh sách vật phẩm
-- `POST   /reward/daily` : Nhận thưởng hàng ngày (cộng điểm, nhận vật phẩm random)
+- `POST   /reward/daily` : Nhận thưởng hàng ngày
 - `GET    /leaderboard` : Xem bảng xếp hạng
 - `POST   /rooms` : Tạo phòng chơi
 - `POST   /rooms/:id/join` : Tham gia phòng
@@ -84,15 +92,28 @@ docker compose up --build
 - `POST   /match-history` : Lưu lịch sử trận đấu
 - `GET    /match-history/:userId` : Lấy lịch sử trận đấu của user
 
-## Tài liệu API
+## Tài liệu hóa API & Socket
 
-- Truy cập [http://localhost:3000/api-docs](http://localhost:3000/api-docs) để xem và thử API trực tiếp (Swagger UI).
+- **RESTful API:**  
+  Truy cập [http://localhost:3000/api-docs](http://localhost:3000/api-docs) (Swagger UI) để xem, thử và lấy mẫu request/response.
+- **Socket event:**  
+  Xem file `asyncapi.yaml` để tra cứu chi tiết các sự kiện socket (chat, game, ...), chuẩn hóa theo AsyncAPI.
+
+## Bảo mật & xác thực
+
+- Sử dụng JWT cho xác thực, lưu token vào Redis với TTL.
+- Middleware kiểm tra token hợp lệ và còn tồn tại trong Redis (có thể thu hồi token tức thì).
+- Chỉ user đã xác thực mới truy cập được các API bảo vệ.
 
 ## Lưu ý
 
-- Dữ liệu MongoDB được lưu trong volume docker, không mất khi restart container (chỉ mất khi xóa volume).
+- Dữ liệu MongoDB và Redis được lưu trong volume docker, không mất khi restart container (chỉ mất khi xóa volume).
 - Không commit file `.env` lên git.
 - Nếu gặp lỗi, kiểm tra lại cấu hình ESM, import/export, hoặc xem log container.
+- Có thể kiểm tra token trong Redis bằng lệnh:
+  ```sh
+  docker compose exec redis redis-cli keys 'token:*'
+  ```
 
 ---
 
