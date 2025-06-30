@@ -34,7 +34,7 @@ router.use(rateLimit);
  *       400:
  *         description: Lỗi đầu vào hoặc tài khoản đã tồn tại
  */
-router.post("/register", register as any);
+router.post("/register", rateLimit, register as any);
 /**
  * @swagger
  * /auth/login:
@@ -59,7 +59,7 @@ router.post("/register", register as any);
  *       401:
  *         description: Sai thông tin đăng nhập
  */
-router.post("/login", login as any);
+router.post("/login", rateLimit, login as any);
 /**
  * @swagger
  * /auth/logout:
@@ -75,6 +75,6 @@ router.post("/login", login as any);
  *       401:
  *         description: Không có token hoặc token không hợp lệ
  */
-router.post("/logout", logout as any);
+router.post("/logout", rateLimit, logout as any);
 
 export default router;

@@ -1,6 +1,7 @@
 import express from "express";
 import { claimDailyReward } from "../controllers/reward.controller.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 
 const router = express.Router();
 // Bảo vệ tất cả các route reward bằng JWT
@@ -26,6 +27,6 @@ router.use(authenticateToken as express.RequestHandler);
  *       200:
  *         description: Nhận thưởng thành công
  */
-router.post("/daily", claimDailyReward as any);
+router.post("/daily", rateLimit, claimDailyReward as any);
 
 export default router;

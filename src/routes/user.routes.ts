@@ -13,6 +13,7 @@ import {
 } from "../controllers/user.controller.js";
 import { logger } from "../middleware/logger.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 
 const router = Router();
 // Bảo vệ tất cả các route phía dưới bằng JWT
@@ -120,7 +121,7 @@ router.put("/:id/profile", updateProfile as any);
  *       200:
  *         description: Đã gửi lời mời kết bạn
  */
-router.post("/friend-request", sendFriendRequest as any);
+router.post("/friend-request", rateLimit, sendFriendRequest as any);
 /**
  * @swagger
  * /users/accept-friend:
@@ -166,7 +167,7 @@ router.post("/accept-friend", acceptFriendRequest as any);
  *       200:
  *         description: Đã block user
  */
-router.post("/block", blockUser as any);
+router.post("/block", rateLimit, blockUser as any);
 /**
  * @swagger
  * /users/{id}/sent-friend-requests:

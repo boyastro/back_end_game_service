@@ -6,6 +6,7 @@ import {
   createItem,
 } from "../controllers/item.controller.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 
 const router = express.Router();
 // Bảo vệ tất cả các route item bằng JWT
@@ -79,7 +80,7 @@ router.post("/create", createItem as any);
  *       200:
  *         description: Mua thành công
  */
-router.post("/buy", buyItem as any);
+router.post("/buy", rateLimit, buyItem as any);
 
 /**
  * @swagger
@@ -103,6 +104,6 @@ router.post("/buy", buyItem as any);
  *       200:
  *         description: Sử dụng thành công
  */
-router.post("/use", useItem as any);
+router.post("/use", rateLimit, useItem as any);
 
 export default router;

@@ -9,6 +9,7 @@ import {
 } from "../controllers/room.controller.js";
 import { logger } from "../middleware/logger.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
+import { rateLimit } from "../middleware/rateLimit.js";
 
 const router = express.Router();
 // Middleware ghi log request
@@ -122,7 +123,7 @@ router.post("/:id/invite", inviteToRoom as any);
  *       200:
  *         description: Gửi chat thành công
  */
-router.post("/:id/chat", sendRoomChat as any);
+router.post("/:id/chat", rateLimit, sendRoomChat as any);
 /**
  * @swagger
  * /rooms/{id}:
