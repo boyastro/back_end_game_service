@@ -128,6 +128,24 @@ docker compose up --build
 - Middleware checks token validity and existence in Redis (supports instant token revocation).
 - Only authenticated users can access protected APIs.
 
+## CI/CD with GitHub Actions
+
+- The project includes a ready-to-use GitHub Actions workflow for CI/CD automation.
+- On every push or pull request to the `main` branch, the workflow will:
+  1. Checkout the code
+  2. Set up Node.js and install dependencies
+  3. Lint and test the code
+  4. Build a Docker image
+  5. Log in and push the image to Docker Hub
+- **How to use:**
+  1. Go to your GitHub repository → Settings → Secrets and variables → Actions
+  2. Add two repository secrets:
+     - `DOCKERHUB_USERNAME`: your Docker Hub username
+     - `DOCKERHUB_TOKEN`: your Docker Hub access token (Read & Write)
+  3. Push code to `main` or open a pull request to trigger the workflow
+  4. Check workflow status in the **Actions** tab on GitHub
+- You can extend the workflow to auto-deploy to your server or cloud by adding deployment steps in `.github/workflows/ci-cd.yml`.
+
 ## Notes
 
 - MongoDB and Redis data are stored in Docker volumes, not lost on container restart (unless volume is deleted).
