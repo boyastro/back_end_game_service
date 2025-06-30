@@ -148,13 +148,21 @@ docker compose up --build
 
 ## Notes
 
-- MongoDB and Redis data are stored in Docker volumes, not lost on container restart (unless volume is deleted).
-- Do not commit `.env` file to git.
-- If you encounter errors, check ESM config, import/export syntax, or container logs.
-- You can check tokens in Redis with:
+- MongoDB và Redis được lưu trữ qua Docker volumes, không mất dữ liệu khi restart container (trừ khi xóa volume).
+- Không commit file `.env` lên git để bảo mật thông tin nhạy cảm.
+- Nếu gặp lỗi, hãy kiểm tra:
+  - Cấu hình ESM/CommonJS, cú pháp import/export phù hợp với môi trường Node.js.
+  - Log của container bằng lệnh `docker compose logs <service>` để xem chi tiết lỗi runtime.
+  - Kết quả test tự động:
+    - Nếu thấy dòng `Test Suites: 1 passed, 1 total` và `Tests: 5 passed, 5 total` nghĩa là toàn bộ test đều chạy thành công.
+    - Nếu có lỗi test, kiểm tra lại file test, cấu hình Jest (`jest.config.js` nên dùng `module.exports`).
+- Để kiểm tra token trong Redis:
   ```sh
   docker compose exec redis redis-cli keys 'token:*'
   ```
+- Có thể mở rộng CI/CD để auto-deploy lên server/cloud bằng cách thêm bước deploy vào `.github/workflows/ci-cd.yml`.
+- Có thể thêm custom metrics cho Prometheus bằng cách sử dụng `prom-client` trong code.
+- Nếu cần thêm test thực tế cho các module, hãy tạo file test trong thư mục `tests/` hoặc cùng thư mục với module.
 
 ---
 
