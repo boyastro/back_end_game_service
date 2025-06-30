@@ -27,7 +27,7 @@ mongoose
   .then(() => console.log("✅ Connected to MongoDB"))
   .catch((err: unknown) => console.error("❌ MongoDB connection error:", err));
 
-// Kết nối Redis trước khi start app
+// Connect to Redis before starting the app
 (async () => {
   await redisClient.connect();
   console.log("✅ Connected to Redis");
@@ -59,7 +59,7 @@ mongoose
   const server = http.createServer(app);
   const io = new Server(server, { cors: { origin: "*" } });
 
-  // Register chat socket logic
+  // Register chat socket logic (usersOnlineGauge is now updated in chat.socket.ts)
   registerChatSocket(io);
   registerCaroSocket(io);
 
@@ -69,3 +69,6 @@ mongoose
 })();
 
 export default app;
+
+// Example: update online user count (if you have a currentOnlineUserCount variable)
+// usersOnlineGauge.set(currentOnlineUserCount);

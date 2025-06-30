@@ -1,8 +1,12 @@
 import { Server, Socket } from "socket.io";
 import GameRoom from "../model/room.js";
+import { usersOnlineGauge } from "../utils/metrics.js";
 
 export function registerChatSocket(io: Server) {
+  let currentOnlineUserCount = 0;
   io.on("connection", (socket: Socket) => {
+    currentOnlineUserCount++;
+    usersOnlineGauge.set(currentOnlineUserCount);
     console.log("A user connected:", socket.id);
 
     socket.on("joinRoom", (roomId: string) => {
@@ -35,6 +39,8 @@ export function registerChatSocket(io: Server) {
     );
 
     socket.on("disconnect", () => {
+      currentOnlineUserCount = Math.max(0, currentOnlineUserCount - 1);
+      usersOnlineGauge.set(currentOnlineUserCount);
       console.log("User disconnected:", socket.id);
     });
   });
