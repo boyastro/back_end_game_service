@@ -2,7 +2,7 @@
 
 ## Introduction
 
-A RESTful API backend for multi-genre games, built with Node.js, Express, TypeScript, MongoDB, and Redis. Supports user management, game rooms, realtime chat (Socket.io), items, rewards, leaderboard, JWT authentication, API documentation (Swagger), socket event documentation (AsyncAPI), and monitoring with Prometheus & Grafana. Easy deployment with Docker Compose.
+A RESTful API backend for multi-genre games, built with Node.js, Express, TypeScript, MongoDB, and Redis. Supports user management, game rooms, realtime chat (Socket.io), items, rewards, leaderboard, JWT authentication, API documentation (Swagger), socket event documentation (AsyncAPI), and monitoring with Prometheus & Grafana. Easy deployment with Docker Compose and Nginx reverse proxy. Supports horizontal scaling with Redis adapter for Socket.io.
 
 ## Key Features
 
@@ -16,9 +16,10 @@ A RESTful API backend for multi-genre games, built with Node.js, Express, TypeSc
 - Auto-generated API docs with Swagger, socket docs with AsyncAPI
 - Realtime support (Socket.io) for chat and games (e.g., caro)
 - Advanced security: token validation via Redis, active token revocation
-- Scalable, easy to extend, Docker Compose integration (MongoDB, Redis)
+- Scalable, easy to extend, Docker Compose integration (MongoDB, Redis, Nginx)
 - **Rate Limiting:** Prevents abuse and spam by limiting the number of requests per user/IP using Redis.
 - **Monitoring:** Built-in Prometheus metrics endpoint and Grafana dashboard support for real-time monitoring and alerting.
+- **Horizontal scaling:** Supports multi-container backend with Nginx reverse proxy and Redis adapter for Socket.io (all chat/game events are synchronized across containers).
 
 ## Project Structure
 
@@ -37,6 +38,7 @@ my-ts-app/
 ├── asyncapi.yaml         # Socket event documentation
 ├── Dockerfile
 ├── docker-compose.yml
+├── nginx.conf            # Nginx reverse proxy config
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -63,17 +65,28 @@ my-ts-app/
   5. Create dashboards or import community dashboards for Node.js/Express/Prometheus.
 - You can add custom metrics in code using `prom-client` if needed.
 
+## Horizontal Scaling & Nginx Reverse Proxy
+
+- The backend supports horizontal scaling (multi-container) using Docker Compose.
+- Nginx acts as a reverse proxy and load balancer for all backend containers.
+- Sticky session (`ip_hash`) is enabled in Nginx to ensure Socket.io polling requests from the same client go to the same backend container.
+- Socket.io uses Redis adapter to synchronize events (chat, game, ...) across all containers.
+- All WebSocket and HTTP traffic is routed through Nginx (port 80).
+- Example Nginx config: see `nginx.conf`.
+
 ## Quick Start with Docker Compose
 
 ```sh
 docker compose up --build
 ```
 
-- App: http://localhost:3000
-- Swagger UI: http://localhost:3000/api-docs
+- App: http://localhost:3000 (or http://localhost if using Nginx)
+- Swagger UI: http://localhost:3000/api-docs (or http://localhost/api-docs)
 - MongoDB: mongodb://localhost:27017/test (or MongoDB Atlas)
 - Redis: redis://localhost:6379
-- Socket.io: ws://localhost:3000
+- Socket.io: ws://localhost:3000 (or ws://localhost)
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3001
 
 ## Local Development (without Docker)
 
