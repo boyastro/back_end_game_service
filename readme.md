@@ -118,7 +118,7 @@ docker compose up --build
 ## API & Socket Documentation
 
 - **RESTful API:**  
-  Visit [http://localhost:3000/api-docs](http://localhost:3000/api-docs) (Swagger UI) for interactive API docs and sample requests/responses.
+  Visit [http://localhost/api-docs](http://localhost/api-docs) (Swagger UI) for interactive API docs and sample requests/responses. (If using Nginx reverse proxy, use port 80)
 - **Socket events:**  
   See `asyncapi.yaml` for detailed socket event documentation (chat, game, ...), following the AsyncAPI standard.
 

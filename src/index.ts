@@ -16,6 +16,8 @@ import cors from "cors";
 import caroRoutes from "./games/turnbased/caro/caro.routes.js";
 import redisClient from "./utils/redisClient.js";
 import client from "prom-client";
+import { createAdapter } from "@socket.io/redis-adapter";
+import { createClient as createRedisClient } from "redis";
 
 const app = express();
 const PORT = 3000;
@@ -47,6 +49,9 @@ mongoose
   app.use("/items", itemRoutes);
   app.use("/rewards", rewardRoutes);
   app.use("/games/caro", caroRoutes);
+  app.get("/whoami", (req, res) => {
+    res.send(`This is container: ${process.env.HOSTNAME || process.pid}`);
+  });
 
   // Prometheus metrics
   client.collectDefaultMetrics();
@@ -58,6 +63,13 @@ mongoose
   // Create HTTP server and integrate with Socket.io
   const server = http.createServer(app);
   const io = new Server(server, { cors: { origin: "*" } });
+
+  // Redis adapter for Socket.io (for scaling horizontally)
+  const pubClient = createRedisClient({ url: "redis://redis:6379" });
+  const subClient = pubClient.duplicate();
+  await pubClient.connect();
+  await subClient.connect();
+  io.adapter(createAdapter(pubClient, subClient));
 
   // Register chat socket logic (usersOnlineGauge is now updated in chat.socket.ts)
   registerChatSocket(io);
