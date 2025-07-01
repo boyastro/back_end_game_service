@@ -9,7 +9,8 @@ export function registerChatSocket(io: Server) {
     usersOnlineGauge.set(currentOnlineUserCount);
     console.log("A user connected:", socket.id);
 
-    socket.on("joinRoom", (roomId: string) => {
+    socket.on("joinRoom", (data) => {
+      const roomId = typeof data === "string" ? data : data.roomId;
       socket.join(roomId);
       // Optionally notify others or send room state
     });

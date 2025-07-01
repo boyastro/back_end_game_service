@@ -49,7 +49,7 @@ router.post("/register", rateLimit, register as any);
  *           schema:
  *             type: object
  *             properties:
- *               username:
+ *               name:
  *                 type: string
  *               password:
  *                 type: string
