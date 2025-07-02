@@ -3,16 +3,28 @@ import GameRoom from "../model/room.js";
 import { usersOnlineGauge } from "../utils/metrics.js";
 
 export function registerChatSocket(io: Server) {
-  let currentOnlineUserCount = 0;
+  async function updateOnlineUserCount() {
+    // Đếm số userId duy nhất trên toàn hệ thống
+    const sockets = await io.of("/").fetchSockets();
+    const uniqueUserIds = new Set(
+      sockets.map((s) => s.data.userId).filter(Boolean)
+    );
+    usersOnlineGauge.set(uniqueUserIds.size);
+  }
+
   io.on("connection", (socket: Socket) => {
-    currentOnlineUserCount++;
-    usersOnlineGauge.set(currentOnlineUserCount);
+    // Số user online sẽ được cập nhật khi joinRoom có userId hoặc disconnect
     console.log("A user connected:", socket.id);
 
     socket.on("joinRoom", (data) => {
       const roomId = typeof data === "string" ? data : data.roomId;
+      // Gán userId vào socket để đếm user duy nhất
+      if (typeof data === "object" && data.userId) {
+        socket.data.userId = data.userId;
+      }
       socket.join(roomId);
       // Optionally notify others or send room state
+      updateOnlineUserCount(); // Cập nhật lại ngay khi joinRoom có userId
     });
 
     socket.on(
@@ -40,8 +52,7 @@ export function registerChatSocket(io: Server) {
     );
 
     socket.on("disconnect", () => {
-      currentOnlineUserCount = Math.max(0, currentOnlineUserCount - 1);
-      usersOnlineGauge.set(currentOnlineUserCount);
+      updateOnlineUserCount();
       console.log("User disconnected:", socket.id);
     });
   });

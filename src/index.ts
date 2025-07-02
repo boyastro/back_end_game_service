@@ -81,6 +81,3 @@ mongoose
 })();
 
 export default app;
-
-// Example: update online user count (if you have a currentOnlineUserCount variable)
-// usersOnlineGauge.set(currentOnlineUserCount);
