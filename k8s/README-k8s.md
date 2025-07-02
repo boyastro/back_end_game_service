@@ -57,32 +57,56 @@ kubectl get svc
   # hoặc truy cập http://<minikube-ip>:32000
   ```
 
-## 8. Scale số lượng pod
+## 8. Expose service với port cố định bằng kubectl port-forward
+
+Nếu bạn muốn truy cập service qua một port cố định trên máy local (thay vì port ngẫu nhiên do minikube tunnel tạo ra), hãy dùng lệnh sau:
+
+```sh
+kubectl port-forward service/nginx 8080:80
+```
+
+- Truy cập Nginx qua: http://localhost:8080
+- Thay `8080` bằng port local bạn muốn, `80` là port của service trong cluster.
+
+Tương tự, với MongoDB:
+
+```sh
+kubectl port-forward service/mongo 27017:27017
+```
+
+- Truy cập MongoDB qua: mongodb://localhost:27017
+
+**Lưu ý:**
+
+- Cửa sổ terminal phải luôn mở để duy trì port-forward.
+- Port local (bên trái dấu `:`) là cố định nếu bạn chỉ định rõ.
+
+## 9. Scale số lượng pod
 
 ```sh
 kubectl scale deployment app --replicas=5
 ```
 
-## 9. Xem log, debug
+## 10. Xem log, debug
 
 ```sh
 kubectl logs -l app=app
 kubectl describe pod <tên-pod>
 ```
 
-## 10. Xóa tài nguyên
+## 11. Xóa tài nguyên
 
 ```sh
 kubectl delete -f k8s/
 ```
 
-## 11. Một số lưu ý
+## 12. Một số lưu ý
 
 - Sửa file YAML, apply lại để cập nhật cấu hình.
 - Đảm bảo image backend đã được push lên Docker Hub trước khi deploy.
 - Có thể mở rộng thêm Ingress, auto-scaling, RBAC, secret, ...
 
-## 12. Tài liệu tham khảo
+## 13. Tài liệu tham khảo
 
 - https://kubernetes.io/docs/
 - https://minikube.sigs.k8s.io/docs/
