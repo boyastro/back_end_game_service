@@ -1,0 +1,17 @@
+services:
+  haproxy:
+    image: haproxy:latest
+    container_name: haproxy
+    ports:
+      - "80:80" # expose HTTP
+      - "8404:8404" # expose HAProxy stats dashboard (optional)
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    restart: unless-stopped
+    # depends_on không cần thiết nếu các container đã cùng network
+    networks:
+      - lbnet
+
+networks:
+  lbnet:
+    driver: bridge

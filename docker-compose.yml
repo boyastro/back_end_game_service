@@ -12,9 +12,9 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: nginx
-    ports:
-      - "80:80"
+    # container_name: nginx  # Bỏ dòng này
+    expose:
+      - "80" # Chỉ expose port nội bộ Docker network
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
