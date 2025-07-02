@@ -77,11 +77,31 @@ my-ts-app/
 ## Quick Start with Docker Compose
 
 ```sh
-docker compose up --build
+# Scale multiple backend and nginx containers (example: 4 app, 2 nginx)
+docker compose up --scale app=4 --scale nginx=2 --build
 ```
 
-- App: http://localhost:3000 (or http://localhost if using Nginx)
-- Swagger UI: http://localhost:3000/api-docs (or http://localhost/api-docs)
+- App: http://localhost:3000 (direct to app) or http://localhost (via Nginx/HAProxy)
+- Swagger UI: http://localhost:3000/api-docs (direct) or http://localhost/api-docs (via Nginx/HAProxy)
+
+## Scaling and Load Balancing
+
+- To run multiple Nginx containers, remove `container_name` and use `expose: ["80"]` in your `docker-compose.yml` for nginx service.
+- Use a load balancer (e.g., HAProxy) in front of all Nginx containers to distribute traffic.
+- Example HAProxy config:
+
+  ```haproxy
+  frontend http-in
+      bind *:80
+      default_backend nginx_servers
+
+  backend nginx_servers
+      balance roundrobin
+      server nginx1 nginx_1:80 check
+      server nginx2 nginx_2:80 check
+  ```
+
+- Point your domain or client to the HAProxy IP/hostname.
 - MongoDB: mongodb://localhost:27017/test (or MongoDB Atlas)
 - Redis: redis://localhost:6379
 - Socket.io: ws://localhost:3000 (or ws://localhost)
