@@ -41,7 +41,17 @@ my-ts-app/
 ├── nginx.conf            # Nginx reverse proxy config
 ├── package.json
 ├── tsconfig.json
-└── README.md
+├── README.md
+├── k8s/
+│   ├── app-deployment.yaml           # Triển khai backend Node.js/TypeScript
+│   ├── nginx-deployment.yaml         # Triển khai Nginx reverse proxy
+│   ├── nginx-configmap.yaml          # ConfigMap cho Nginx
+│   ├── mongo-deployment.yaml         # Triển khai MongoDB
+│   ├── redis-deployment.yaml         # Triển khai Redis
+│   ├── prometheus-deployment.yaml    # Triển khai Prometheus
+│   ├── prometheus-configmap.yaml     # ConfigMap cho Prometheus
+│   ├── grafana-deployment.yaml       # Triển khai Grafana
+│   └── README-k8s.md                 # Hướng dẫn sử dụng K8s
 ```
 
 ## Rate Limiting
@@ -178,6 +188,72 @@ docker compose up --scale app=4 --scale nginx=2 --build
   3. Push code to `main` or open a pull request to trigger the workflow
   4. Check workflow status in the **Actions** tab on GitHub
 - You can extend the workflow to auto-deploy to your server or cloud by adding deployment steps in `.github/workflows/ci-cd.yml`.
+
+## Kubernetes (K8s) Support
+
+Dự án hỗ trợ triển khai production-ready trên Kubernetes với các manifest mẫu trong thư mục `k8s/`:
+
+- `app-deployment.yaml`: Triển khai backend Node.js/TypeScript
+- `nginx-deployment.yaml`, `nginx-configmap.yaml`: Reverse proxy Nginx
+- `mongo-deployment.yaml`, `redis-deployment.yaml`: Database & cache
+- `prometheus-deployment.yaml`, `prometheus-configmap.yaml`: Monitoring
+- `grafana-deployment.yaml`: Dashboard
+
+### Triển khai nhanh với Minikube
+
+1. **Chuẩn bị:**
+   - Cài đặt `kubectl`, `minikube`, Docker.
+   - Build & push image backend lên Docker Hub:
+     ```sh
+     docker login
+     docker build -t boyastro/app:latest .
+     docker push boyastro/app:latest
+     ```
+2. **Khởi động Minikube:**
+   ```sh
+   minikube start
+   kubectl config use-context minikube
+   ```
+3. **Triển khai toàn bộ stack:**
+   ```sh
+   kubectl apply -f k8s/
+   ```
+4. **Kiểm tra trạng thái:**
+   ```sh
+   kubectl get pods
+   kubectl get svc
+   ```
+5. **Truy cập dịch vụ:**
+   - API/backend qua Nginx:
+     ```sh
+     minikube service nginx
+     # hoặc http://127.0.0.1:<port> do minikube cung cấp
+     ```
+   - Grafana:
+     ```sh
+     minikube service grafana
+     ```
+6. **Cấu hình MongoDB:**
+   - Dùng MongoDB nội bộ K8s (`mongodb://mongo:27017/gamedata`) hoặc MongoDB Atlas cloud (cập nhật biến môi trường `MONGO_URI`).
+   - Nếu dùng Atlas, whitelist IP node/cluster trên trang Atlas.
+7. **Scale, log, debug:**
+   ```sh
+   kubectl scale deployment app --replicas=5
+   kubectl logs -l app=app
+   kubectl describe pod <tên-pod>
+   ```
+8. **Xóa tài nguyên:**
+   ```sh
+   kubectl delete -f k8s/
+   ```
+9. **Lưu ý:**
+   - Có thể mở rộng với Ingress, auto-scaling, RBAC, secret, ...
+   - Tham khảo thêm file `k8s/README-k8s.md` để biết chi tiết cấu hình từng thành phần.
+
+### Production/Cloud
+
+- Có thể deploy lên GKE, EKS, AKS hoặc bất kỳ cluster K8s nào bằng cách apply các manifest trong `k8s/`.
+- Nên cấu hình thêm Ingress, SSL, auto-scaling, RBAC, monitoring, alerting cho môi trường production.
 
 ## Notes
 
