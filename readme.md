@@ -69,7 +69,7 @@ my-ts-app/
 
 - The backend supports horizontal scaling (multi-container) using Docker Compose.
 - Nginx acts as a reverse proxy and load balancer for all backend containers.
-- Sticky session (`ip_hash`) is enabled in Nginx to ensure Socket.io polling requests from the same client go to the same backend container.
+  Sticky session is not enabled by default. For WebSocket, sticky session is not required because the connection is persistent and handled by the same backend container. For long-polling, if you want to ensure all requests from the same client go to the same backend, you can enable sticky session (e.g., by cookie or header), but with WebSocket upgrade, this is usually not needed.
 - Socket.io uses Redis adapter to synchronize events (chat, game, ...) across all containers.
 - All WebSocket and HTTP traffic is routed through Nginx (port 80).
 - Example Nginx config: see `nginx.conf`.

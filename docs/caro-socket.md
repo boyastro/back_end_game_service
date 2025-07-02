@@ -1,12 +1,12 @@
 # Caro Game Socket API Documentation
 
-This document describes all Socket.io events for the Caro (Gomoku) game. Sử dụng cho cả backend và frontend/client để tích hợp realtime.
+This document describes all Socket.io events for the Caro (Gomoku) game. Use this for both backend and frontend/client to integrate realtime features.
 
-## Tổng quan
+## Overview
 
-- Namespace: `/` (mặc định)
-- URL: `ws://localhost:3000` hoặc production server
-- Thư viện: [socket.io](https://socket.io/)
+- Namespace: `/` (default)
+- URL: `ws://localhost:3000` or your production server
+- Library: [socket.io](https://socket.io/)
 
 ---
 
@@ -14,7 +14,7 @@ This document describes all Socket.io events for the Caro (Gomoku) game. Sử d�
 
 ### 1. caro:join
 
-- **Client emit:** Tham gia phòng chơi
+- **Client emit:** Join a game room
 - **Payload:**
   ```json
   {
@@ -35,7 +35,7 @@ This document describes all Socket.io events for the Caro (Gomoku) game. Sử d�
 
 ### 2. caro:leave
 
-- **Client emit:** Rời phòng chơi
+- **Client emit:** Leave a game room
 - **Payload:**
   ```json
   {
@@ -56,7 +56,7 @@ This document describes all Socket.io events for the Caro (Gomoku) game. Sử d�
 
 ### 3. caro:move
 
-- **Client emit:** Gửi nước đi
+- **Client emit:** Send a move
 - **Payload:**
   ```json
   {
@@ -88,7 +88,7 @@ This document describes all Socket.io events for the Caro (Gomoku) game. Sử d�
       "isWin": false
     }
     ```
-  - Nếu thắng:
+  - If win:
     - Event: `caro:win`
     - Payload:
       ```json
@@ -102,7 +102,7 @@ This document describes all Socket.io events for the Caro (Gomoku) game. Sử d�
 
 ### 4. caro:chat
 
-- **Client emit:** Gửi tin nhắn chat
+- **Client emit:** Send a chat message
 - **Payload:**
   ```json
   {
@@ -125,7 +125,7 @@ This document describes all Socket.io events for the Caro (Gomoku) game. Sử d�
 
 ### 5. caro:sync
 
-- **Client emit:** Yêu cầu đồng bộ trạng thái bàn cờ (dành cho user mới vào/phục hồi kết nối)
+- **Client emit:** Request to sync board state (for new users or reconnect)
 - **Payload:**
   ```json
   {
@@ -146,7 +146,7 @@ This document describes all Socket.io events for the Caro (Gomoku) game. Sử d�
 
 ### 6. caro:error
 
-- **Server emit:** Báo lỗi (nước đi không hợp lệ, v.v.)
+- **Server emit:** Error notification (invalid move, etc.)
 - **Payload:**
   ```json
   {
@@ -156,13 +156,13 @@ This document describes all Socket.io events for the Caro (Gomoku) game. Sử d�
 
 ---
 
-## Lưu ý
+## Notes
 
-- Tất cả event đều truyền qua socket.io, client cần lắng nghe đúng tên event.
-- Các event `caro:joined`, `caro:left`, `caro:move`, `caro:win`, `caro:chat`, `caro:sync`, `caro:error` là do server emit.
-- Các event `caro:join`, `caro:leave`, `caro:move`, `caro:chat`, `caro:sync` là do client emit.
+- All events are transmitted via socket.io, client must listen to the correct event names.
+- Events `caro:joined`, `caro:left`, `caro:move`, `caro:win`, `caro:chat`, `caro:sync`, `caro:error` are emitted by the server.
+- Events `caro:join`, `caro:leave`, `caro:move`, `caro:chat`, `caro:sync` are emitted by the client.
 
-## Ví dụ sử dụng (client JS)
+## Example usage (client JS)
 
 ```js
 const socket = io("ws://localhost:3000");
@@ -188,7 +188,7 @@ socket.on("caro:error", (err) => {
 
 ---
 
-## Tham khảo thêm
+## Further reference
 
 - [Socket.io Docs](https://socket.io/docs/)
 - [AsyncAPI Docs](https://www.asyncapi.com/docs/)
