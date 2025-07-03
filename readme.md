@@ -255,6 +255,46 @@ Dự án hỗ trợ triển khai production-ready trên Kubernetes với các ma
 - Có thể deploy lên GKE, EKS, AKS hoặc bất kỳ cluster K8s nào bằng cách apply các manifest trong `k8s/`.
 - Nên cấu hình thêm Ingress, SSL, auto-scaling, RBAC, monitoring, alerting cho môi trường production.
 
+## Horizontal Pod Autoscaler (HPA) cho Kubernetes
+
+- Dự án đã cung cấp sẵn file `k8s/hpa.yaml` để tự động scale số lượng pod backend dựa trên mức sử dụng CPU.
+- HPA sẽ tự động tăng/giảm số lượng pod của deployment app khi CPU trung bình vượt quá hoặc thấp hơn ngưỡng cấu hình (ví dụ: 70%).
+- Cấu hình mẫu:
+  ```yaml
+  apiVersion: autoscaling/v2
+  kind: HorizontalPodAutoscaler
+  metadata:
+    name: app-hpa
+  spec:
+    scaleTargetRef:
+      apiVersion: apps/v1
+      kind: Deployment
+      name: app
+    minReplicas: 3
+    maxReplicas: 10
+    metrics:
+      - type: Resource
+        resource:
+          name: cpu
+          target:
+            type: Utilization
+            averageUtilization: 70
+  ```
+- Để sử dụng:
+  1. Đảm bảo đã cài đặt và fix xong metrics-server (xem hướng dẫn trong `k8s/README-k8s.md`).
+  2. Apply HPA:
+     ```sh
+     kubectl apply -f k8s/hpa.yaml
+     ```
+  3. Kiểm tra trạng thái autoscale:
+     ```sh
+     kubectl get hpa
+     ```
+  4. Tăng tải (stress test) để kiểm tra HPA tự động scale pod.
+- HPA giúp backend tự động mở rộng khi tải tăng cao và thu nhỏ khi tải giảm, tối ưu tài nguyên và chi phí vận hành.
+
+Tham khảo chi tiết về HPA và metrics-server trong file `k8s/README-k8s.md`.
+
 ## Notes
 
 - MongoDB and Redis data are stored in Docker volumes, so data is not lost when containers are restarted (unless the volume is deleted).
