@@ -17,6 +17,11 @@ spec:
           image: boyastro/app:latest
           ports:
             - containerPort: 3000
+          resources:
+            requests:
+              cpu: 100m
+            limits:
+              cpu: 500m
           env:
             - name: MONGO_URI
               value: "mongodb+srv://game:Thanhdat%401234@cluster0.l4tli.mongodb.net/gamedata"
