@@ -20,8 +20,10 @@ spec:
           resources:
             requests:
               cpu: 100m
+              memory: 128Mi
             limits:
               cpu: 500m
+              memory: 512Mi
           env:
             - name: MONGO_URI
               value: "mongodb+srv://game:Thanhdat%401234@cluster0.l4tli.mongodb.net/gamedata"
