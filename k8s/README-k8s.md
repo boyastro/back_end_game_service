@@ -119,6 +119,7 @@ kubectl delete -f k8s/
 ### Triển khai HPA:
 
 - File ví dụ: `hpa.yaml`
+- kubectl port-forward service/haproxy 8080:80
 - Apply:
   ```sh
   kubectl apply -f k8s/hpa.yaml

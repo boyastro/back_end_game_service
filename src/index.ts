@@ -9,6 +9,8 @@ import matchHistoryRoutes from "./routes/matchHistory.routes.js";
 import leaderboardRoutes from "./routes/leaderboard.routes.js";
 import itemRoutes from "./routes/item.routes.js";
 import rewardRoutes from "./routes/reward.routes.js";
+import paymentRoutes from "./routes/payment.js";
+import stripeWebhookRoutes from "./routes/stripe-webhook.js";
 import { swaggerUi, specs } from "./swagger.js";
 import { registerChatSocket } from "./socket/chat.socket.js";
 import { registerCaroSocket } from "./games/turnbased/caro/caro.socket.js";
@@ -49,6 +51,8 @@ mongoose
   app.use("/items", itemRoutes);
   app.use("/rewards", rewardRoutes);
   app.use("/games/caro", caroRoutes);
+  app.use("/payments", paymentRoutes);
+  app.use("/stripe", stripeWebhookRoutes);
   app.get("/whoami", (req, res) => {
     res.send(`This is container: ${process.env.HOSTNAME || process.pid}`);
   });

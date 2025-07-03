@@ -4,6 +4,8 @@ services:
     environment:
       - MONGO_URI=mongodb+srv://game:Thanhdat%401234@cluster0.l4tli.mongodb.net/gamedata
       - REDIS_URL=redis://redis:6379
+      - STRIPE_SECRET_KEY=sk_test_51RgjJ6Rkaxke7LhDpjIbwnErFMVfJlzRdByCqvDqwhAEqVNg8UXGiqqVxDgCeA3H99i9MH0Eh0Pk3b4Tc8JXecwQ00E0wlJfct
+      - STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
     depends_on:
       - redis
       - prometheus
@@ -13,8 +15,8 @@ services:
   nginx:
     image: nginx:alpine
     # container_name: nginx  # Bỏ dòng này
-    expose:
-      - "80" # Chỉ expose port nội bộ Docker network
+    ports:
+      - "8080:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
