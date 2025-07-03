@@ -111,3 +111,93 @@ kubectl delete -f k8s/
 - https://kubernetes.io/docs/
 - https://minikube.sigs.k8s.io/docs/
 - https://hub.docker.com/
+
+---
+
+## 14. HPA (Horizontal Pod Autoscaler) & Metrics-server
+
+### Triển khai HPA:
+
+- File ví dụ: `hpa.yaml`
+- Apply:
+  ```sh
+  kubectl apply -f k8s/hpa.yaml
+  ```
+- Kiểm tra trạng thái HPA:
+  ```sh
+  kubectl get hpa
+  # Kết quả đúng sẽ có cột TARGETS dạng cpu: 15%/70%
+  ```
+
+### Cài & sửa lỗi metrics-server (bắt buộc để HPA hoạt động):
+
+- Kiểm tra pod metrics-server:
+  ```sh
+  kubectl get pods -n kube-system | grep metrics-server
+  ```
+- Nếu pod 0/1 hoặc lỗi TLS, cần thêm tham số `--kubelet-insecure-tls` vào phần args của deployment metrics-server:
+  1. Sửa bằng Dashboard hoặc xuất YAML ra file, thêm dòng:
+     ```yaml
+     args:
+       - --kubelet-insecure-tls
+     ```
+  2. Apply lại deployment:
+     ```sh
+     kubectl apply -f <file-yaml>
+     ```
+  3. Xóa pod metrics-server để rollout lại:
+     ```sh
+     kubectl delete pod -n kube-system -l k8s-app=metrics-server
+     ```
+
+### Kiểm tra metrics CPU, log:
+
+- Xem metrics pod:
+  ```sh
+  kubectl top pod
+  kubectl top pod | grep app
+  kubectl top node
+  ```
+- Xem log pod app:
+  ```sh
+  kubectl logs <tên-pod-app>
+  kubectl logs -l app=app
+  kubectl logs -f <tên-pod-app> # realtime
+  ```
+
+---
+
+## 15. Cài đặt & sử dụng Kubernetes Dashboard
+
+### Cài đặt Dashboard:
+
+```sh
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+```
+
+### Tạo tài khoản admin:
+
+```sh
+kubectl apply -f k8s/dashboard-admin.yaml
+```
+
+### Lấy token đăng nhập:
+
+```sh
+kubectl -n kubernetes-dashboard create token admin-user
+```
+
+### Mở Dashboard:
+
+```sh
+minikube dashboard
+# hoặc
+kubectl proxy
+# rồi truy cập http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/
+```
+
+### Sửa deployment bằng Dashboard:
+
+- Vào menu Deployments, namespace kube-system, chọn metrics-server, nhấn Edit, thêm/thay đổi args như hướng dẫn ở trên, nhấn Save.
+
+---
