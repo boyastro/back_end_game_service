@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: haproxy
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: haproxy
@@ -70,7 +70,6 @@ data:
         balance roundrobin
         option httpchk GET /
         server nginx-1 nginx.default.svc.cluster.local:80 check
-        server nginx-2 nginx.default.svc.cluster.local:80 check
     listen stats
         bind *:8404
         stats enable

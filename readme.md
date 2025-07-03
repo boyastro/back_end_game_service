@@ -295,6 +295,25 @@ Dự án hỗ trợ triển khai production-ready trên Kubernetes với các ma
 
 Tham khảo chi tiết về HPA và metrics-server trong file `k8s/README-k8s.md`.
 
+## Load Balancing with HAProxy on Kubernetes
+
+- The project supports HAProxy as a load balancer in front of nginx services to improve load distribution, scalability, and system monitoring.
+- Example manifest for deploying HAProxy on K8s: `k8s/haproxy-deployment.yaml` (includes Deployment, Service, ConfigMap).
+- HAProxy receives all HTTP requests from outside (via NodePort or port-forward) and distributes them to nginx pods in the cluster.
+- You can access the HAProxy monitoring dashboard at: `http://<minikube-ip>:32404/stats` (default user/pass is empty).
+- Usage:
+  1. Apply the manifest:
+     ```sh
+     kubectl apply -f k8s/haproxy-deployment.yaml
+     ```
+  2. Access API/backend via HAProxy:
+     - NodePort: `http://<minikube-ip>:30081`
+     - Port-forward: `kubectl port-forward service/haproxy 8080:80` then access `http://localhost:8080`
+  3. HAProxy dashboard: `http://<minikube-ip>:32404/stats` or port-forward `kubectl port-forward service/haproxy 8404:8404`
+- HAProxy helps the system handle high traffic, easily scale nginx/backend, and monitor backend health via the dashboard.
+
+See detailed configuration in `k8s/haproxy-deployment.yaml` and instructions in `k8s/README-k8s.md`.
+
 ## Notes
 
 - MongoDB and Redis data are stored in Docker volumes, so data is not lost when containers are restarted (unless the volume is deleted).
