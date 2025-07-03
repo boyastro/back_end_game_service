@@ -201,3 +201,24 @@ kubectl proxy
 - Vào menu Deployments, namespace kube-system, chọn metrics-server, nhấn Edit, thêm/thay đổi args như hướng dẫn ở trên, nhấn Save.
 
 ---
+
+## 16. Một số lệnh cơ bản để xem thông tin trong Kubernetes
+
+| Lệnh                                                     | Chức năng                                                       |
+| -------------------------------------------------------- | --------------------------------------------------------------- |
+| kubectl get pods                                         | Xem danh sách pod trong namespace hiện tại                      |
+| kubectl get pods -A                                      | Xem pod ở tất cả namespace                                      |
+| kubectl get svc                                          | Xem danh sách service                                           |
+| kubectl get deployment                                   | Xem danh sách deployment                                        |
+| kubectl get hpa                                          | Xem trạng thái autoscaling (HPA)                                |
+| kubectl get node                                         | Xem thông tin node trong cluster                                |
+| kubectl describe pod <tên-pod>                           | Xem chi tiết pod (event, log, trạng thái)                       |
+| kubectl logs <tên-pod>                                   | Xem log của pod                                                 |
+| kubectl top pod                                          | Xem metrics CPU/Memory của pod (cần metrics-server)             |
+| kubectl top node                                         | Xem metrics CPU/Memory của node                                 |
+| kubectl get events --sort-by=.metadata.creationTimestamp | Xem các sự kiện gần nhất trong cluster                          |
+| kubectl get all                                          | Xem tất cả resource (pod, svc, deployment, ...) trong namespace |
+
+Bạn có thể thay <tên-pod> bằng tên thực tế, hoặc thêm -n <namespace> để chỉ định namespace.
+
+---
