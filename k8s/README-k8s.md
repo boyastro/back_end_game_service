@@ -57,6 +57,31 @@ kubectl get svc
   # hoặc truy cập http://<minikube-ip>:32000
   ```
 
+### Dùng port-forward để truy cập Grafana
+
+Nếu không muốn expose NodePort, bạn có thể dùng lệnh sau để truy cập Grafana qua localhost:
+
+```sh
+kubectl port-forward service/grafana 3001:3000
+```
+
+- Sau đó truy cập: http://localhost:3001
+- Cửa sổ terminal phải luôn mở để duy trì port-forward.
+- Có thể đổi `3001` thành port local khác nếu muốn.
+
+### Đưa cổng Grafana ra ngoài bằng port-forward
+
+Nếu không muốn dùng NodePort, bạn có thể port-forward Grafana ra localhost:
+
+```sh
+kubectl port-forward -n <namespace> service/grafana 3001:3000
+```
+
+- Thay `<namespace>` bằng namespace Grafana đang chạy (ví dụ: `default` hoặc `monitoring`).
+- Sau đó truy cập: http://localhost:3001
+- Có thể đổi `3001` thành port local khác nếu muốn.
+- Cửa sổ terminal phải luôn mở để duy trì port-forward.
+
 ## 8. Expose service với port cố định bằng kubectl port-forward
 
 Nếu bạn muốn truy cập service qua một port cố định trên máy local (thay vì port ngẫu nhiên do minikube tunnel tạo ra), hãy dùng lệnh sau:
@@ -223,3 +248,134 @@ kubectl proxy
 Bạn có thể thay <tên-pod> bằng tên thực tế, hoặc thêm -n <namespace> để chỉ định namespace.
 
 ---
+
+## 17. Truy vấn log thanh toán trong Loki/Grafana
+
+### 1. Truy vấn log payment/stripe trong Loki (Grafana > Explore)
+
+- Truy vấn log liên quan đến payment:
+  ```logql
+  {app="app"} |= "payment"
+  ```
+- Truy vấn log liên quan đến Stripe:
+  ```logql
+  {app="app"} |= "stripe"
+  ```
+- Truy vấn log Stripe webhook:
+  ```logql
+  {app="app"} |= "stripe" |= "webhook"
+  ```
+- Truy vấn log payment có lỗi:
+  ```logql
+  {app="app"} |= "payment" |= "error"
+  ```
+- Truy vấn nhiều từ khoá (AND):
+  ```logql
+  {app="app"} |= "stripe" |= "success"
+  ```
+- Truy vấn nhiều từ khoá (OR):
+  ```logql
+  {app="app"} |~ "stripe|payment|checkout"
+  ```
+
+### 2. Lưu ý
+
+- Đảm bảo Promtail đã thu thập log app và gửi về Loki.
+- Nếu chưa thấy log payment/stripe, kiểm tra lại cấu hình Promtail, đường dẫn log, hoặc log app đã in ra đúng format chưa.
+- Có thể filter thêm theo namespace, pod, hoặc các trường đặc thù nếu log có chứa.
+
+---
+
+## 18. Xem log info của app
+
+### 1. Xem log info qua kubectl
+
+- Xem toàn bộ log app:
+  ```sh
+  kubectl logs -l app=app
+  ```
+- Xem realtime:
+  ```sh
+  kubectl logs -f -l app=app
+  ```
+- Lọc log info (nếu app log theo level, ví dụ có từ "info"):
+  ```sh
+  kubectl logs -l app=app | grep info
+  ```
+
+### 2. Xem log info qua Loki/Grafana
+
+- Vào Grafana > Explore, truy vấn:
+  ```logql
+  {app="app"} |= "info"
+  ```
+- Hoặc xem toàn bộ log app:
+  ```logql
+  {app="app"}
+  ```
+- Có thể filter thêm theo namespace, pod, hoặc từ khoá khác.
+
+### 3. Lưu ý
+
+- Nếu app chưa log theo level (info, error, warn...), nên chuẩn hoá log để dễ filter.
+- Promtail sẽ thu thập stdout/stderr của container, nên mọi log `console.log` đều sẽ xuất hiện ở đây.
+
+---
+
+## Cài đặt Loki bằng Helm
+
+Bạn có thể cài Loki (và Promtail) nhanh chóng bằng Helm chart chính thức:
+
+### 1. Thêm repo Helm Loki
+
+```sh
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+```
+
+### 2. Cài đặt Loki
+
+```sh
+helm install loki grafana/loki-stack --set promtail.enabled=true
+```
+
+- Lệnh này sẽ cài cả Loki, Promtail, và các thành phần liên quan.
+- Nếu muốn chỉ cài Loki:
+  ```sh
+  helm install loki grafana/loki
+  ```
+
+### 3. Kiểm tra pod/service
+
+```sh
+kubectl get pods -l app.kubernetes.io/name=loki
+kubectl get svc -l app.kubernetes.io/name=loki
+```
+
+### 4. Truy cập Loki từ Grafana
+
+- Nếu Grafana và Loki ở **cùng namespace** (ví dụ đều ở `monitoring`):
+  - Thêm datasource Loki trong Grafana với URL: `http://loki:3100`
+- Nếu Grafana và Loki ở **khác namespace**:
+  - Thêm datasource Loki với URL: `http://loki.<namespace-loki>.svc.cluster.local:3100`
+    - Ví dụ: Loki ở namespace `monitoring`, URL sẽ là: `http://loki.monitoring.svc.cluster.local:3100`
+- Nếu dùng port-forward:
+
+  ```sh
+  kubectl port-forward -n <namespace-loki> service/loki 3100:3100
+  ```
+
+  → Truy cập Loki qua: `http://localhost:3100`
+
+- Đảm bảo Grafana có thể resolve đúng DNS nội bộ hoặc sử dụng port-forward nếu chạy ngoài cluster.
+
+### 5. Gỡ cài đặt Loki
+
+```sh
+helm uninstall loki
+```
+
+### 6. Lưu ý
+
+- Có thể custom cấu hình bằng các tham số `--set` hoặc file values.yaml.
+- Nếu cluster có nhiều namespace, có thể thêm `-n <namespace>` vào các lệnh trên.
