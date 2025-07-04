@@ -6,6 +6,10 @@ A RESTful API backend for multi-genre games, built with Node.js, Express, TypeSc
 
 This backend also supports secure in-app purchases and payment processing via Stripe, allowing users to buy game items and features with real-time inventory updates after successful payment. All payment flows are handled safely with webhook verification and best practices for both development and production environments.
 
+This project also supports advanced load balancing with HAProxy. HAProxy can be deployed in front of multiple Nginx and backend containers (on Docker Compose or Kubernetes) to distribute HTTP/WebSocket traffic efficiently, provide health checks, and enable high availability. Example manifests and configuration for HAProxy are included for both local and K8s environments, with a built-in monitoring dashboard for real-time traffic and backend health visualization.
+
+The project is production-ready for Kubernetes (K8s) deployment, with sample manifests for all core services (backend, Nginx, MongoDB, Redis, Prometheus, Grafana, HAProxy, HPA) included. You can easily deploy, scale, monitor, and manage the entire stack on any K8s cluster (Minikube, GKE, EKS, AKS, etc.), with best practices for resource limits, autoscaling, service discovery, and secure configuration. See the `k8s/` folder and `k8s/README-k8s.md` for detailed instructions and manifest examples.
+
 ## Key Features
 
 - Register, login, JWT authentication, instant token revocation with Redis
