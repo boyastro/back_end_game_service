@@ -4,6 +4,8 @@
 
 A RESTful API backend for multi-genre games, built with Node.js, Express, TypeScript, MongoDB, and Redis. Supports user management, game rooms, realtime chat (Socket.io), items, rewards, leaderboard, JWT authentication, API documentation (Swagger), socket event documentation (AsyncAPI), and monitoring with Prometheus & Grafana. Easy deployment with Docker Compose and Nginx reverse proxy. Supports horizontal scaling with Redis adapter for Socket.io.
 
+This backend also supports secure in-app purchases and payment processing via Stripe, allowing users to buy game items and features with real-time inventory updates after successful payment. All payment flows are handled safely with webhook verification and best practices for both development and production environments.
+
 ## Key Features
 
 - Register, login, JWT authentication, instant token revocation with Redis
@@ -313,6 +315,58 @@ Tham khảo chi tiết về HPA và metrics-server trong file `k8s/README-k8s.md
 - HAProxy helps the system handle high traffic, easily scale nginx/backend, and monitor backend health via the dashboard.
 
 See detailed configuration in `k8s/haproxy-deployment.yaml` and instructions in `k8s/README-k8s.md`.
+
+## Stripe Payment Integration
+
+The backend supports in-app purchases using Stripe for secure and flexible payment processing. Below is the recommended flow and integration guide:
+
+### 1. Payment Flow Overview
+
+- Client requests to buy an item (with itemId, userId).
+- Backend looks up the item price and creates a Stripe PaymentIntent with the correct amount and metadata (userId, itemId).
+- Backend returns the clientSecret to the client.
+- Client uses Stripe.js (web) or Stripe SDK (mobile) to complete the payment using the clientSecret.
+- Stripe processes the payment and, if successful, sends a webhook (payment_intent.succeeded) to the backend.
+- Backend verifies the webhook, checks metadata, and updates the user's inventory (adds the purchased item).
+
+### 2. Environment Variables
+
+Add these to your `.env` or `docker-compose.yml`:
+
+```
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+### 3. API Endpoints
+
+- `POST /payments/create-payment-intent`  
+  Request body: `{ amount, currency, userId, itemId }`  
+  Returns: `{ clientSecret }`
+- Webhook endpoint: `POST /stripe/webhook` (Stripe will call this automatically)
+
+### 4. Security & Best Practices
+
+- Always lookup item price on the backend, never trust client-sent amount.
+- Only unlock items for the user after receiving and verifying the Stripe webhook.
+- Use Stripe test cards for development (e.g., 4242 4242 4242 4242 for VISA).
+- Never commit your Stripe secret keys to git.
+
+### 5. Testing Stripe Webhook Locally
+
+- Install Stripe CLI: https://stripe.com/docs/stripe-cli
+- Run:  
+  `stripe listen --forward-to localhost:8080/stripe/webhook`
+- Use the webhook secret shown in the CLI output for STRIPE_WEBHOOK_SECRET.
+- Test payments using Stripe test cards and check logs for webhook events.
+
+### 6. References
+
+- [Stripe Node.js SDK](https://stripe.com/docs/api)
+- [Stripe Webhooks](https://stripe.com/docs/webhooks)
+- [Stripe CLI](https://stripe.com/docs/stripe-cli)
+
+See `docs/stripe-guide.md` for a more detailed step-by-step guide and troubleshooting tips.
 
 ## Notes
 
