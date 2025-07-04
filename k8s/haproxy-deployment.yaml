@@ -60,7 +60,7 @@ metadata:
 data:
   haproxy.cfg: |
     global
-        log /dev/log local0
+        log 127.0.0.1 local0
         maxconn 4096
         daemon
     defaults

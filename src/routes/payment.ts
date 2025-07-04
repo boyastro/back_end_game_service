@@ -33,9 +33,11 @@
  *         description: Lỗi xử lý phía server
  */
 import express from "express";
+import { logger } from "../middleware/logger.js";
 
 const router = express.Router();
 import { createPaymentIntent } from "../controllers/payment.controller.js";
+router.use(logger);
 
 // Tạo Payment Intent cho client
 router.post("/create-payment-intent", createPaymentIntent);

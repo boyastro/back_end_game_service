@@ -27,9 +27,10 @@
  *         description: Webhook không hợp lệ hoặc xác thực thất bại
  */
 import express from "express";
-import Stripe from "stripe";
+import { logger } from "../middleware/logger.js";
 
 const router = express.Router();
+router.use(logger);
 
 import { handleStripeWebhook } from "../controllers/stripe-webhook.controller.js";
 
