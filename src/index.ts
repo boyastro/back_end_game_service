@@ -36,6 +36,9 @@ mongoose
   await redisClient.connect();
   console.log("✅ Connected to Redis");
 
+  // Đăng ký route Stripe webhook trước khi dùng express.json()
+  app.use("/stripe", stripeWebhookRoutes);
+
   app.use(express.json());
   app.use(cors({ origin: "*" }));
 
@@ -52,7 +55,6 @@ mongoose
   app.use("/rewards", rewardRoutes);
   app.use("/games/caro", caroRoutes);
   app.use("/payments", paymentRoutes);
-  app.use("/stripe", stripeWebhookRoutes);
   app.get("/whoami", (req, res) => {
     res.send(`This is container: ${process.env.HOSTNAME || process.pid}`);
   });

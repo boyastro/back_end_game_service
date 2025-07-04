@@ -17,6 +17,7 @@ export const createPaymentIntent = async (req: Request, res: Response) => {
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
+      payment_method_types: ["card"], // Chỉ cho phép thanh toán qua thẻ
       metadata: { integration_check: "in-app-purchase" },
     });
     res.json({ clientSecret: paymentIntent.client_secret });

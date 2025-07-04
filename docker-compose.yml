@@ -5,7 +5,7 @@ services:
       - MONGO_URI=mongodb+srv://game:Thanhdat%401234@cluster0.l4tli.mongodb.net/gamedata
       - REDIS_URL=redis://redis:6379
       - STRIPE_SECRET_KEY=sk_test_51RgjJ6Rkaxke7LhDpjIbwnErFMVfJlzRdByCqvDqwhAEqVNg8UXGiqqVxDgCeA3H99i9MH0Eh0Pk3b4Tc8JXecwQ00E0wlJfct
-      - STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+      - STRIPE_WEBHOOK_SECRET=whsec_d5f325b23416c3e096f5b62ba5aff658f1744328596b84bf4b43085b3828e012
     depends_on:
       - redis
       - prometheus
