@@ -12,13 +12,17 @@ const stripe = new Stripe(stripeSecretKey, {
 });
 
 export const createPaymentIntent = async (req: Request, res: Response) => {
-  const { amount, currency } = req.body;
+  const { amount, currency, userId, itemId } = req.body;
   try {
     const paymentIntent = await stripe.paymentIntents.create({
       amount,
       currency,
-      payment_method_types: ["card"], // Chỉ cho phép thanh toán qua thẻ
-      metadata: { integration_check: "in-app-purchase" },
+      payment_method_types: ["card"],
+      metadata: {
+        integration_check: "in-app-purchase",
+        userId: userId || "",
+        itemId: itemId || "",
+      },
     });
     res.json({ clientSecret: paymentIntent.client_secret });
   } catch (err: any) {
