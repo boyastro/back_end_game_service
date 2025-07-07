@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: haproxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: haproxy
+  template:
+    metadata:
+      labels:
+        app: haproxy
+    spec:
+      containers:
+        - name: haproxy
+          image: haproxy:latest
+          ports:
+            - containerPort: 80
+            - containerPort: 8404
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: haproxy-config
+              mountPath: /usr/local/etc/haproxy/haproxy.cfg
+              subPath: haproxy.cfg
+      volumes:
+        - name: haproxy-config
+          configMap:
+            name: haproxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: haproxy
+spec:
+  type: NodePort
+  selector:
+    app: haproxy
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30081
+    - name: stats
+      port: 8404
+      targetPort: 8404
+      nodePort: 32404
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: haproxy-config
+data:
+  haproxy.cfg: |
+    global
+        log stdout format raw local0
+        maxconn 4096
+        daemon
+
+    defaults
+        log     global
+        mode    http
+        option  httplog
+        timeout connect 5s
+        timeout client  50s
+        timeout server  50s
+        option  forwardfor
+        option  http-server-close
+
+    frontend http-in
+        bind *:80
+        default_backend nginx_servers
+
+    backend nginx_servers
+        balance roundrobin
+        option httpchk GET /
+        server nginx-1 nginx.default.svc.cluster.local:80 check
+        # Thêm nhiều server nếu cần:
+        # server nginx-2 nginx.default.svc.cluster.local:80 check
+
+    listen stats
+        bind *:8404
+        stats enable
+        stats uri /stats
+        stats refresh 10s
+        stats auth admin:admin123

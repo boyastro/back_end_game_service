@@ -12,11 +12,23 @@ resource "aws_instance" "k3s" {
     Name = "k3s-server"
   }
 
+  provisioner "file" {
+    source      = "k8s/"
+    destination = "/home/ec2-user/k8s/"
+    connection {
+      type        = "ssh"
+      user        = "ec2-user"
+      private_key = file("my-ec2-key.pem")
+      host        = self.public_ip
+    }
+  }
+
   provisioner "remote-exec" {
     inline = [
-      "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_SELINUX_RPM=true sh -"
+      "curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_SELINUX_RPM=true sh -",
+      "sleep 30",
+      "sudo /usr/local/bin/k3s kubectl apply -f /home/ec2-user/k8s/"
     ]
-
     connection {
       type        = "ssh"
       user        = "ec2-user"
