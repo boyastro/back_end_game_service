@@ -382,3 +382,4 @@ helm uninstall loki
 
 ssh -i my-ec2-key.pem ec2-user@13.213.32.80
 scp -i my-ec2-key.pem /k8s/app-deployment.yaml ec2-user@13.213.32.80:/home/ec2-user/
+test
