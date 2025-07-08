@@ -14,17 +14,17 @@ spec:
     spec:
       containers:
         - name: haproxy
-          image: haproxy:latest
+          image: haproxy:alpine
           ports:
             - containerPort: 80
             - containerPort: 8404
           resources:
             requests:
-              cpu: 50m
-              memory: 64Mi
+              cpu: 20m
+              memory: 32Mi
             limits:
-              cpu: 200m
-              memory: 128Mi
+              cpu: 100m
+              memory: 64Mi
           volumeMounts:
             - name: haproxy-config
               mountPath: /usr/local/etc/haproxy/haproxy.cfg

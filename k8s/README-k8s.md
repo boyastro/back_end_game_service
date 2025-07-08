@@ -385,7 +385,17 @@ scp -i my-ec2-key.pem /k8s/app-deployment.yaml ec2-user@154.179.50.108:/home/ec2
 sudo /usr/local/bin/k3s kubectl get pods
 sudo /usr/local/bin/k3s kubectl get svc
 sudo /usr/local/bin/k3s kubectl logs <tên-pod>
+sudo /usr/local/bin/k3s kubectl logs -l app=app
 kubectl apply -f app-deployment.yaml
+kubectl delete pod --all
+
+# Khởi động lại k3s
+
+sudo systemctl restart k3s
+
+# Áp dụng cho Folder hiện tại
+
+kubectl apply -f .
 
 test
 
