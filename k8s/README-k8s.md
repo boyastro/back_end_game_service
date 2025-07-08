@@ -404,6 +404,6 @@ test
 
 scp -i my-ec2-key.pem ec2-user@54.179.50.108:~/\*.yaml ~/Desktop/
 
-# Tạo Docker mới chạy trên linux
+# Tạo Docker mới chạy trên linux(t2.micro)
 
 docker buildx build --platform linux/amd64 -t boyastro/app:latest . --push
