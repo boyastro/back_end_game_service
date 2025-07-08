@@ -387,6 +387,8 @@ sudo /usr/local/bin/k3s kubectl get svc
 sudo /usr/local/bin/k3s kubectl logs <tên-pod>
 kubectl apply -f app-deployment.yaml
 
+test
+
 # Copy file từ server về Destop
 
 scp -i my-ec2-key.pem ec2-user@54.179.50.108:~/\*.yaml ~/Desktop/
