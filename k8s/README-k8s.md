@@ -386,6 +386,7 @@ sudo /usr/local/bin/k3s kubectl get pods
 sudo /usr/local/bin/k3s kubectl get svc
 sudo /usr/local/bin/k3s kubectl logs <tên-pod>
 sudo /usr/local/bin/k3s kubectl logs -l app=app
+kubectl delete -f app-deployment.yaml
 kubectl apply -f app-deployment.yaml
 kubectl delete pod --all
 
@@ -402,3 +403,7 @@ test
 # Copy file từ server về Destop
 
 scp -i my-ec2-key.pem ec2-user@54.179.50.108:~/\*.yaml ~/Desktop/
+
+# Tạo Docker mới chạy trên linux
+
+docker buildx build --platform linux/amd64 -t boyastro/app:latest . --push
