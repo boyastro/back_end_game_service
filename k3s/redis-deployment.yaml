@@ -17,13 +17,6 @@ spec:
           image: redis:6
           ports:
             - containerPort: 6379
-          resources:
-            requests:
-              memory: "16Mi"
-              cpu: "10m"
-            limits:
-              memory: "64Mi"
-              cpu: "100m"
 ---
 apiVersion: v1
 kind: Service

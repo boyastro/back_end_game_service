@@ -19,11 +19,11 @@ spec:
             - containerPort: 3000
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 200m
+              memory: 256Mi
           env:
             - name: STRIPE_SECRET_KEY
               value: sk_test_51RgjJ6Rkaxke7LhDpjIbwnErFMVfJlzRdByCqvDqwhAEqVNg8UXGiqqVxDgCeA3H99i9MH0Eh0Pk3b4Tc8JXecwQ00E0wlJfct
@@ -39,10 +39,9 @@ kind: Service
 metadata:
   name: app
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: app
   ports:
     - port: 3000
       targetPort: 3000
-      nodePort: 32000
