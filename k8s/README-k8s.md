@@ -380,6 +380,8 @@ helm uninstall loki
 - Có thể custom cấu hình bằng các tham số `--set` hoặc file values.yaml.
 - Nếu cluster có nhiều namespace, có thể thêm `-n <namespace>` vào các lệnh trên.
 
-ssh -i my-ec2-key.pem ec2-user@13.213.32.80
-scp -i my-ec2-key.pem /k8s/app-deployment.yaml ec2-user@13.213.32.80:/home/ec2-user/
-test
+ssh -i my-ec2-key.pem ec2-user@54.179.50.108
+scp -i my-ec2-key.pem /k8s/app-deployment.yaml ec2-user@154.179.50.108:/home/ec2-user/
+sudo /usr/local/bin/k3s kubectl get pods
+sudo /usr/local/bin/k3s kubectl get svc
+sudo /usr/local/bin/k3s kubectl logs <tên-pod>
