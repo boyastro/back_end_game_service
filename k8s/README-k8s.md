@@ -386,6 +386,15 @@ sudo /usr/local/bin/k3s kubectl get pods
 sudo /usr/local/bin/k3s kubectl get svc
 sudo /usr/local/bin/k3s kubectl logs <tên-pod>
 sudo /usr/local/bin/k3s kubectl logs -l app=app
+
+# Hiển thị log thời gian thực của app nào đó
+
+kubectl logs -l app=nginx -f
+
+# Hiển thị log thời gian thực của app nào đó
+
+kubectl logs <tên-pod> -f
+
 kubectl delete -f app-deployment.yaml
 kubectl apply -f app-deployment.yaml
 kubectl delete pod --all
