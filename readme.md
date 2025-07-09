@@ -394,97 +394,95 @@ See `docs/stripe-guide.md` for a more detailed step-by-step guide and troublesho
 
 For support, contact the dev or create an issue!
 
-## Triển khai lên AWS EC2 với Terraform và K3s
+# Deploying on AWS EC2 with Terraform and K3s
 
-### 1. Chuẩn bị
+### 1. Preparation
 
-- Đăng ký tài khoản AWS, tạo key pair EC2 (ví dụ: my-ec2-key.pem).
-- Cài đặt AWS CLI, Terraform, Docker (nếu build image).
-- Đảm bảo đã build và push image backend lên Docker Hub:
+- Register an AWS account and create an EC2 key pair (e.g., my-ec2-key.pem).
+- Install AWS CLI, Terraform, and Docker (if you need to build images).
+- Make sure you have built and pushed your backend image to Docker Hub:
   ```sh
   docker login
   docker build -t boyastro/app:latest .
   docker push boyastro/app:latest
   ```
 
-### 2. Tạo hạ tầng EC2 và cài đặt K3s bằng Terraform
+### 2. Provision EC2 and Install K3s with Terraform
 
-- Cấu hình file `terraform/main.tf` với thông tin:
-  - AMI Amazon Linux 2 (x86_64, ví dụ: ami-004a7732acfcc1e2d)
+- Configure `terraform/main.tf` with:
+  - Amazon Linux 2 AMI (x86_64, e.g., ami-004a7732acfcc1e2d)
   - Instance type: t2.micro (Free Tier)
-  - Key pair, security group đã mở port 22 (SSH), 80, 443, 30081 (NodePort HAProxy), 6379 (Redis, nếu cần)
-- Khởi tạo và apply Terraform:
+  - Key pair, security group with open ports: 22 (SSH), 80, 443, 30081 (HAProxy NodePort), 6379 (Redis, if needed)
+- Initialize and apply Terraform:
   ```sh
   cd terraform
   terraform init
   terraform apply
   ```
-- Terraform sẽ tự động:
-  - Tạo EC2, gán security group
-  - Copy manifest K8s lên EC2
-  - Cài đặt K3s
-  - Apply manifest (triển khai backend, nginx, redis, haproxy, ...)
+- Terraform will automatically:
+  - Create EC2 and assign security group
+  - Copy K8s manifests to EC2
+  - Install K3s
+  - Apply manifests (deploy backend, nginx, redis, haproxy, ...)
 
-### 3. Cấu hình Security Group
+### 3. Configure Security Group
 
-- Mở port cần thiết trên EC2:
+- Open necessary ports on EC2:
   - 22: SSH
   - 80, 443: HTTP/HTTPS (nginx/haproxy)
-  - 30081: NodePort HAProxy (public cho client/API Gateway)
-  - 6379: Redis (nên chỉ mở private)
-- Có thể dùng AWS CLI để mở port:
+  - 30081: HAProxy NodePort (public for client/API Gateway)
+  - 6379: Redis (should be private only)
+- You can use AWS CLI to open ports:
   ```sh
   aws ec2 authorize-security-group-ingress --group-id <sg-id> --protocol tcp --port 30081 --cidr 0.0.0.0/0
   ```
 
-### 4. Truy cập dịch vụ
+### 4. Access Services
 
-- Lấy public IP EC2:
+- Get EC2 public IP:
   ```sh
   terraform output
-  # hoặc xem trên AWS Console
+  # or check on AWS Console
   ```
-- Truy cập API/backend qua HAProxy/nginx:
-  - http://<EC2_IP>:30081 (NodePort HAProxy)
-  - http://<EC2_IP> (nếu dùng nginx/HAProxy listen 80)
-- Truy cập Swagger UI:
+- Access API/backend via HAProxy/nginx:
+  - http://<EC2_IP>:30081 (HAProxy NodePort)
+  - http://<EC2_IP> (if nginx/HAProxy listens on 80)
+- Access Swagger UI:
   - http://<EC2_IP>:30081/api-docs
 
-### 5. Tích hợp AWS API Gateway (tuỳ chọn)
+### 5. Integrate AWS API Gateway (optional)
 
-- Có thể dùng Terraform để tạo API Gateway reverse proxy về EC2/HAProxy/nginx.
-- Tham khảo file `terraform/api-gateway/api-gateway.tf` để tự động hoá resource API Gateway, mapping path, stage, endpoint.
-- Sau khi apply, truy cập API qua endpoint dạng:
+- You can use Terraform to create an API Gateway reverse proxy to EC2/HAProxy/nginx.
+- See `terraform/api-gateway/api-gateway.tf` for automated API Gateway resource, path mapping, stage, endpoint.
+- After applying, access API via endpoint like:
   ```
   https://<api-id>.execute-api.<region>.amazonaws.com/prod/<path>
   ```
-- Lưu ý: API Gateway HTTP/REST không proxy được WebSocket/socket.io, chỉ dùng cho REST API.
+- Note: API Gateway HTTP/REST cannot proxy WebSocket/socket.io, only REST API.
 
-### 6. Quản trị, log, debug
+### 6. Management, Logging, Debugging
 
-- SSH vào EC2:
+- SSH into EC2:
   ```sh
   ssh -i my-ec2-key.pem ec2-user@<EC2_IP>
   ```
-- Kiểm tra pod, log, event:
+- Check pods, logs, events:
   ```sh
   sudo /usr/local/bin/k3s kubectl get pods
   sudo /usr/local/bin/k3s kubectl logs -l app=app
   sudo /usr/local/bin/k3s kubectl get svc
   sudo /usr/local/bin/k3s kubectl describe pod <pod-name>
   ```
-- Copy file YAML giữa local và EC2:
+- Copy YAML files between local and EC2:
   ```sh
   scp -i my-ec2-key.pem ./k3s/app-deployment.yaml ec2-user@<EC2_IP>:/home/ec2-user/k8s/
   scp -i my-ec2-key.pem ec2-user@<EC2_IP>:/home/ec2-user/k8s/app-deployment.yaml ./
   ```
 
-### 7. Lưu ý khi triển khai production
+### 7. Production Deployment Notes
 
-- Nên dùng Elastic IP cho EC2 để IP không thay đổi.
-- Bảo mật port, chỉ mở port public cần thiết.
-- Có thể tích hợp thêm SSL (Let's Encrypt) trên nginx/HAProxy.
-- Sử dụng các dịch vụ bảo mật AWS: IAM, Security Group, WAF, CloudTrail, ...
-- Theo dõi chi phí AWS, tận dụng Free Tier.
-
----
+- Use Elastic IP for EC2 to keep the IP static.
+- Secure your ports, only open necessary public ports.
+- You can integrate SSL (Let's Encrypt) on nginx/HAProxy.
+- Use AWS security services: IAM, Security Group, WAF, CloudTrail, ...
+- Monitor AWS costs and utilize Free Tier where possible.
