@@ -10,6 +10,10 @@ This project also supports advanced load balancing with HAProxy. HAProxy can be 
 
 The project is production-ready for Kubernetes (K8s) deployment, with sample manifests for all core services (backend, Nginx, MongoDB, Redis, Prometheus, Grafana, HAProxy, HPA) included. You can easily deploy, scale, monitor, and manage the entire stack on any K8s cluster (Minikube, GKE, EKS, AKS, etc.), with best practices for resource limits, autoscaling, service discovery, and secure configuration. See the `k8s/` folder and `k8s/README-k8s.md` for detailed instructions and manifest examples.
 
+## About K3s
+
+K3s is a lightweight, certified Kubernetes distribution designed for production workloads in resource-constrained environments, edge computing, and IoT. It is easy to install, requires minimal system resources, and is fully compatible with standard Kubernetes APIs and tooling. K3s is ideal for running Kubernetes clusters on virtual machines (such as AWS EC2), bare metal, or even on devices like Raspberry Pi. It simplifies cluster management, supports automatic updates, and is widely used for development, CI/CD, and production deployments where simplicity and efficiency are priorities.
+
 ## Key Features
 
 - Register, login, JWT authentication, instant token revocation with Redis
