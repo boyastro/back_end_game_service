@@ -395,8 +395,8 @@ kubectl logs -l app=nginx -f
 
 kubectl logs <tên-pod> -f
 
-kubectl delete -f app-deployment.yaml
-kubectl apply -f app-deployment.yaml
+kubectl delete -f haproxy-deployment.yaml
+kubectl apply -f haproxy-deployment.yaml
 kubectl delete pod --all
 
 # Khởi động lại k3s
@@ -412,6 +412,10 @@ test
 # Copy file từ server về Destop
 
 scp -i my-ec2-key.pem ec2-user@54.179.50.108:~/\*.yaml ~/Desktop/
+
+# Copy file từ local lên Ec2
+
+scp -i my-ec2-key.pem ./k3s/haproxy-deployment.yaml ec2-user@54.179.50.108:/home/ec2-user/
 
 # Tạo Docker mới chạy trên linux(t2.micro)
 

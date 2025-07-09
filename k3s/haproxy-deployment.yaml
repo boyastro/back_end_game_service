@@ -17,6 +17,7 @@ spec:
           image: haproxy:alpine
           ports:
             - containerPort: 80
+            - containerPort: 443
             - containerPort: 8404
           resources:
             requests:
@@ -29,10 +30,16 @@ spec:
             - name: haproxy-config
               mountPath: /usr/local/etc/haproxy/haproxy.cfg
               subPath: haproxy.cfg
+            - name: haproxy-ssl
+              mountPath: /usr/local/etc/haproxy/haproxy.pem
+              subPath: haproxy.pem
       volumes:
         - name: haproxy-config
           configMap:
             name: haproxy-config
+        - name: haproxy-ssl
+          secret:
+            secretName: haproxy-ssl
 ---
 apiVersion: v1
 kind: Service
@@ -47,6 +54,10 @@ spec:
       port: 80
       targetPort: 80
       nodePort: 30081
+    - name: https
+      port: 443
+      targetPort: 443
+      nodePort: 30192
     - name: stats
       port: 8404
       targetPort: 8404
@@ -73,8 +84,13 @@ data:
         option  forwardfor
         option  http-server-close
 
+
     frontend http-in
         bind *:80
+        default_backend nginx_servers
+
+    frontend https-in
+        bind *:443 ssl crt /usr/local/etc/haproxy/haproxy.pem
         default_backend nginx_servers
 
     backend nginx_servers
