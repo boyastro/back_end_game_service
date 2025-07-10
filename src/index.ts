@@ -20,6 +20,7 @@ import redisClient from "./utils/redisClient.js";
 import client from "prom-client";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { createClient as createRedisClient } from "redis";
+import websocketRoutes from "./routes/websocket.routes.js";
 
 const app = express();
 const PORT = 3000;
@@ -58,6 +59,9 @@ mongoose
   app.get("/whoami", (req, res) => {
     res.send(`This is container: ${process.env.HOSTNAME || process.pid}`);
   });
+
+  // Đăng ký route WebSocket API Gateway
+  app.use("/websocket", websocketRoutes);
 
   // Prometheus metrics
   client.collectDefaultMetrics();

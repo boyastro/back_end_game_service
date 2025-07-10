@@ -395,8 +395,10 @@ kubectl logs -l app=nginx -f
 
 kubectl logs <tên-pod> -f
 
-kubectl delete -f haproxy-deployment.yaml
-kubectl apply -f haproxy-deployment.yaml
+kubectl logs -l app=app -f
+
+kubectl delete -f app-deployment.yaml
+kubectl apply -f app-deployment.yaml
 kubectl delete pod --all
 
 # Khởi động lại k3s
