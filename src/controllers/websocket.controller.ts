@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import GameRoom from "../model/room.js";
 import { usersOnlineGauge } from "../utils/metrics.js";
+import redisClient from "../utils/redisClient.js";
 import {
   ApiGatewayManagementApiClient,
   PostToConnectionCommand,
@@ -15,25 +16,31 @@ const WEBSOCKET_API_ENDPOINT =
 
 export const connectHandler = (req: Request, res: Response) => {
   console.log("ConnectHandler called", req.body, req.headers);
-  // Để tránh lỗi 500 khi connect WebSocket qua API Gateway, chỉ trả về HTTP 200 và body rỗng
   res.status(200).end();
 };
 
-export const disconnectHandler = (req: Request, res: Response) => {
+export const disconnectHandler = async (req: Request, res: Response) => {
   const { connectionId } = req.body;
-  connectionMap.delete(connectionId);
-  usersOnlineGauge.set(connectionMap.size);
+  await redisClient.hDel("connections", connectionId);
   res.json({ message: "Disconnected" });
 };
-
-export const joinRoomHandler = (req: Request, res: Response) => {
+export const joinRoomHandler = async (req: Request, res: Response) => {
   const { connectionId, userId, roomId } = req.body;
   if (connectionId && userId && roomId) {
-    connectionMap.set(connectionId, { userId, roomId });
-    usersOnlineGauge.set(
-      new Set([...connectionMap.values()].map((v: any) => v.userId)).size
+    // Xóa tất cả connectionId cũ của userId này trước khi set mới
+    const allConnections = await redisClient.hGetAll("connections");
+    for (const [connId, value] of Object.entries(allConnections)) {
+      const info = JSON.parse(value);
+      if (info.userId === userId) {
+        await redisClient.hDel("connections", connId);
+      }
+    }
+    await redisClient.hSet(
+      "connections",
+      connectionId,
+      JSON.stringify({ userId, roomId })
     );
-    res.json({ message: "Joined room" });
+    res.status(200).end();
   } else {
     res.status(400).json({ error: "Missing connectionId, userId, or roomId" });
   }
@@ -70,17 +77,18 @@ export const sendMessageHandler = async (req: Request, res: Response) => {
     },
   };
 
-  // Log connectionMap hiện tại
-  console.log("Current connectionMap:", Array.from(connectionMap.entries()));
-
-  // Gửi message tới các client trong room qua API Gateway Management API
+  // Lấy danh sách connection từ Redis
+  const allConnections = await redisClient.hGetAll("connections");
   const apiGwClient = new ApiGatewayManagementApiClient({
     endpoint: WEBSOCKET_API_ENDPOINT,
     region: "ap-southeast-1",
   });
+  const broadcastPromises = [];
   let sentCount = 0;
-  for (const [connectionId, info] of connectionMap.entries()) {
-    if (info.roomId === roomId) {
+  for (const [connectionId, value] of Object.entries(allConnections)) {
+    const info = JSON.parse(value);
+    // Broadcast cho các user khác trong cùng room, loại trừ người gửi
+    if (info.roomId === roomId && String(info.userId) !== String(userId)) {
       console.log(
         `Broadcasting to connectionId: ${connectionId}, userId: ${info.userId}`
       );
@@ -88,18 +96,27 @@ export const sendMessageHandler = async (req: Request, res: Response) => {
         ConnectionId: connectionId,
         Data: Buffer.from(JSON.stringify(messagePayload)),
       });
-      try {
-        await apiGwClient.send(command);
-        sentCount++;
-      } catch (err) {
-        console.error(`Failed to send to connectionId ${connectionId}:`, err);
-        // Nếu connectionId không còn hợp lệ, có thể xóa khỏi connectionMap
-      }
+      const promise = apiGwClient
+        .send(command)
+        .then(() => {
+          sentCount++;
+        })
+        .catch((err) => {
+          console.error(`Failed to send to connectionId ${connectionId}:`, err);
+          // Nếu connectionId không còn hợp lệ, có thể xóa khỏi Redis
+          const e = err as any;
+          if (e.$metadata && e.$metadata.httpStatusCode === 410) {
+            return redisClient.hDel("connections", connectionId);
+          }
+        });
+      broadcastPromises.push(promise);
     }
   }
-  console.log(`Message sent to ${sentCount} connection(s) in room ${roomId}`);
+  await Promise.all(broadcastPromises);
+  console.log(
+    `Message sent to ${sentCount} unique connection(s) in room ${roomId}`
+  );
 
-  // Trả về HTTP 200 với body rỗng để API Gateway không gửi message "Message sent" về client
   res.status(200).end();
 };
 
