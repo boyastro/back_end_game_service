@@ -95,14 +95,30 @@ export const sendMessageHandler = async (req: Request, res: Response) => {
     console.log("Room not found:", roomId);
     return res.status(404).end();
   }
-  if (!room.members.some((id: any) => String(id) === String(userId))) {
-    console.log("User not in room:", userId);
+
+  // Lấy connections 1 lần, parse luôn cho hiệu quả
+  const allConnections = await redisClient.hGetAll("connections");
+  const connectionsArr = Object.entries(allConnections).map(
+    ([connId, value]) => ({
+      connId,
+      ...JSON.parse(value),
+    })
+  );
+
+  // Kiểm tra userId có trong room (theo Redis)
+  const userInRoom = connectionsArr.some(
+    (c) => c.userId === userId && c.roomId === roomId
+  );
+  if (!userInRoom) {
+    console.log("User not in room (by Redis):", userId);
     return res.status(403).end();
   }
+
+  // Lưu chat vào DB
   room.chatMessages.push({ user: userId, name, message: text });
   await room.save();
 
-  // Định dạng message giống nhau cho mọi client
+  // Định dạng message gửi cho client
   const messagePayload = {
     type: "receiveMessage",
     data: {
@@ -113,46 +129,39 @@ export const sendMessageHandler = async (req: Request, res: Response) => {
     },
   };
 
-  // Lấy danh sách connection từ Redis
-  const allConnections = await redisClient.hGetAll("connections");
+  // Broadcast cho tất cả connection thuộc room
   const apiGwClient = new ApiGatewayManagementApiClient({
     endpoint: WEBSOCKET_API_ENDPOINT,
     region: "ap-southeast-1",
   });
-  const broadcastPromises = [];
   let sentCount = 0;
-  for (const [connectionId, value] of Object.entries(allConnections)) {
-    const info = JSON.parse(value);
-    // Broadcast cho tất cả user trong cùng room (bao gồm cả người gửi)
-    if (info.roomId === roomId) {
-      console.log(
-        `Broadcasting to connectionId: ${connectionId}, userId: ${info.userId}`
-      );
+  const broadcastPromises = connectionsArr
+    .filter((c) => c.roomId === roomId)
+    .map((c) => {
+      // Không cần log từng connection
       const command = new PostToConnectionCommand({
-        ConnectionId: connectionId,
+        ConnectionId: c.connId,
         Data: Buffer.from(JSON.stringify(messagePayload)),
       });
-      const promise = apiGwClient
+      return apiGwClient
         .send(command)
         .then(() => {
           sentCount++;
         })
         .catch((err) => {
-          console.error(`Failed to send to connectionId ${connectionId}:`, err);
-          // Nếu connectionId không còn hợp lệ, có thể xóa khỏi Redis
+          // Chỉ log lỗi thực sự cần thiết
           const e = err as any;
           if (e.$metadata && e.$metadata.httpStatusCode === 410) {
-            return redisClient.hDel("connections", connectionId);
+            return redisClient.hDel("connections", c.connId);
+          } else {
+            console.error(`Failed to send to connectionId ${c.connId}:`, err);
           }
         });
-      broadcastPromises.push(promise);
-    }
-  }
+    });
   await Promise.all(broadcastPromises);
   console.log(
     `Message sent to ${sentCount} unique connection(s) in room ${roomId}`
   );
-
   res.status(200).end();
 };
 
