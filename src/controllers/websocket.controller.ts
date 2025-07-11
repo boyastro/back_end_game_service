@@ -22,6 +22,12 @@ export const connectHandler = (req: Request, res: Response) => {
 export const disconnectHandler = async (req: Request, res: Response) => {
   const { connectionId } = req.body;
   await redisClient.hDel("connections", connectionId);
+  // Log danh sách các kết nối còn lại trong Redis sau khi disconnect
+  const allConnections = await redisClient.hGetAll("connections");
+  console.log(
+    "[disconnectHandler] Current connections in Redis:",
+    allConnections
+  );
   res.json({ message: "Disconnected" });
 };
 export const joinRoomHandler = async (req: Request, res: Response) => {
@@ -40,6 +46,36 @@ export const joinRoomHandler = async (req: Request, res: Response) => {
       connectionId,
       JSON.stringify({ userId, roomId })
     );
+    // Log danh sách các kết nối sau khi join room
+    const updatedConnections = await redisClient.hGetAll("connections");
+    console.log(
+      "[joinRoomHandler] Current connections in Redis:",
+      updatedConnections
+    );
+    // Gửi message thông báo join room thành công về cho user vừa join
+    const joinRoomMessage = {
+      type: "joinRoomSuccess",
+      data: {
+        userId,
+        roomId,
+        time: new Date().toISOString(),
+      },
+    };
+    // Lấy connectionId của user vừa join
+    const apiGwClient = new ApiGatewayManagementApiClient({
+      endpoint: WEBSOCKET_API_ENDPOINT,
+      region: "ap-southeast-1",
+    });
+    try {
+      await apiGwClient.send(
+        new PostToConnectionCommand({
+          ConnectionId: connectionId,
+          Data: Buffer.from(JSON.stringify(joinRoomMessage)),
+        })
+      );
+    } catch (err) {
+      console.error("Failed to send joinRoomSuccess message:", err);
+    }
     res.status(200).end();
   } else {
     res.status(400).json({ error: "Missing connectionId, userId, or roomId" });
@@ -87,8 +123,8 @@ export const sendMessageHandler = async (req: Request, res: Response) => {
   let sentCount = 0;
   for (const [connectionId, value] of Object.entries(allConnections)) {
     const info = JSON.parse(value);
-    // Broadcast cho các user khác trong cùng room, loại trừ người gửi
-    if (info.roomId === roomId && String(info.userId) !== String(userId)) {
+    // Broadcast cho tất cả user trong cùng room (bao gồm cả người gửi)
+    if (info.roomId === roomId) {
       console.log(
         `Broadcasting to connectionId: ${connectionId}, userId: ${info.userId}`
       );
