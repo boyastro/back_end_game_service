@@ -5,10 +5,7 @@ import { Request, Response } from "express";
 export const createRoom = async (req: Request, res: Response) => {
   try {
     const { name, hostId } = req.body;
-    // Kiểm tra user đã là host của phòng nào chưa
-    const existedRoom = await GameRoom.findOne({ host: hostId });
-    if (existedRoom)
-      return res.status(400).json({ error: "User already has a room" });
+    // Cho phép 1 user tạo nhiều room, bỏ kiểm tra hostId đã có phòng chưa
     // Kiểm tra trùng tên phòng (không phân biệt hoa thường)
     const existed = await GameRoom.findOne({
       name: { $regex: `^${name}$`, $options: "i" },
