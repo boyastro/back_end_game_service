@@ -2,17 +2,6 @@ import User from "../model/user.js";
 import mongoose from "mongoose";
 import { Request, Response } from "express";
 
-export const createUser = async (req: Request, res: Response) => {
-  try {
-    const { name, age } = req.body;
-    const user = new User({ name, age });
-    await user.save();
-    res.json(user);
-  } catch (err) {
-    res.status(500).json({ error: "Failed to create user" });
-  }
-};
-
 export const getAllUsers = async (req: Request, res: Response) => {
   try {
     const users = await User.find();

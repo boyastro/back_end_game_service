@@ -28,6 +28,9 @@ router.use(rateLimit);
  *                 type: integer
  *               password:
  *                 type: string
+ *               avatar:
+ *                 type: string
+ *                 description: Link ảnh đại diện
  *     responses:
  *       201:
  *         description: Đăng ký thành công

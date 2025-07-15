@@ -7,7 +7,7 @@ import redisClient from "../utils/redisClient.js";
 const JWT_SECRET = process.env.JWT_SECRET || "mysecretkey";
 
 export const register = async (req: Request, res: Response) => {
-  const { name, age, password } = req.body;
+  const { name, age, password, avatar } = req.body;
   // Kiểm tra độ mạnh mật khẩu
   const strongPassword =
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-={}\[\]:;"'<>,.?/]).{8,}$/;
@@ -18,7 +18,7 @@ export const register = async (req: Request, res: Response) => {
     });
   }
   const hashedPassword = await bcrypt.hash(password, 10);
-  const user = new User({ name, age, password: hashedPassword });
+  const user = new User({ name, age, password: hashedPassword, avatar });
   await user.save();
   res.json({ message: "Đăng ký thành công", user });
 };
