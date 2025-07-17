@@ -66,34 +66,45 @@ export const joinRoomHandler = async (req: Request, res: Response) => {
     }
   }
   if (waitingIds.length < 2) {
-    await redisClient.sRem("caro:waiting", connectionId);
-    // Gửi message về cho client thông báo không có người chơi
-    try {
-      const apiGwClient = new ApiGatewayManagementApiClient({
-        endpoint: WEBSOCKET_API_ENDPOINT,
-        region: "ap-southeast-1",
-      });
-      const message = {
-        type: "noOpponentFound",
-        data: {
-          reason:
-            "Không tìm thấy người chơi khác trong thời gian chờ. Vui lòng thử lại sau.",
-        },
-      };
-      await apiGwClient.send(
-        new PostToConnectionCommand({
-          ConnectionId: connectionId,
-          Data: Buffer.from(JSON.stringify(message)),
-        })
-      );
+    // Kiểm tra lại connectionId của mình có còn trong set chờ không
+    const stillWaiting = await redisClient.sIsMember(
+      "caro:waiting",
+      connectionId
+    );
+    if (stillWaiting) {
+      await redisClient.sRem("caro:waiting", connectionId);
+      // Gửi message về cho client thông báo không có người chơi
+      try {
+        const apiGwClient = new ApiGatewayManagementApiClient({
+          endpoint: WEBSOCKET_API_ENDPOINT,
+          region: "ap-southeast-1",
+        });
+        const message = {
+          type: "noOpponentFound",
+          data: {
+            reason:
+              "Không tìm thấy người chơi khác trong thời gian chờ. Vui lòng thử lại sau.",
+          },
+        };
+        await apiGwClient.send(
+          new PostToConnectionCommand({
+            ConnectionId: connectionId,
+            Data: Buffer.from(JSON.stringify(message)),
+          })
+        );
+        console.log(
+          `[joinRoomHandler] Đã gửi message noOpponentFound tới:`,
+          connectionId
+        );
+      } catch (err) {
+        console.error(
+          `[joinRoomHandler] Lỗi khi gửi message noOpponentFound:`,
+          err
+        );
+      }
+    } else {
       console.log(
-        `[joinRoomHandler] Đã gửi message noOpponentFound tới:`,
-        connectionId
-      );
-    } catch (err) {
-      console.error(
-        `[joinRoomHandler] Lỗi khi gửi message noOpponentFound:`,
-        err
+        `[joinRoomHandler] connectionId đã được ghép phòng ở request khác, không gửi message lỗi.`
       );
     }
     return res.status(400).end();
