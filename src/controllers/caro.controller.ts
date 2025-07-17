@@ -46,17 +46,24 @@ export const joinRoomHandler = async (req: Request, res: Response) => {
       `[joinRoomHandler] Đã thêm connectionId vào set chờ: ${connectionId}`
     );
   }
-  // Lấy 2 connectionId từ set caro:waiting
+  // Lấy 2 connectionId từ set caro:waiting, kiểm tra nhiều lần với delay ngắn
   let waitingIds = await redisClient.sMembers("caro:waiting");
   console.log(`[joinRoomHandler] Danh sách chờ hiện tại:`, waitingIds);
-  if (waitingIds.length < 2) {
-    // Chờ 30 giây rồi kiểm tra lại
-    await new Promise((resolve) => setTimeout(resolve, 30000));
+  const maxTries = 30; // tổng thời gian chờ ~15s (30 lần x 500ms)
+  let tries = 0;
+  while (waitingIds.length < 2 && tries < maxTries) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
     waitingIds = await redisClient.sMembers("caro:waiting");
-    console.log(`[joinRoomHandler] Danh sách chờ sau 30s:`, waitingIds);
-    if (waitingIds.length < 2) {
-      return res.status(400).end();
+    tries++;
+    if (tries % 5 === 0) {
+      console.log(
+        `[joinRoomHandler] Danh sách chờ sau ${tries * 500}ms:`,
+        waitingIds
+      );
     }
+  }
+  if (waitingIds.length < 2) {
+    return res.status(400).end();
   }
 
   // Lấy ngẫu nhiên 2 id trong danh sách chờ
