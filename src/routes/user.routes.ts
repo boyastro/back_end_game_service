@@ -20,7 +20,7 @@ const router = Router();
 router.use(authenticateToken as any);
 
 // Middleware ghi log request
-router.use(logger);
+router.use(logger as any);
 
 /**
  * @swagger
@@ -33,7 +33,7 @@ router.use(logger);
  *       200:
  *         description: Danh sách user
  */
-router.get("/", getAllUsers);
+router.get("/", getAllUsers as any);
 /**
  * @swagger
  * /users/{id}:
@@ -121,7 +121,7 @@ router.put("/:id/profile", updateProfile as any);
  *       200:
  *         description: Đã gửi lời mời kết bạn
  */
-router.post("/friend-request", rateLimit, sendFriendRequest as any);
+router.post("/friend-request", rateLimit as any, sendFriendRequest as any);
 /**
  * @swagger
  * /users/accept-friend:
@@ -167,7 +167,7 @@ router.post("/accept-friend", acceptFriendRequest as any);
  *       200:
  *         description: Đã block user
  */
-router.post("/block", rateLimit, blockUser as any);
+router.post("/block", rateLimit as any, blockUser as any);
 /**
  * @swagger
  * /users/{id}/sent-friend-requests:

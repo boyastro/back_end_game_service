@@ -9,12 +9,12 @@ import {
 import { logger } from "../middleware/logger.js";
 
 const router = express.Router();
-router.use(logger);
+router.use(logger as any);
 
-router.post("/connect", connectHandler);
-router.post("/disconnect", disconnectHandler);
-router.post("/joinRoom", joinRoomHandler);
+router.post("/connect", connectHandler as any);
+router.post("/disconnect", disconnectHandler as any);
+router.post("/joinRoom", joinRoomHandler as any);
 router.post("/sendMessage", sendMessageHandler as any);
-router.post("/default", defaultHandler);
+router.post("/default", defaultHandler as any);
 
 export default router;

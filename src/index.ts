@@ -13,9 +13,8 @@ import paymentRoutes from "./routes/payment.js";
 import stripeWebhookRoutes from "./routes/stripe-webhook.js";
 import { swaggerUi, specs } from "./swagger.js";
 import { registerChatSocket } from "./socket/chat.socket.js";
-import { registerCaroSocket } from "./games/turnbased/caro/caro.socket.js";
+import caroRoutes from "./routes/caro.routes.js";
 import cors from "cors";
-import caroRoutes from "./games/turnbased/caro/caro.routes.js";
 import redisClient from "./utils/redisClient.js";
 import client from "prom-client";
 import { createAdapter } from "@socket.io/redis-adapter";
@@ -54,7 +53,7 @@ mongoose
   app.use("/leaderboard", leaderboardRoutes);
   app.use("/items", itemRoutes);
   app.use("/rewards", rewardRoutes);
-  app.use("/games/caro", caroRoutes);
+  app.use("/caro", caroRoutes);
   app.use("/payments", paymentRoutes);
   app.get("/whoami", (req, res) => {
     res.send(`This is container: ${process.env.HOSTNAME || process.pid}`);
@@ -83,7 +82,6 @@ mongoose
 
   // Register chat socket logic (usersOnlineGauge is now updated in chat.socket.ts)
   registerChatSocket(io);
-  registerCaroSocket(io);
 
   server.listen(PORT, () => {
     console.log(`🚀 Server running at http://localhost:${PORT}`);

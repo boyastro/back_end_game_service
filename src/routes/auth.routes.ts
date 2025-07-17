@@ -5,8 +5,8 @@ import { rateLimit } from "../middleware/rateLimit.js";
 
 const router = Router();
 // Middleware ghi log request
-router.use(logger);
-router.use(rateLimit);
+router.use(logger as any);
+router.use(rateLimit as any);
 
 /**
  * @swagger
@@ -37,7 +37,7 @@ router.use(rateLimit);
  *       400:
  *         description: Lỗi đầu vào hoặc tài khoản đã tồn tại
  */
-router.post("/register", rateLimit, register as any);
+router.post("/register", rateLimit as any, register as any);
 /**
  * @swagger
  * /auth/login:
@@ -62,7 +62,7 @@ router.post("/register", rateLimit, register as any);
  *       401:
  *         description: Sai thông tin đăng nhập
  */
-router.post("/login", rateLimit, login as any);
+router.post("/login", rateLimit as any, login as any);
 /**
  * @swagger
  * /auth/logout:
@@ -78,6 +78,6 @@ router.post("/login", rateLimit, login as any);
  *       401:
  *         description: Không có token hoặc token không hợp lệ
  */
-router.post("/logout", rateLimit, logout as any);
+router.post("/logout", rateLimit as any, logout as any);
 
 export default router;
