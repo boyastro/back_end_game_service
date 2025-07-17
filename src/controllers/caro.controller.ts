@@ -19,6 +19,9 @@ export const disconnectHandler = async (req: Request, res: Response) => {
   const { connectionId } = req.body;
   if (connectionId) {
     await redisClient.sRem("caro:waiting", connectionId);
+    // Log danh sách chờ hiện tại sau khi xóa
+    const waitingIds = await redisClient.sMembers("caro:waiting");
+    console.log("[disconnectHandler] Danh sách chờ hiện tại:", waitingIds);
     res.status(200).end();
   } else {
     res.status(400).end();
@@ -63,6 +66,36 @@ export const joinRoomHandler = async (req: Request, res: Response) => {
     }
   }
   if (waitingIds.length < 2) {
+    await redisClient.sRem("caro:waiting", connectionId);
+    // Gửi message về cho client thông báo không có người chơi
+    try {
+      const apiGwClient = new ApiGatewayManagementApiClient({
+        endpoint: WEBSOCKET_API_ENDPOINT,
+        region: "ap-southeast-1",
+      });
+      const message = {
+        type: "noOpponentFound",
+        data: {
+          reason:
+            "Không tìm thấy người chơi khác trong thời gian chờ. Vui lòng thử lại sau.",
+        },
+      };
+      await apiGwClient.send(
+        new PostToConnectionCommand({
+          ConnectionId: connectionId,
+          Data: Buffer.from(JSON.stringify(message)),
+        })
+      );
+      console.log(
+        `[joinRoomHandler] Đã gửi message noOpponentFound tới:`,
+        connectionId
+      );
+    } catch (err) {
+      console.error(
+        `[joinRoomHandler] Lỗi khi gửi message noOpponentFound:`,
+        err
+      );
+    }
     return res.status(400).end();
   }
 
