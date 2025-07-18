@@ -8,6 +8,21 @@ import redisClient from "../utils/redisClient.js";
 const WEBSOCKET_API_ENDPOINT =
   "https://ukgw0jnnkj.execute-api.ap-southeast-1.amazonaws.com/prod";
 
+// Utility: Lấy userId cho từng connectionId
+async function getPlayerInfos(
+  connectionIds: string[]
+): Promise<{ connectionId: string; userId: string | null }[]> {
+  return Promise.all(
+    connectionIds.map(async (connectionId) => {
+      const userId = await redisClient.hGet(
+        `caro:user:${connectionId}`,
+        "userId"
+      );
+      return { connectionId, userId };
+    })
+  );
+}
+
 // Handler: Khi client connect WebSocket
 export const connectHandler = async (req: Request, res: Response) => {
   console.log("ConnectHandler called", req.body, req.headers);
@@ -41,12 +56,16 @@ export const joinRoomHandler = async (req: Request, res: Response) => {
   // Log dữ liệu nhận được để kiểm tra
   console.log("[joinRoomHandler] req.body:", req.body);
   console.log("[joinRoomHandler] req.headers:", req.headers);
-  // Lấy connectionId và action từ mapping template mới
-  const { connectionId } = req.body;
+  // Lấy connectionId và userId từ client
+  const { connectionId, userId } = req.body;
   if (connectionId) {
     await redisClient.sAdd("caro:waiting", connectionId);
+    // Lưu userId vào Redis để tra cứu sau này
+    if (userId) {
+      await redisClient.hSet(`caro:user:${connectionId}`, { userId });
+    }
     console.log(
-      `[joinRoomHandler] Đã thêm connectionId vào set chờ: ${connectionId}`
+      `[joinRoomHandler] Đã thêm connectionId vào set chờ: ${connectionId}, userId: ${userId}`
     );
   }
   // Lấy 2 connectionId từ set caro:waiting, kiểm tra nhiều lần với delay ngắn
@@ -151,6 +170,9 @@ export const joinRoomHandler = async (req: Request, res: Response) => {
   await redisClient.sRem("caro:waiting", [id1, id2]);
   console.log(`[joinRoomHandler] Đã xóa 2 id khỏi set chờ:`, id1, id2);
 
+  // Lấy userId cho từng player
+  const playerInfos = await getPlayerInfos([id1, id2]);
+
   // Broadcast trạng thái bắt đầu game cho cả 2 user
   const apiGwClient = new ApiGatewayManagementApiClient({
     endpoint: WEBSOCKET_API_ENDPOINT,
@@ -163,7 +185,7 @@ export const joinRoomHandler = async (req: Request, res: Response) => {
         type: "gameStarted",
         data: {
           roomId,
-          players: [id1, id2],
+          players: playerInfos,
           board: roomData.board,
           turn: id1,
           status: roomData.status,
@@ -318,12 +340,14 @@ export const leaveRoomHandler = async (req: Request, res: Response) => {
       endpoint: WEBSOCKET_API_ENDPOINT,
       region: "ap-southeast-1",
     });
+    // Lấy userId cho player còn lại
+    const playerInfos = await getPlayerInfos(players);
     const leaveMsg = {
       type: "userLeft",
       data: {
         roomId,
         leaver: connectionId,
-        players,
+        players: playerInfos,
         status: "waiting",
       },
     };
@@ -381,6 +405,8 @@ export const leaveRoomHandler = async (req: Request, res: Response) => {
     await redisClient.hSet(`caro:room:${newRoomId}`, hashData);
     // Xóa 2 id khỏi set chờ
     await redisClient.sRem("caro:waiting", [idA, idB]);
+    // Lấy userId cho từng player
+    const playerInfos = await getPlayerInfos([idA, idB]);
     // Broadcast trạng thái bắt đầu game cho cả 2 user
     const apiGwClient = new ApiGatewayManagementApiClient({
       endpoint: WEBSOCKET_API_ENDPOINT,
@@ -392,7 +418,7 @@ export const leaveRoomHandler = async (req: Request, res: Response) => {
           type: "gameStarted",
           data: {
             roomId: newRoomId,
-            players: [idA, idB],
+            players: playerInfos,
             board: roomData.board,
             turn: idA,
             status: roomData.status,
