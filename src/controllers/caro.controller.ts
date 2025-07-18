@@ -307,7 +307,6 @@ export const leaveRoomHandler = async (req: Request, res: Response) => {
   }
   // Xóa user khỏi danh sách players
   players = players.filter((id) => id !== connectionId);
-
   // Nếu còn 1 người, cập nhật lại phòng và broadcast cho người còn lại
   if (players.length === 1) {
     await redisClient.hSet(roomKey, {
@@ -339,6 +338,125 @@ export const leaveRoomHandler = async (req: Request, res: Response) => {
   } else {
     // Nếu không còn ai, xóa phòng khỏi Redis
     await redisClient.del(roomKey);
+  }
+  // Đưa chính connectionId vừa rời phòng vào lại set chờ
+  await redisClient.sAdd("caro:waiting", connectionId);
+  console.log(
+    `[leaveRoomHandler] Đã đưa connectionId ${connectionId} vào lại set chờ.`
+  );
+
+  // Chờ tối đa 15s, nếu trong thời gian đó đủ 2 user thì ghép phòng, nếu không thì gửi message noOpponentFound
+  let waitingIds = await redisClient.sMembers("caro:waiting");
+  const maxTries = 30; // 30 lần x 500ms = 15s
+  let tries = 0;
+  let matched = false;
+  while (waitingIds.length < 2 && tries < maxTries) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    waitingIds = await redisClient.sMembers("caro:waiting");
+    tries++;
+  }
+  if (waitingIds.length >= 2) {
+    // Lấy ngẫu nhiên 2 id
+    const shuffled = waitingIds.sort(() => Math.random() - 0.5);
+    const [idA, idB] = shuffled;
+    // Tạo id phòng mới bằng uuid
+    const { v4: uuidv4 } = await import("uuid");
+    const newRoomId = `room:${uuidv4()}`;
+    // Tạo dữ liệu phòng mới
+    const roomData = {
+      roomId: newRoomId,
+      players: [idA, idB],
+      board: Array(15)
+        .fill(null)
+        .map(() => Array(15).fill(null)),
+      turn: idA,
+      status: "playing",
+      createdAt: new Date().toISOString(),
+    };
+    // Lưu thông tin phòng vào Redis
+    const hashData: Record<string, string> = {};
+    for (const [k, v] of Object.entries(roomData)) {
+      hashData[k] = typeof v === "object" ? JSON.stringify(v) : String(v);
+    }
+    await redisClient.hSet(`caro:room:${newRoomId}`, hashData);
+    // Xóa 2 id khỏi set chờ
+    await redisClient.sRem("caro:waiting", [idA, idB]);
+    // Broadcast trạng thái bắt đầu game cho cả 2 user
+    const apiGwClient = new ApiGatewayManagementApiClient({
+      endpoint: WEBSOCKET_API_ENDPOINT,
+      region: "ap-southeast-1",
+    });
+    await Promise.all(
+      [idA, idB].map(async (connId) => {
+        const message = {
+          type: "gameStarted",
+          data: {
+            roomId: newRoomId,
+            players: [idA, idB],
+            board: roomData.board,
+            turn: idA,
+            status: roomData.status,
+            myConnectionId: connId,
+          },
+        };
+        try {
+          await apiGwClient.send(
+            new PostToConnectionCommand({
+              ConnectionId: connId,
+              Data: Buffer.from(JSON.stringify(message)),
+            })
+          );
+          console.log(`[leaveRoomHandler] Đã gửi gameStarted tới:`, connId);
+        } catch (err) {
+          console.error(`[leaveRoomHandler] Lỗi gửi gameStarted:`, err);
+        }
+      })
+    );
+    console.log(
+      `[leaveRoomHandler] Đã tự động ghép phòng và khởi động game cho:`,
+      idA,
+      idB
+    );
+    matched = true;
+  }
+  // Nếu sau 15s vẫn chưa ghép được ai thì gửi message noOpponentFound về cho client vừa leave
+  if (!matched) {
+    // Kiểm tra lại connectionId của mình có còn trong set chờ không
+    const stillWaiting = await redisClient.sIsMember(
+      "caro:waiting",
+      connectionId
+    );
+    if (stillWaiting) {
+      await redisClient.sRem("caro:waiting", connectionId);
+      try {
+        const apiGwClient = new ApiGatewayManagementApiClient({
+          endpoint: WEBSOCKET_API_ENDPOINT,
+          region: "ap-southeast-1",
+        });
+        const message = {
+          type: "noOpponentFound",
+          data: {
+            reason:
+              "Không tìm thấy người chơi khác trong thời gian chờ. Vui lòng thử lại sau.",
+          },
+        };
+        await apiGwClient.send(
+          new PostToConnectionCommand({
+            ConnectionId: connectionId,
+            Data: Buffer.from(JSON.stringify(message)),
+          })
+        );
+        console.log(
+          `[leaveRoomHandler] Đã gửi message noOpponentFound tới:`,
+          connectionId
+        );
+      } catch (err) {
+        console.error(
+          `[leaveRoomHandler] Lỗi khi gửi message noOpponentFound:`,
+          err
+        );
+      }
+    }
   }
 
   res.status(200).end();
