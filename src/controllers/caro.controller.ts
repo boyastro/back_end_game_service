@@ -249,24 +249,37 @@ export const makeMoveHandler = async (req: Request, res: Response) => {
     ];
     for (const [dx, dy] of directions) {
       let count = 1;
-      for (let d = 1; d < 5; d++) {
+      let blocks = 0;
+      // Đếm về phía trước
+      for (let d = 1; d < 15; d++) {
         const nx = px + dx * d,
           ny = py + dy * d;
-        if (b[ny] && b[ny][nx] === symbol) count++;
-        else break;
+        if (b[ny] && b[ny][nx] === symbol) {
+          count++;
+        } else {
+          if (!b[ny] || b[ny][nx] !== null) blocks++;
+          break;
+        }
       }
-      for (let d = 1; d < 5; d++) {
+      // Đếm về phía sau
+      for (let d = 1; d < 15; d++) {
         const nx = px - dx * d,
           ny = py - dy * d;
-        if (b[ny] && b[ny][nx] === symbol) count++;
-        else break;
+        if (b[ny] && b[ny][nx] === symbol) {
+          count++;
+        } else {
+          if (!b[ny] || b[ny][nx] !== null) blocks++;
+          break;
+        }
       }
       if (count >= 5) return true;
     }
     return false;
   }
   const symbol = playerIdx === 0 ? "X" : "O";
-  const isWin = checkWin(board, x, y, symbol);
+  const xInt = typeof x === "string" ? parseInt(x, 10) : x;
+  const yInt = typeof y === "string" ? parseInt(y, 10) : y;
+  const isWin = checkWin(board, xInt, yInt, symbol);
   const isDraw = board.flat().every((cell) => cell !== null);
 
   // Đổi lượt
