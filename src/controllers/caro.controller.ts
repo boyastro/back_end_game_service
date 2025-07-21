@@ -3,7 +3,9 @@ import {
   ApiGatewayManagementApiClient,
   PostToConnectionCommand,
 } from "@aws-sdk/client-apigatewaymanagementapi";
+
 import redisClient from "../utils/redisClient.js";
+import User from "../model/user.js";
 
 const WEBSOCKET_API_ENDPOINT =
   "https://ukgw0jnnkj.execute-api.ap-southeast-1.amazonaws.com/prod";
@@ -320,6 +322,48 @@ export const makeMoveHandler = async (req: Request, res: Response) => {
       } catch (err) {}
     })
   );
+
+  // Nếu có người thắng, cập nhật điểm số ngay tại đây
+  if (isWin && players.length === 2) {
+    try {
+      const winnerConnId = connectionId;
+      const loserConnId = players.find((id) => id !== winnerConnId);
+      const winnerUserId = await redisClient.hGet(
+        `caro:user:${winnerConnId}`,
+        "userId"
+      );
+      const loserUserId = loserConnId
+        ? await redisClient.hGet(`caro:user:${loserConnId}`, "userId")
+        : null;
+
+      // Cộng điểm cho người thắng
+      if (winnerUserId) {
+        const winnerUser = await User.findById(winnerUserId);
+        if (winnerUser) {
+          winnerUser.score = (winnerUser.score || 0) + 20;
+          winnerUser.totalScore = (winnerUser.totalScore || 0) + 20;
+          winnerUser.winCount = (winnerUser.winCount || 0) + 1;
+          if ((winnerUser.score || 0) > (winnerUser.highestScore || 0)) {
+            winnerUser.highestScore = winnerUser.score;
+          }
+          await winnerUser.save();
+        }
+      }
+      // Trừ điểm cho người thua
+      if (loserUserId) {
+        const loserUser = await User.findById(loserUserId);
+        if (loserUser) {
+          loserUser.score = Math.max((loserUser.score || 0) - 20, 0);
+          loserUser.totalScore = (loserUser.totalScore || 0) - 20;
+          if (loserUser.totalScore < 0) loserUser.totalScore = 0;
+          loserUser.loseCount = (loserUser.loseCount || 0) + 1;
+          await loserUser.save();
+        }
+      }
+    } catch (err) {
+      console.error("[makeMoveHandler] Lỗi cập nhật điểm số:", err);
+    }
+  }
 
   res.status(200).end();
 };
