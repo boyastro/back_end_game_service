@@ -10,6 +10,7 @@ import {
   gameOverHandler,
   disconnectHandler,
   defaultHandler,
+  passTurnHandler,
 } from "../controllers/caro.controller.js";
 
 const router = express.Router();
@@ -22,6 +23,7 @@ router.post("/move", makeMoveHandler as any);
 router.post("/leave", leaveRoomHandler as any);
 router.post("/gameover", gameOverHandler as any);
 router.post("/disconnect", disconnectHandler as any);
+router.post("/passTurn", passTurnHandler as any);
 router.post("/default", defaultHandler as any);
 
 export default router;

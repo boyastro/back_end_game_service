@@ -368,6 +368,56 @@ export const makeMoveHandler = async (req: Request, res: Response) => {
   res.status(200).end();
 };
 
+// Handler: Chuyển lượt do quá thời gian
+export const passTurnHandler = async (req: Request, res: Response) => {
+  const { roomId } = req.body;
+  if (!roomId) {
+    return res.status(400).end();
+  }
+  const roomKey = `caro:room:${roomId}`;
+  const roomData = await redisClient.hGetAll(roomKey);
+  if (!roomData || !roomData.players || !roomData.turn) {
+    return res.status(404).end();
+  }
+  const players = JSON.parse(roomData.players);
+  const currentTurn = roomData.turn;
+  if (!players.includes(currentTurn)) {
+    return res.status(400).end();
+  }
+  // Đổi lượt cho người còn lại
+  const nextTurn = players.find((id: string) => id !== currentTurn);
+  if (!nextTurn) {
+    return res.status(400).end();
+  }
+  await redisClient.hSet(roomKey, { turn: nextTurn });
+
+  // Broadcast thông báo chuyển lượt cho cả phòng
+  const apiGwClient = new ApiGatewayManagementApiClient({
+    endpoint: WEBSOCKET_API_ENDPOINT,
+    region: "ap-southeast-1",
+  });
+  const passTurnMsg = {
+    type: "passTurn",
+    data: {
+      roomId,
+      nextTurn,
+    },
+  };
+  await Promise.all(
+    players.map(async (connId: string) => {
+      try {
+        await apiGwClient.send(
+          new PostToConnectionCommand({
+            ConnectionId: connId,
+            Data: Buffer.from(JSON.stringify(passTurnMsg)),
+          })
+        );
+      } catch (err) {}
+    })
+  );
+  res.status(200).end();
+};
+
 // Handler: User rời phòng
 export const leaveRoomHandler = async (req: Request, res: Response) => {
   const { roomId, connectionId } = req.body;

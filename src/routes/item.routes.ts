@@ -4,6 +4,7 @@ import {
   buyItem,
   useItem,
   createItem,
+  getItemById,
 } from "../controllers/item.controller.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
 import { rateLimit } from "../middleware/rateLimit.js";
@@ -105,5 +106,27 @@ router.post("/buy", rateLimit, buyItem as any);
  *         description: Sử dụng thành công
  */
 router.post("/use", rateLimit, useItem as any);
+
+/**
+ * @swagger
+ * /items/{id}:
+ *   get:
+ *     summary: Lấy thông tin vật phẩm theo id
+ *     tags:
+ *       - Item
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của vật phẩm
+ *     responses:
+ *       200:
+ *         description: Thông tin vật phẩm
+ *       404:
+ *         description: Không tìm thấy vật phẩm
+ */
+router.get("/:id", getItemById as any);
 
 export default router;

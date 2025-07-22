@@ -2,6 +2,17 @@ import Item from "../model/item.js";
 import User from "../model/user.js";
 import { Request, Response } from "express";
 
+// Lấy thông tin vật phẩm theo id
+export const getItemById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const item = await Item.findById(id);
+    if (!item) return res.status(404).json({ error: "Item not found" });
+    res.json(item);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to get item" });
+  }
+};
 // Lấy danh sách vật phẩm
 export const getItems = async (_req: Request, res: Response) => {
   try {
