@@ -537,6 +537,38 @@ export const passTurnHandler = async (req: Request, res: Response) => {
       } catch (err) {}
     })
   );
+
+  // Nếu nextTurn là bot thì cho bot đánh tự động (nếu game còn playing)
+  const botUserIds = [
+    "687f3f087aee6198397cf831",
+    "687f3e897aee6198397cf82f",
+    "687f1a45c34f751f62ef2329",
+  ];
+  const nextTurnUserId = await redisClient.hGet(
+    `caro:user:${nextTurn}`,
+    "userId"
+  );
+  const updatedRoomData = await redisClient.hGetAll(roomKey);
+  const updatedStatus = updatedRoomData.status;
+  if (
+    nextTurn === "bot_conn_id" &&
+    nextTurnUserId &&
+    botUserIds.includes(String(nextTurnUserId)) &&
+    updatedStatus === "playing"
+  ) {
+    let board: string[][] = JSON.parse(updatedRoomData.board);
+    const move = generateBotMove(board);
+    if (move) {
+      setTimeout(() => {
+        makeMoveHandler(
+          {
+            body: { roomId, connectionId: "bot_conn_id", x: move.x, y: move.y },
+          } as any,
+          { status: () => ({ end: () => {} }) } as any
+        );
+      }, 700);
+    }
+  }
   res.status(200).end();
 };
 
