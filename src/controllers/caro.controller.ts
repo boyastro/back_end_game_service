@@ -288,7 +288,7 @@ export const joinRoomHandler = async (req: Request, res: Response) => {
     waitingIds = waitingIds.filter((id) => id !== "bot_conn_id");
   }
   console.log(`[joinRoomHandler] Danh sách chờ hiện tại:`, waitingIds);
-  const maxTries = 30; // tổng thời gian chờ ~15s (30 lần x 500ms)
+  const maxTries = 10; // tổng thời gian chờ ~5s (10 lần x 500ms)
   let tries = 0;
   while (waitingIds.length == 1 && tries < maxTries) {
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -862,9 +862,9 @@ export const leaveRoomHandler = async (req: Request, res: Response) => {
     `[leaveRoomHandler] Đã đưa connectionId ${connectionId} vào lại set chờ.`
   );
 
-  // Chờ tối đa 15s, nếu trong thời gian đó đủ 2 user thì ghép phòng, nếu không thì gửi message noOpponentFound
+  // Chờ tối đa 5s, nếu trong thời gian đó đủ 2 user thì ghép phòng, nếu không thì gửi message noOpponentFound
   let waitingIds = await redisClient.sMembers("caro:waiting");
-  const maxTries = 30; // 30 lần x 500ms = 15s
+  const maxTries = 10; // 10 lần x 500ms = 5s
   let tries = 0;
   let matched = false;
   while (waitingIds.length < 2 && tries < maxTries) {
