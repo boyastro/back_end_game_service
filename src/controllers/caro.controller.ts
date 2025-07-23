@@ -26,17 +26,213 @@ async function getPlayerInfos(
 }
 
 // Hàm sinh nước đi cho bot (random ô trống)
+// Hàm sinh nước đi cho bot (AI đơn giản: ưu tiên thắng, chặn thắng đối thủ, nếu không thì random)
+/**
+ * Tạo ra nước đi cho bot bằng cách sử dụng thuật toán Minimax với hệ thống tính điểm heuristic.
+ * - Quét tất cả các ô trống một lần.
+ * - Với mỗi ô, tính toán một điểm số dựa trên cả tiềm năng tấn công và phòng thủ.
+ * - Chọn ô có điểm số cao nhất.
+ *
+ * @param board Bàn cờ hiện tại.
+ * @param botSymbol Ký hiệu của bot (mặc định 'O').
+ * @param userSymbol Ký hiệu của người dùng (mặc định 'X').
+ * @returns Tọa độ {x, y} của nước đi tốt nhất hoặc null nếu bàn cờ đã đầy.
+ */
 function generateBotMove(
-  board: (string | null)[][]
+  board: (string | null)[][],
+  botSymbol: string = "O",
+  userSymbol: string = "X"
 ): { x: number; y: number } | null {
+  const size = board.length;
   const emptyCells: { x: number; y: number }[] = [];
-  for (let y = 0; y < board.length; y++) {
-    for (let x = 0; x < board[y].length; x++) {
-      if (board[y][x] === null) emptyCells.push({ x, y });
+
+  // 1. Thu thập tất cả các ô trống
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (board[y][x] === null) {
+        emptyCells.push({ x, y });
+      }
     }
   }
+
   if (emptyCells.length === 0) return null;
-  return emptyCells[Math.floor(Math.random() * emptyCells.length)];
+
+  // Heuristic: Nếu đây là nước đi đầu tiên, đánh vào giữa bàn cờ.
+  if (emptyCells.length === size * size) {
+    const mid = Math.floor(size / 2);
+    return { x: mid, y: mid };
+  }
+
+  // 2. Định nghĩa điểm số cho các mẫu cờ (patterns)
+  // Đây là "bộ não" của bot. Bạn có thể tinh chỉnh các điểm số này.
+  const SCORES = {
+    WIN: 100000000, // Thắng ngay lập tức
+    OPEN_FOUR: 1000000, // 4 quân mở hai đầu (_OOOO_) -> thắng ở nước tiếp theo
+    BLOCKED_FOUR: 50000, // 4 quân bị chặn một đầu (XOOOO_ hoặc _OOOOX)
+    OPEN_THREE: 10000, // 3 quân mở hai đầu (_OOO__)
+    BLOCKED_THREE: 500, // 3 quân bị chặn một đầu (XOOO_ hoặc _OOOX)
+    OPEN_TWO: 100, // 2 quân mở hai đầu (__OO__)
+    BLOCKED_TWO: 10, // 2 quân bị chặn một đầu (XOO__)
+    CENTER_BONUS: 1, // Điểm cộng nhỏ khi ở gần trung tâm
+  };
+
+  let bestMove: { x: number; y: number } | null = null;
+  let maxScore = -Infinity;
+
+  const directions = [
+    [1, 0], // Ngang
+    [0, 1], // Dọc
+    [1, 1], // Chéo chính
+    [1, -1], // Chéo phụ
+  ];
+
+  // 3. Duyệt qua tất cả các ô trống và tính điểm cho mỗi ô
+  for (const cell of emptyCells) {
+    let currentScore = 0;
+
+    // Tính điểm tấn công (nếu bot đặt quân vào ô này)
+    board[cell.y][cell.x] = botSymbol;
+    currentScore += calculateScoreForPosition(cell.x, cell.y, botSymbol, board);
+
+    // Tính điểm phòng thủ (nếu người dùng đặt quân vào ô này)
+    board[cell.y][cell.x] = userSymbol;
+    // Điểm phòng thủ thường quan trọng hơn, có thể nhân với một hệ số
+    currentScore +=
+      calculateScoreForPosition(cell.x, cell.y, userSymbol, board) * 1.1;
+
+    // Đặt lại ô trống
+    board[cell.y][cell.x] = null;
+
+    // Thêm điểm thưởng nhỏ cho các ô gần trung tâm
+    const mid = Math.floor(size / 2);
+    currentScore += (mid - Math.abs(cell.x - mid)) * SCORES.CENTER_BONUS;
+    currentScore += (mid - Math.abs(cell.y - mid)) * SCORES.CENTER_BONUS;
+
+    if (currentScore > maxScore) {
+      maxScore = currentScore;
+      bestMove = cell;
+    }
+  }
+
+  // Hàm tính điểm cho một vị trí cụ thể bằng cách quét 4 hướng
+  function calculateScoreForPosition(
+    x: number,
+    y: number,
+    symbol: string,
+    b: (string | null)[][]
+  ): number {
+    let totalScore = 0;
+    for (const [dx, dy] of directions) {
+      totalScore += evaluateLine(x, y, dx, dy, symbol, b);
+    }
+    return totalScore;
+  }
+
+  // Hàm "cốt lõi": đánh giá một đường (line) và trả về điểm số
+  function evaluateLine(
+    x: number,
+    y: number,
+    dx: number,
+    dy: number,
+    symbol: string,
+    b: (string | null)[][]
+  ): number {
+    let consecutive = 0;
+    let openEnds = 0;
+    let blocked = false;
+    const opponentSymbol = symbol === botSymbol ? userSymbol : botSymbol;
+
+    // Đếm về phía trước
+    for (let i = 1; i < 5; i++) {
+      const nx = x + i * dx;
+      const ny = y + i * dy;
+      if (
+        nx < 0 ||
+        nx >= size ||
+        ny < 0 ||
+        ny >= size ||
+        b[ny][nx] === opponentSymbol
+      ) {
+        blocked = true;
+        break;
+      }
+      if (b[ny][nx] === symbol) {
+        consecutive++;
+      } else {
+        // Gặp ô trống
+        break;
+      }
+    }
+
+    // Đếm về phía sau
+    for (let i = 1; i < 5; i++) {
+      const nx = x - i * dx;
+      const ny = y - i * dy;
+      if (
+        nx < 0 ||
+        nx >= size ||
+        ny < 0 ||
+        ny >= size ||
+        b[ny][nx] === opponentSymbol
+      ) {
+        blocked = true;
+        break;
+      }
+      if (b[ny][nx] === symbol) {
+        consecutive++;
+      } else {
+        // Gặp ô trống
+        break;
+      }
+    }
+
+    // Đếm số đầu mở
+    // Kiểm tra phía trước của chuỗi
+    const frontX = x + (consecutive + 1) * dx;
+    const frontY = y + (consecutive + 1) * dy;
+    if (
+      frontX >= 0 &&
+      frontX < size &&
+      frontY >= 0 &&
+      frontY < size &&
+      b[frontY][frontX] === null
+    ) {
+      openEnds++;
+    }
+
+    // Kiểm tra phía sau của chuỗi
+    const backX = x - dx;
+    const backY = y - dy;
+    if (
+      backX >= 0 &&
+      backX < size &&
+      backY >= 0 &&
+      backY < size &&
+      b[backY][backX] === null
+    ) {
+      openEnds++;
+    }
+
+    // Trả về điểm dựa trên số quân liên tiếp và số đầu mở
+    if (consecutive >= 4) return SCORES.WIN;
+    if (consecutive === 3) {
+      if (openEnds === 2) return SCORES.OPEN_FOUR; // Thực ra đây là tạo ra 4 mở
+      if (openEnds === 1) return SCORES.BLOCKED_FOUR; // Tạo ra 4 bị chặn
+    }
+    if (consecutive === 2) {
+      if (openEnds === 2) return SCORES.OPEN_THREE;
+      if (openEnds === 1) return SCORES.BLOCKED_THREE;
+    }
+    if (consecutive === 1) {
+      if (openEnds === 2) return SCORES.OPEN_TWO;
+      if (openEnds === 1) return SCORES.BLOCKED_TWO;
+    }
+
+    return 0;
+  }
+
+  // Nếu không tìm được nước đi nào tốt hơn (trường hợp hiếm), chọn ngẫu nhiên
+  return bestMove || emptyCells[Math.floor(Math.random() * emptyCells.length)];
 }
 
 // Handler: Khi client connect WebSocket
@@ -86,12 +282,22 @@ export const joinRoomHandler = async (req: Request, res: Response) => {
   }
   // Lấy 2 connectionId từ set caro:waiting, kiểm tra nhiều lần với delay ngắn
   let waitingIds = await redisClient.sMembers("caro:waiting");
+  // Luôn loại bỏ bot_conn_id khỏi set chờ trước khi kiểm tra ghép phòng 2 người thật
+  if (waitingIds.includes("bot_conn_id")) {
+    await redisClient.sRem("caro:waiting", "bot_conn_id");
+    waitingIds = waitingIds.filter((id) => id !== "bot_conn_id");
+  }
   console.log(`[joinRoomHandler] Danh sách chờ hiện tại:`, waitingIds);
   const maxTries = 30; // tổng thời gian chờ ~15s (30 lần x 500ms)
   let tries = 0;
-  while (waitingIds.length < 2 && tries < maxTries) {
+  while (waitingIds.length == 1 && tries < maxTries) {
     await new Promise((resolve) => setTimeout(resolve, 500));
     waitingIds = await redisClient.sMembers("caro:waiting");
+    // Luôn loại bỏ bot_conn_id khỏi set chờ trong mỗi lần lặp
+    if (waitingIds.includes("bot_conn_id")) {
+      await redisClient.sRem("caro:waiting", "bot_conn_id");
+      waitingIds = waitingIds.filter((id) => id !== "bot_conn_id");
+    }
     tries++;
     if (tries % 5 === 0) {
       console.log(
@@ -100,186 +306,189 @@ export const joinRoomHandler = async (req: Request, res: Response) => {
       );
     }
   }
-  if (waitingIds.length < 2) {
-    // Không tìm thấy đối thủ, ghép với bot
-    // Lấy user bot từ danh sách ưu tiên (random)
-    const botUserIds = [
-      "687f3f087aee6198397cf831",
-      "687f3e897aee6198397cf82f",
-      "687f1a45c34f751f62ef2329",
-    ];
-    // Shuffle mảng botUserIds để chọn ngẫu nhiên (clone trước khi sort)
-    const shuffledBotUserIds = [...botUserIds].sort(() => Math.random() - 0.5);
-    let botUser = null;
-    let botUserId = null;
-    for (const id of shuffledBotUserIds) {
-      botUser = await User.findById(id);
-      if (botUser) {
-        botUserId = id;
-        break;
-      }
-    }
-    if (!botUser) {
-      return res.status(400).json({ error: "No bot user found in DB" });
-    }
-    const botConnectionId = "bot_conn_id";
-    await redisClient.hSet(`caro:user:${botConnectionId}`, {
-      userId: String(botUserId),
-    });
-    // Random ai đi trước và random vị trí bot trong mảng players
+  // Nếu đủ 2 người thật thì chỉ ghép 2 người thật, không bao giờ có bot_conn_id
+  if (waitingIds.length >= 2) {
+    // Lấy ngẫu nhiên 2 id trong danh sách chờ (không có bot_conn_id)
+    const shuffled = waitingIds.sort(() => Math.random() - 0.5);
+    const [idA, idB] = shuffled;
+    console.log(`[joinRoomHandler] Chọn ngẫu nhiên 2 id:`, idA, idB);
+    // Chọn ngẫu nhiên ai đi trước
     const firstIdx = Math.random() < 0.5 ? 0 : 1;
-    let players: string[];
-    if (firstIdx === 0) {
-      players = [connectionId, botConnectionId];
-    } else {
-      players = [botConnectionId, connectionId];
-    }
-    const turn = players[0];
-    const { v4: uuidv4 } = await import("uuid");
-    const roomId = `room:${uuidv4()}`;
-    const roomData = {
-      roomId,
-      players,
+    const id1 = [idA, idB][firstIdx];
+    const id2 = [idA, idB][1 - firstIdx];
+    console.log(`[joinRoomHandler] id1 đi trước:`, id1, ", id2: ", id2);
+    // Tạo id phòng mới bằng uuid để không bị trùng
+    const { v4: uuidv4_real } = await import("uuid");
+    const roomIdReal = `room:${uuidv4_real()}`;
+    console.log(`[joinRoomHandler] Tạo roomId mới:`, roomIdReal);
+    // Tạo dữ liệu phòng mới
+    const roomDataReal = {
+      roomId: roomIdReal,
+      players: [id1, id2],
       board: Array(15)
         .fill(null)
-        .map(() => Array(15).fill(null)),
-      turn,
+        .map(() => Array(15).fill(null)), // bàn cờ 15x15
+      turn: id1, // id1 đi trước
       status: "playing",
       createdAt: new Date().toISOString(),
     };
-    // Lưu thông tin phòng vào Redis
-    const hashData: Record<string, string> = {};
-    for (const [k, v] of Object.entries(roomData)) {
-      hashData[k] = typeof v === "object" ? JSON.stringify(v) : String(v);
+    console.log(`[joinRoomHandler] roomData:`, roomDataReal);
+    // Lưu thông tin phòng vào Redis (hash)
+    const hashDataReal: Record<string, string> = {};
+    for (const [k, v] of Object.entries(roomDataReal)) {
+      hashDataReal[k] = typeof v === "object" ? JSON.stringify(v) : String(v);
     }
-    await redisClient.hSet(`caro:room:${roomId}`, hashData);
-    // Xóa user thật khỏi set chờ
-    await redisClient.sRem("caro:waiting", connectionId);
+    await redisClient.hSet(`caro:room:${roomIdReal}`, hashDataReal);
+    console.log(
+      `[joinRoomHandler] Đã lưu room vào Redis: caro:room:${roomIdReal}`
+    );
+    // Xóa 2 id khỏi set chờ
+    await redisClient.sRem("caro:waiting", [id1, id2]);
+    console.log(`[joinRoomHandler] Đã xóa 2 id khỏi set chờ:`, id1, id2);
     // Lấy userId cho từng player
-    const playerInfos = await getPlayerInfos(players);
-    // Broadcast trạng thái bắt đầu game cho user thật
-    const apiGwClient = new ApiGatewayManagementApiClient({
+    const playerInfosReal = await getPlayerInfos([id1, id2]);
+    // Broadcast trạng thái bắt đầu game cho cả 2 user
+    const apiGwClientReal = new ApiGatewayManagementApiClient({
       endpoint: WEBSOCKET_API_ENDPOINT,
       region: "ap-southeast-1",
     });
-    const message = {
-      type: "gameStarted",
-      data: {
-        roomId,
-        players: playerInfos,
-        board: roomData.board,
-        turn,
-        status: roomData.status,
-        myConnectionId: connectionId,
-      },
-    };
-    try {
-      await apiGwClient.send(
-        new PostToConnectionCommand({
-          ConnectionId: connectionId,
-          Data: Buffer.from(JSON.stringify(message)),
-        })
-      );
-    } catch (err) {}
-    // Không cần gửi cho bot
-    // Nếu bot đi trước thì cho bot đánh luôn
-    if (turn === "bot_conn_id") {
-      const move = generateBotMove(roomData.board);
-      if (move) {
-        setTimeout(() => {
-          makeMoveHandler(
-            {
-              body: {
-                roomId,
-                connectionId: "bot_conn_id",
-                x: move.x,
-                y: move.y,
-              },
-            } as any,
-            { status: () => ({ end: () => {} }) } as any
+    console.log(`[joinRoomHandler] Gửi message gameStarted tới:`, [id1, id2]);
+    await Promise.all(
+      [id1, id2].map(async (connId: string) => {
+        const message = {
+          type: "gameStarted",
+          data: {
+            roomId: roomIdReal,
+            players: playerInfosReal,
+            board: roomDataReal.board,
+            turn: id1,
+            status: roomDataReal.status,
+            myConnectionId: connId, // trả về connectionId của chính client này
+          },
+        };
+        try {
+          await apiGwClientReal.send(
+            new PostToConnectionCommand({
+              ConnectionId: connId,
+              Data: Buffer.from(JSON.stringify(message)),
+            })
           );
-        }, 1000); // bot suy nghĩ 1s
-      }
-    }
+          console.log(`[joinRoomHandler] Đã gửi gameStarted tới:`, connId);
+        } catch (err) {}
+      })
+    );
+    return res.status(200).end();
+  }
+  // Trước khi ghép với bot, kiểm tra lại connectionId có còn trong set chờ không (tránh race condition)
+  const stillWaiting = await redisClient.sIsMember(
+    "caro:waiting",
+    connectionId
+  );
+  if (!stillWaiting) {
     return res.status(200).end();
   }
 
-  // Lấy ngẫu nhiên 2 id trong danh sách chờ
-  const shuffled = waitingIds.sort(() => Math.random() - 0.5);
-  const [idA, idB] = shuffled;
-  console.log(`[joinRoomHandler] Chọn ngẫu nhiên 2 id:`, idA, idB);
-
-  // Chọn ngẫu nhiên ai đi trước
-  const firstIdx = Math.random() < 0.5 ? 0 : 1;
-  const id1 = [idA, idB][firstIdx];
-  const id2 = [idA, idB][1 - firstIdx];
-  console.log(`[joinRoomHandler] id1 đi trước:`, id1, ", id2: ", id2);
-
-  // Tạo id phòng mới bằng uuid để không bị trùng
-  const { v4: uuidv4 } = await import("uuid");
-  const roomId = `room:${uuidv4()}`;
-  console.log(`[joinRoomHandler] Tạo roomId mới:`, roomId);
-
-  // Tạo dữ liệu phòng mới
-  const roomData = {
-    roomId,
-    players: [id1, id2],
+  // Lấy user bot từ danh sách ưu tiên (random)
+  const botUserIds = [
+    "687f3f087aee6198397cf831",
+    "687f3e897aee6198397cf82f",
+    "687f1a45c34f751f62ef2329",
+  ];
+  // Shuffle mảng botUserIds để chọn ngẫu nhiên (clone trước khi sort)
+  const shuffledBotUserIds = [...botUserIds].sort(() => Math.random() - 0.5);
+  let botUser = null;
+  let botUserId = null;
+  for (const id of shuffledBotUserIds) {
+    botUser = await User.findById(id);
+    if (botUser) {
+      botUserId = id;
+      break;
+    }
+  }
+  if (!botUser) {
+    return res.status(400).json({ error: "No bot user found in DB" });
+  }
+  const botConnectionId = "bot_conn_id";
+  await redisClient.hSet(`caro:user:${botConnectionId}`, {
+    userId: String(botUserId),
+  });
+  // Ghép user thật với bot
+  let playersBot = [connectionId, botConnectionId];
+  // Random ai đi trước
+  if (Math.random() < 0.5) playersBot.reverse();
+  const turnBot = playersBot[0];
+  const { v4: uuidv4_bot } = await import("uuid");
+  const roomIdBot = `room:${uuidv4_bot()}`;
+  const roomDataBot = {
+    roomId: roomIdBot,
+    players: playersBot,
     board: Array(15)
       .fill(null)
-      .map(() => Array(15).fill(null)), // bàn cờ 15x15
-    turn: id1, // id1 đi trước
+      .map(() => Array(15).fill(null)),
+    turn: turnBot,
     status: "playing",
     createdAt: new Date().toISOString(),
   };
-  console.log(`[joinRoomHandler] roomData:`, roomData);
-
-  // Lưu thông tin phòng vào Redis (hash)
-  const hashData: Record<string, string> = {};
-  for (const [k, v] of Object.entries(roomData)) {
-    hashData[k] = typeof v === "object" ? JSON.stringify(v) : String(v);
+  // Lưu thông tin phòng vào Redis
+  const hashDataBot: Record<string, string> = {};
+  for (const [k, v] of Object.entries(roomDataBot)) {
+    hashDataBot[k] = typeof v === "object" ? JSON.stringify(v) : String(v);
   }
-  await redisClient.hSet(`caro:room:${roomId}`, hashData);
-  console.log(`[joinRoomHandler] Đã lưu room vào Redis: caro:room:${roomId}`);
-
-  // Xóa 2 id khỏi set chờ
-  await redisClient.sRem("caro:waiting", [id1, id2]);
-  console.log(`[joinRoomHandler] Đã xóa 2 id khỏi set chờ:`, id1, id2);
-
+  await redisClient.hSet(`caro:room:${roomIdBot}`, hashDataBot);
+  // Xóa user thật khỏi set chờ
+  await redisClient.sRem("caro:waiting", connectionId);
   // Lấy userId cho từng player
-  const playerInfos = await getPlayerInfos([id1, id2]);
-
-  // Broadcast trạng thái bắt đầu game cho cả 2 user
-  const apiGwClient = new ApiGatewayManagementApiClient({
+  const playerInfosBot = await getPlayerInfos(playersBot);
+  // Broadcast trạng thái bắt đầu game cho user thật
+  const apiGwClientBot = new ApiGatewayManagementApiClient({
     endpoint: WEBSOCKET_API_ENDPOINT,
     region: "ap-southeast-1",
   });
-  console.log(`[joinRoomHandler] Gửi message gameStarted tới:`, [id1, id2]);
-  await Promise.all(
-    [id1, id2].map(async (connId: string) => {
-      const message = {
-        type: "gameStarted",
-        data: {
-          roomId,
-          players: playerInfos,
-          board: roomData.board,
-          turn: id1,
-          status: roomData.status,
-          myConnectionId: connId, // trả về connectionId của chính client này
-        },
-      };
-      try {
-        await apiGwClient.send(
-          new PostToConnectionCommand({
-            ConnectionId: connId,
-            Data: Buffer.from(JSON.stringify(message)),
-          })
+  const messageBot = {
+    type: "gameStarted",
+    data: {
+      roomId: roomIdBot,
+      players: playerInfosBot,
+      board: roomDataBot.board,
+      turn: turnBot,
+      status: roomDataBot.status,
+      myConnectionId: connectionId,
+    },
+  };
+  try {
+    await apiGwClientBot.send(
+      new PostToConnectionCommand({
+        ConnectionId: connectionId,
+        Data: Buffer.from(JSON.stringify(messageBot)),
+      })
+    );
+  } catch (err) {}
+  // Không cần gửi cho bot
+  // Nếu bot đi trước thì cho bot đánh luôn
+  if (turnBot === "bot_conn_id") {
+    // Xác định symbol bot và user dựa vào vị trí bot trong players
+    const botIdx = playersBot.indexOf("bot_conn_id");
+    const userIdx = 1 - botIdx;
+    const botSymbol = botIdx === 0 ? "X" : "O";
+    const userSymbol = userIdx === 0 ? "X" : "O";
+    const move = generateBotMove(roomDataBot.board, botSymbol, userSymbol);
+    if (move) {
+      setTimeout(() => {
+        makeMoveHandler(
+          {
+            body: {
+              roomId: roomIdBot,
+              connectionId: "bot_conn_id",
+              x: move.x,
+              y: move.y,
+            },
+          } as any,
+          { status: () => ({ end: () => {} }) } as any
         );
-        console.log(`[joinRoomHandler] Đã gửi gameStarted tới:`, connId);
-      } catch (err) {}
-    })
-  );
-
-  res.status(200).end();
+      }, 1000); // bot suy nghĩ 1s
+    }
+  }
+  return res.status(200).end();
 };
 
 // Handler: Xử lý nước đi của user
@@ -300,10 +509,20 @@ export const makeMoveHandler = async (req: Request, res: Response) => {
   let board: string[][] = JSON.parse(roomData.board);
   let turn = roomData.turn;
   if (turn !== connectionId) {
-    // Nếu là bot và đến lượt bot thì backend tự động đánh
-    if (turn === "bot_conn_id" && connectionId !== "bot_conn_id") {
-      // Gọi lại makeMoveHandler với nước đi bot tự sinh
-      const move = generateBotMove(board);
+    // Nếu là bot và đến lượt bot thì backend tự động đánh, nhưng chỉ khi phòng có đúng 1 người thật và 1 bot
+    if (
+      turn === "bot_conn_id" &&
+      connectionId !== "bot_conn_id" &&
+      players.length === 2 &&
+      players.includes("bot_conn_id") &&
+      players.filter((id) => id !== "bot_conn_id").length === 1
+    ) {
+      // Xác định symbol bot và user dựa vào vị trí bot trong players
+      const botIdx = players.indexOf("bot_conn_id");
+      const userIdx = 1 - botIdx;
+      const botSymbol = botIdx === 0 ? "X" : "O";
+      const userSymbol = userIdx === 0 ? "X" : "O";
+      const move = generateBotMove(board, botSymbol, userSymbol);
       if (move) {
         await makeMoveHandler(
           {
@@ -455,7 +674,7 @@ export const makeMoveHandler = async (req: Request, res: Response) => {
     }
   }
 
-  // Sau khi user đánh xong, nếu đến lượt bot thì tự động cho bot đánh tiếp (chỉ khi game chưa kết thúc)
+  // Sau khi user đánh xong, nếu đến lượt bot thì tự động cho bot đánh tiếp (chỉ khi game chưa kết thúc và phòng chỉ có 1 người thật + 1 bot)
   const botUserIds = [
     "687f3f087aee6198397cf831",
     "687f3e897aee6198397cf82f",
@@ -472,9 +691,17 @@ export const makeMoveHandler = async (req: Request, res: Response) => {
     nextTurn === "bot_conn_id" &&
     nextTurnUserId &&
     botUserIds.includes(String(nextTurnUserId)) &&
-    updatedStatus === "playing"
+    updatedStatus === "playing" &&
+    players.length === 2 &&
+    players.includes("bot_conn_id") &&
+    players.filter((id) => id !== "bot_conn_id").length === 1
   ) {
-    const move = generateBotMove(board);
+    // Xác định symbol bot và user dựa vào vị trí bot trong players
+    const botIdx = players.indexOf("bot_conn_id");
+    const userIdx = 1 - botIdx;
+    const botSymbol = botIdx === 0 ? "X" : "O";
+    const userSymbol = userIdx === 0 ? "X" : "O";
+    const move = generateBotMove(board, botSymbol, userSymbol);
     if (move) {
       setTimeout(() => {
         makeMoveHandler(
@@ -557,7 +784,12 @@ export const passTurnHandler = async (req: Request, res: Response) => {
     updatedStatus === "playing"
   ) {
     let board: string[][] = JSON.parse(updatedRoomData.board);
-    const move = generateBotMove(board);
+    // Xác định symbol bot và user dựa vào vị trí bot trong players
+    const botIdx = players.indexOf("bot_conn_id");
+    const userIdx = 1 - botIdx;
+    const botSymbol = botIdx === 0 ? "X" : "O";
+    const userSymbol = userIdx === 0 ? "X" : "O";
+    const move = generateBotMove(board, botSymbol, userSymbol);
     if (move) {
       setTimeout(() => {
         makeMoveHandler(
