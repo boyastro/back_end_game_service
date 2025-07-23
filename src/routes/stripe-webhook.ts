@@ -30,7 +30,6 @@ import express from "express";
 import { logger } from "../middleware/logger.js";
 
 const router = express.Router();
-router.use(logger);
 
 import { handleStripeWebhook } from "../controllers/stripe-webhook.controller.js";
 

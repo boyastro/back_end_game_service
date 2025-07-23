@@ -14,6 +14,10 @@ const stripe = new Stripe(stripeSecretKey, {
 });
 
 export const handleStripeWebhook = async (req: Request, res: Response) => {
+  console.log("[Stripe Webhook] Nhận request webhook:", {
+    headers: req.headers,
+    body: req.body,
+  });
   const sig = req.headers["stripe-signature"]!;
   let event: Stripe.Event;
 
@@ -23,10 +27,14 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
       sig,
       process.env.STRIPE_WEBHOOK_SECRET!
     );
+    console.log("[Stripe Webhook] Xác thực chữ ký webhook thành công.");
   } catch (err: any) {
+    console.error("[Stripe Webhook] Lỗi xác thực webhook:", err);
     res.status(400).send(`Webhook Error: ${err.message}`);
     return;
   }
+
+  console.log("[Stripe Webhook] Nhận event:", event.type);
 
   // Xử lý event thành công
   if (event.type === "payment_intent.succeeded") {
@@ -46,6 +54,7 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
     const itemId = paymentIntent.metadata?.itemId;
     if (userId && itemId) {
       try {
+        console.log(`[Stripe Webhook] Tìm user ${userId} và item ${itemId}`);
         const user = await User.findById(userId);
         const item = await Item.findById(itemId);
         if (!user) {
@@ -59,15 +68,27 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
             "[Stripe Webhook] Inventory trước khi cập nhật:",
             user.inventory
           );
+          // Lấy quantity từ metadata nếu có, mặc định là 1
+          let quantity = 1;
+          if (paymentIntent.metadata && paymentIntent.metadata.quantity) {
+            const q = parseInt(paymentIntent.metadata.quantity, 10);
+            if (!isNaN(q) && q > 0) quantity = q;
+          }
           const invItem = user.inventory.find(
             (i: any) =>
               (i.item && i.item.toString() === itemId) ||
               (i._id && i._id.toString() === itemId)
           );
           if (invItem) {
-            invItem.quantity += 1;
+            console.log(
+              `[Stripe Webhook] Đã có item trong kho, cộng thêm ${quantity}`
+            );
+            invItem.quantity += quantity;
           } else {
-            user.inventory.push({ item: item._id, quantity: 1 });
+            console.log(
+              `[Stripe Webhook] Chưa có item trong kho, thêm mới với số lượng ${quantity}`
+            );
+            user.inventory.push({ item: item._id, quantity });
           }
           await user.save();
           console.log(
@@ -76,8 +97,10 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
           );
         }
       } catch (err) {
-        // Log lỗi nếu cần
+        console.error("[Stripe Webhook] Lỗi khi cập nhật kho:", err);
       }
+    } else {
+      console.error("[Stripe Webhook] Thiếu userId hoặc itemId trong metadata");
     }
   }
 

@@ -1,6 +1,14 @@
 import Item from "../model/item.js";
 import User from "../model/user.js";
+import dotenv from "dotenv";
+dotenv.config();
+
 import { Request, Response } from "express";
+import Stripe from "stripe";
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+if (!stripeSecretKey) {
+  throw new Error("STRIPE_SECRET_KEY is not set in environment variables");
+}
 
 // Lấy thông tin vật phẩm theo id
 export const getItemById = async (req: Request, res: Response) => {
@@ -26,22 +34,47 @@ export const getItems = async (_req: Request, res: Response) => {
 // Mua vật phẩm
 export const buyItem = async (req: Request, res: Response) => {
   try {
-    const { userId, itemId, quantity = 1 } = req.body;
+    const { userId, itemId, quantity = 1, currency = "usd" } = req.body;
+    console.log("[buyItem] req.body:", req.body);
     const user = await User.findById(userId);
     const item = await Item.findById(itemId);
-    if (!user || !item)
+    if (!user || !item) {
+      console.error("[buyItem] User or item not found", { userId, itemId });
       return res.status(404).json({ error: "User or item not found" });
-    // (Có thể kiểm tra tiền, trừ tiền ở đây)
-    const inv = user.inventory.find((i) => String(i.item) === String(itemId));
-    if (inv) {
-      inv.quantity += quantity;
-    } else {
-      user.inventory.push({ item: itemId, quantity });
     }
-    await user.save();
-    res.json(user.inventory);
+
+    // Tính tổng tiền
+    const amount = item.price * quantity * 100; // Stripe dùng cent
+    console.log("[buyItem] amount:", amount, "currency:", currency);
+
+    // Tạo PaymentIntent
+    const stripe = new Stripe(stripeSecretKey, {
+      apiVersion: "2025-06-30.basil",
+    });
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency,
+      payment_method_types: ["card"],
+      metadata: {
+        userId,
+        itemId,
+        quantity,
+      },
+    });
+    console.log("[buyItem] Created PaymentIntent:", {
+      id: paymentIntent.id,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      clientSecret: paymentIntent.client_secret,
+      status: paymentIntent.status,
+      metadata: paymentIntent.metadata,
+    });
+
+    // Trả về clientSecret cho frontend
+    res.json({ clientSecret: paymentIntent.client_secret });
   } catch (err) {
-    res.status(500).json({ error: "Failed to buy item" });
+    console.error("[buyItem] Error:", err);
+    res.status(500).json({ error: "Failed to create payment intent" });
   }
 };
 
