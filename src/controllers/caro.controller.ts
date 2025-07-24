@@ -653,6 +653,7 @@ export const makeMoveHandler = async (req: Request, res: Response) => {
           winnerUser.score = (winnerUser.score || 0) + 20;
           winnerUser.totalScore = (winnerUser.totalScore || 0) + 20;
           winnerUser.winCount = (winnerUser.winCount || 0) + 1;
+          winnerUser.coin = (winnerUser.coin || 0) + 10;
           if ((winnerUser.score || 0) > (winnerUser.highestScore || 0)) {
             winnerUser.highestScore = winnerUser.score;
           }
