@@ -1,6 +1,28 @@
 import User from "../model/user.js";
 import { Request, Response } from "express";
 
+export const getSpinInfo = async (req: Request, res: Response) => {
+  const userId = req.query.userId as string;
+  if (!userId) return res.status(400).json({ error: "Thiếu userId" });
+
+  const user = await User.findById(userId);
+  if (!user) return res.status(404).json({ error: "Không tìm thấy user" });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let spinToday = user.spinHistory.find(
+    (s: any) => s.date && new Date(s.date).getTime() === today.getTime()
+  );
+
+  const spinsLeft = spinToday ? Math.max(2 - spinToday.count, 0) : 2;
+
+  res.json({
+    spinsLeft,
+    spinCountToday: spinToday ? spinToday.count : 0,
+  });
+};
+
 export const spin = async (req: Request, res: Response) => {
   const userId = req.body.userId; // Nên lấy từ token/session thực tế
   if (!userId) return res.status(401).json({ error: "Chưa đăng nhập" });
