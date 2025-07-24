@@ -35,6 +35,13 @@ const userSchema = new mongoose.Schema({
       quantity: { type: Number, default: 1 },
     },
   ],
+  coin: { type: Number, default: 0 }, // số coin của người dùng
+  spinHistory: [
+    {
+      date: { type: Date },
+      count: { type: Number, default: 0 },
+    },
+  ], // lịch sử lượt quay mỗi ngày
   dailyRewardAt: { type: Date }, // thời điểm nhận thưởng hàng ngày gần nhất
 });
 

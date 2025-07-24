@@ -11,6 +11,7 @@ import itemRoutes from "./routes/item.routes.js";
 import rewardRoutes from "./routes/reward.routes.js";
 import paymentRoutes from "./routes/payment.js";
 import stripeWebhookRoutes from "./routes/stripe-webhook.js";
+import spinRoutes from "./routes/spin.routes.js";
 import { swaggerUi, specs } from "./swagger.js";
 import { registerChatSocket } from "./socket/chat.socket.js";
 import caroRoutes from "./routes/caro.routes.js";
@@ -38,6 +39,7 @@ mongoose
 
   // Đăng ký route Stripe webhook trước khi dùng express.json()
   app.use("/stripe", stripeWebhookRoutes);
+  app.use("/spin", spinRoutes);
 
   app.use(express.json());
   app.use(cors({ origin: "*" }));
