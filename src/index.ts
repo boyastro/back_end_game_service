@@ -39,7 +39,6 @@ mongoose
 
   // Đăng ký route Stripe webhook trước khi dùng express.json()
   app.use("/stripe", stripeWebhookRoutes);
-  app.use("/spin", spinRoutes);
 
   app.use(express.json());
   app.use(cors({ origin: "*" }));
@@ -57,6 +56,7 @@ mongoose
   app.use("/rewards", rewardRoutes);
   app.use("/caro", caroRoutes);
   app.use("/payments", paymentRoutes);
+  app.use("/spin", spinRoutes);
   app.get("/whoami", (req, res) => {
     res.send(`This is container: ${process.env.HOSTNAME || process.pid}`);
   });
