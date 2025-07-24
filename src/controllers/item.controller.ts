@@ -1,3 +1,5 @@
+// Tạo session thanh toán Stripe cho coin package
+
 import Item from "../model/item.js";
 import User from "../model/user.js";
 import dotenv from "dotenv";
@@ -9,6 +11,48 @@ const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 if (!stripeSecretKey) {
   throw new Error("STRIPE_SECRET_KEY is not set in environment variables");
 }
+
+export const createCoinSession = async (req: Request, res: Response) => {
+  try {
+    const { packageId, userId } = req.body;
+    const coinPackages = [
+      { id: "coin_10", amount: 10, price: 10 },
+      { id: "coin_50", amount: 50, price: 50 },
+      { id: "coin_100", amount: 100, price: 85 },
+      { id: "coin_500", amount: 500, price: 399 },
+    ];
+    const pkg = coinPackages.find((p) => p.id === packageId);
+    if (!pkg) {
+      return res.status(400).json({ error: "Invalid packageId" });
+    }
+    const stripe = new Stripe(stripeSecretKey, {
+      apiVersion: "2025-06-30.basil",
+    });
+    const amount = pkg.price * 100; // Stripe dùng cent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: "usd",
+      payment_method_types: ["card"],
+      metadata: {
+        userId,
+        packageId: pkg.id,
+        amount: pkg.amount,
+      },
+    });
+    console.log("[createCoinSession] Created PaymentIntent:", {
+      id: paymentIntent.id,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
+      clientSecret: paymentIntent.client_secret,
+      status: paymentIntent.status,
+      metadata: paymentIntent.metadata,
+    });
+    res.json({ clientSecret: paymentIntent.client_secret });
+  } catch (err) {
+    console.error("[createCoinSession] Error:", err);
+    res.status(500).json({ error: "Failed to create coin session" });
+  }
+};
 
 // Lấy thông tin vật phẩm theo id
 export const getItemById = async (req: Request, res: Response) => {

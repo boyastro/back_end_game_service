@@ -49,12 +49,12 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
       itemId: paymentIntent.metadata?.itemId,
       metadata: paymentIntent.metadata,
     });
-    // Giả định metadata có userId và itemId
     const userId = paymentIntent.metadata?.userId;
     const itemId = paymentIntent.metadata?.itemId;
+    const coinAmount = paymentIntent.metadata?.amount;
+    // Nếu có itemId: giao dịch mua vật phẩm
     if (userId && itemId) {
       try {
-        console.log(`[Stripe Webhook] Tìm user ${userId} và item ${itemId}`);
         const user = await User.findById(userId);
         const item = await Item.findById(itemId);
         if (!user) {
@@ -64,11 +64,6 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
           console.error("[Stripe Webhook] Không tìm thấy item:", itemId);
         }
         if (user && item) {
-          console.log(
-            "[Stripe Webhook] Inventory trước khi cập nhật:",
-            user.inventory
-          );
-          // Lấy quantity từ metadata nếu có, mặc định là 1
           let quantity = 1;
           if (paymentIntent.metadata && paymentIntent.metadata.quantity) {
             const q = parseInt(paymentIntent.metadata.quantity, 10);
@@ -80,27 +75,35 @@ export const handleStripeWebhook = async (req: Request, res: Response) => {
               (i._id && i._id.toString() === itemId)
           );
           if (invItem) {
-            console.log(
-              `[Stripe Webhook] Đã có item trong kho, cộng thêm ${quantity}`
-            );
             invItem.quantity += quantity;
           } else {
-            console.log(
-              `[Stripe Webhook] Chưa có item trong kho, thêm mới với số lượng ${quantity}`
-            );
             user.inventory.push({ item: item._id, quantity });
           }
           await user.save();
-          console.log(
-            "[Stripe Webhook] Inventory sau khi cập nhật:",
-            user.inventory
-          );
         }
       } catch (err) {
         console.error("[Stripe Webhook] Lỗi khi cập nhật kho:", err);
       }
+    }
+    // Nếu có coinAmount: giao dịch mua coin
+    else if (userId && coinAmount) {
+      try {
+        const user = await User.findById(userId);
+        const coin = parseInt(coinAmount, 10);
+        if (!user) {
+          console.error("[Stripe Webhook] Không tìm thấy user:", userId);
+        } else if (!isNaN(coin) && coin > 0) {
+          user.coin = (user.coin || 0) + coin;
+          await user.save();
+          console.log(
+            `[Stripe Webhook] Đã cộng ${coin} coin cho user ${userId}`
+          );
+        }
+      } catch (err) {
+        console.error("[Stripe Webhook] Lỗi khi cộng coin:", err);
+      }
     } else {
-      console.error("[Stripe Webhook] Thiếu userId hoặc itemId trong metadata");
+      console.error("[Stripe Webhook] Thiếu thông tin metadata cho giao dịch");
     }
   }
 

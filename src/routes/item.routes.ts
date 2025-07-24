@@ -5,6 +5,7 @@ import {
   useItem,
   createItem,
   getItemById,
+  createCoinSession,
 } from "../controllers/item.controller.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
 import { rateLimit } from "../middleware/rateLimit.js";
@@ -128,5 +129,35 @@ router.post("/use", rateLimit, useItem as any);
  *         description: Không tìm thấy vật phẩm
  */
 router.get("/:id", getItemById as any);
+/**
+ * @swagger
+ * /items/create-coin-session:
+ *   post:
+ *     summary: Tạo session thanh toán Stripe cho gói coin
+ *     tags:
+ *       - Coin
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               packageId:
+ *                 type: string
+ *                 description: ID của gói coin
+ *     responses:
+ *       200:
+ *         description: Trả về clientSecret để thanh toán Stripe
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 clientSecret:
+ *                   type: string
+ *                   example: "pi_123456_secret_abcdef"
+ */
+router.post("/create-coin-session", rateLimit, createCoinSession as any);
 
 export default router;
