@@ -156,3 +156,39 @@ export const createItem = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to create item" });
   }
 };
+
+// Mua vật phẩm bằng coin
+export const byCoinItem = async (req: Request, res: Response) => {
+  try {
+    const { userId, itemId, quantity = 1 } = req.body;
+    if (!userId || !itemId) {
+      return res.status(400).json({ error: "Thiếu userId hoặc itemId" });
+    }
+    const user = await User.findById(userId);
+    const item = await Item.findById(itemId);
+    if (!user || !item) {
+      return res.status(404).json({ error: "User hoặc item không tồn tại" });
+    }
+    if (quantity < 1 || !Number.isInteger(quantity)) {
+      return res.status(400).json({ error: "Số lượng không hợp lệ" });
+    }
+    const totalCoin = item.price * quantity;
+    if ((user.coin || 0) < totalCoin) {
+      return res.status(400).json({ error: "Không đủ coin để mua vật phẩm" });
+    }
+    user.coin -= totalCoin;
+    let invItem = user.inventory.find(
+      (i: any) => String(i.item) === String(item._id)
+    );
+    if (invItem) {
+      invItem.quantity += quantity;
+    } else {
+      user.inventory.push({ item: item._id, quantity });
+    }
+    await user.save();
+    res.json({ success: true, coin: user.coin, inventory: user.inventory });
+  } catch (err) {
+    console.error("[byCoinItem] Error:", err);
+    res.status(500).json({ error: "Lỗi khi mua vật phẩm bằng coin" });
+  }
+};

@@ -6,6 +6,7 @@ import {
   createItem,
   getItemById,
   createCoinSession,
+  byCoinItem,
 } from "../controllers/item.controller.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
 import { rateLimit } from "../middleware/rateLimit.js";
@@ -159,5 +160,43 @@ router.get("/:id", getItemById as any);
  *                   example: "pi_123456_secret_abcdef"
  */
 router.post("/create-coin-session", rateLimit, createCoinSession as any);
-
+/**
+ * @swagger
+ * /items/buy-coin-item:
+ *   post:
+ *     summary: Mua vật phẩm bằng coin
+ *     tags:
+ *       - Item
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               userId:
+ *                 type: string
+ *               itemId:
+ *                 type: string
+ *               quantity:
+ *                 type: number
+ *                 default: 1
+ *     responses:
+ *       200:
+ *         description: Mua thành công bằng coin
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 coin:
+ *                   type: number
+ *                 inventory:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ */
+router.post("/buy-coin-item", rateLimit, byCoinItem as any);
 export default router;
