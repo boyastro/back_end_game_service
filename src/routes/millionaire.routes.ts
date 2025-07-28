@@ -75,7 +75,22 @@ router.post("/add-coin", addCoinForMillionaire as any);
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/MillionaireQuestion'
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                 question:
+ *                   type: string
+ *                 answers:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 correctIndex:
+ *                   type: integer
+ *                 level:
+ *                   type: integer
+ *                 explanation:
+ *                   type: string
  */
 router.post("/create-question", createMillionaireQuestion as any);
 
