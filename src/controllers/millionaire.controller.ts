@@ -55,3 +55,29 @@ export const createMillionaireQuestion = async (
     res.status(500).json({ error: "Lỗi khi tạo câu hỏi" });
   }
 };
+
+// Lấy ngẫu nhiên 1 câu hỏi theo level cho game Millionaire
+export const getMillionaireQuestionByLevel = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { level } = req.query;
+    const levelNum = Number(level);
+    if (![1, 2, 3].includes(levelNum)) {
+      return res.status(400).json({ error: "Level không hợp lệ" });
+    }
+    const count = await MillionaireQuestion.countDocuments({ level: levelNum });
+    if (count === 0) {
+      return res.status(404).json({ error: "Không có câu hỏi cho level này" });
+    }
+    const rand = Math.floor(Math.random() * count);
+    const question = await MillionaireQuestion.findOne({
+      level: levelNum,
+    }).skip(rand);
+    res.json(question);
+  } catch (err) {
+    console.error("[getMillionaireQuestionByLevel] Error:", err);
+    res.status(500).json({ error: "Lỗi khi lấy câu hỏi" });
+  }
+};

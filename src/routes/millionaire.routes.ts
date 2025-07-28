@@ -1,6 +1,8 @@
 import express from "express";
 import { addCoinForMillionaire } from "../controllers/millionaire.controller.js";
 import { createMillionaireQuestion } from "../controllers/millionaire.controller.js";
+import { getMillionaireQuestionByLevel } from "../controllers/millionaire.controller.js";
+
 import { authenticateToken } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
@@ -93,5 +95,54 @@ router.post("/add-coin", addCoinForMillionaire as any);
  *                   type: string
  */
 router.post("/create-question", createMillionaireQuestion as any);
+
+/**
+ * @swagger
+ * /millionaire/question:
+ *   get:
+ *     summary: Lấy ngẫu nhiên 1 câu hỏi theo level cho game Millionaire
+ *     tags:
+ *       - Millionaire
+ *     parameters:
+ *       - in: query
+ *         name: level
+ *         required: true
+ *         schema:
+ *           type: integer
+ *           enum: [1, 2, 3]
+ *         description: Cấp độ câu hỏi (1: dễ, 2: trung bình, 3: khó)
+ *     responses:
+ *       200:
+ *         description: Trả về 1 câu hỏi
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                 question:
+ *                   type: string
+ *                 answers:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                 correctIndex:
+ *                   type: integer
+ *                 level:
+ *                   type: integer
+ *                 explanation:
+ *                   type: string
+ *       404:
+ *         description: Không có câu hỏi cho level này
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ */
+router.get("/question", getMillionaireQuestionByLevel as any);
 
 export default router;
