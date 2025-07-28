@@ -62,19 +62,51 @@ export const getMillionaireQuestionByLevel = async (
   res: Response
 ) => {
   try {
-    const { level } = req.query;
+    const { level, excludeIds } = req.query;
     const levelNum = Number(level);
+    console.log(
+      "[getMillionaireQuestionByLevel] level:",
+      level,
+      "levelNum:",
+      levelNum
+    );
     if (![1, 2, 3].includes(levelNum)) {
+      console.log(
+        "[getMillionaireQuestionByLevel] Level không hợp lệ:",
+        levelNum
+      );
       return res.status(400).json({ error: "Level không hợp lệ" });
     }
-    const count = await MillionaireQuestion.countDocuments({ level: levelNum });
+    // Xử lý excludeIds: có thể là string (dạng 'a,b,c') hoặc array
+    let exclude: string[] = [];
+    if (excludeIds) {
+      if (Array.isArray(excludeIds)) {
+        exclude = excludeIds as string[];
+      } else if (typeof excludeIds === "string") {
+        exclude = excludeIds.includes(",")
+          ? excludeIds.split(",")
+          : [excludeIds];
+      }
+    }
+    console.log(
+      "[getMillionaireQuestionByLevel] excludeIds:",
+      excludeIds,
+      "exclude:",
+      exclude
+    );
+    const filter: any = { level: levelNum };
+    if (exclude.length > 0) filter._id = { $nin: exclude };
+    console.log("[getMillionaireQuestionByLevel] filter:", filter);
+    const count = await MillionaireQuestion.countDocuments(filter);
+    console.log("[getMillionaireQuestionByLevel] count:", count);
     if (count === 0) {
-      return res.status(404).json({ error: "Không có câu hỏi cho level này" });
+      console.log("[getMillionaireQuestionByLevel] Không còn câu hỏi phù hợp");
+      return res.status(404).json({ error: "Không còn câu hỏi phù hợp" });
     }
     const rand = Math.floor(Math.random() * count);
-    const question = await MillionaireQuestion.findOne({
-      level: levelNum,
-    }).skip(rand);
+    console.log("[getMillionaireQuestionByLevel] rand:", rand);
+    const question = await MillionaireQuestion.findOne(filter).skip(rand);
+    console.log("[getMillionaireQuestionByLevel] question:", question);
     res.json(question);
   } catch (err) {
     console.error("[getMillionaireQuestionByLevel] Error:", err);
