@@ -1,3 +1,5 @@
+import millionaireRoutes from "./routes/millionaire.routes.js";
+
 import express from "express";
 import http from "http";
 import mongoose from "mongoose";
@@ -57,6 +59,7 @@ mongoose
   app.use("/caro", caroRoutes);
   app.use("/payments", paymentRoutes);
   app.use("/spin", spinRoutes);
+  app.use("/millionaire", millionaireRoutes);
   app.get("/whoami", (req, res) => {
     res.send(`This is container: ${process.env.HOSTNAME || process.pid}`);
   });
