@@ -1,3 +1,4 @@
+import MillionaireQuestion from "../model/millionaireQuestion.js";
 import User from "../model/user.js";
 import { Request, Response } from "express";
 
@@ -20,5 +21,37 @@ export const addCoinForMillionaire = async (req: Request, res: Response) => {
   } catch (err) {
     console.error("[addCoinForMillionaire] Error:", err);
     res.status(500).json({ error: "Lỗi khi cộng coin cho user" });
+  }
+};
+// Tạo câu hỏi mới cho game Millionaire
+export const createMillionaireQuestion = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { question, answers, correctIndex, level, explanation } = req.body;
+    if (
+      !question ||
+      !Array.isArray(answers) ||
+      answers.length !== 4 ||
+      typeof correctIndex !== "number" ||
+      correctIndex < 0 ||
+      correctIndex > 3 ||
+      ![1, 2, 3].includes(level)
+    ) {
+      return res.status(400).json({ error: "Dữ liệu không hợp lệ" });
+    }
+    const newQuestion = new MillionaireQuestion({
+      question,
+      answers,
+      correctIndex,
+      level,
+      explanation,
+    });
+    await newQuestion.save();
+    res.status(201).json(newQuestion);
+  } catch (err) {
+    console.error("[createMillionaireQuestion] Error:", err);
+    res.status(500).json({ error: "Lỗi khi tạo câu hỏi" });
   }
 };
