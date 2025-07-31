@@ -1,5 +1,4 @@
 import millionaireRoutes from "./routes/millionaire.routes.js";
-
 import express from "express";
 import http from "http";
 import mongoose from "mongoose";
@@ -14,9 +13,10 @@ import rewardRoutes from "./routes/reward.routes.js";
 import paymentRoutes from "./routes/payment.js";
 import stripeWebhookRoutes from "./routes/stripe-webhook.js";
 import spinRoutes from "./routes/spin.routes.js";
-import { swaggerUi, specs } from "./swagger.js";
+import { swaggerUi, specs } from "./utils/swagger.js";
 import { registerChatSocket } from "./socket/chat.socket.js";
 import caroRoutes from "./routes/caro.routes.js";
+import wordRoutes from "./routes/word.routes.js";
 import cors from "cors";
 import redisClient from "./utils/redisClient.js";
 import client from "prom-client";
@@ -57,6 +57,7 @@ mongoose
   app.use("/items", itemRoutes);
   app.use("/rewards", rewardRoutes);
   app.use("/caro", caroRoutes);
+  app.use("/words", wordRoutes);
   app.use("/payments", paymentRoutes);
   app.use("/spin", spinRoutes);
   app.use("/millionaire", millionaireRoutes);

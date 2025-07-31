@@ -7,7 +7,7 @@ router.use(authenticateToken as express.RequestHandler);
 
 /**
  * @swagger
- * /words:
+ * /words/make-words:
  *   post:
  *     summary: Tạo nhiều câu hỏi (tối đa 10)
  *     tags:
@@ -63,6 +63,6 @@ router.use(authenticateToken as express.RequestHandler);
  *         description: Lỗi server
  */
 // Route tạo nhiều câu hỏi (tối đa 10)
-router.post("/words", createWords as any);
+router.post("/make-words", createWords as any);
 
 export default router;
