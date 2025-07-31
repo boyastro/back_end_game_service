@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import Word from "../model/word";
+import Word from "../model/word.js";
 
 // Tạo nhiều câu hỏi (tối đa 10)
 export const createWords = async (req: Request, res: Response) => {

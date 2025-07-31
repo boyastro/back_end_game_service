@@ -54,7 +54,22 @@ router.use(authenticateToken as express.RequestHandler);
  *                 data:
  *                   type: array
  *                   items:
- *                     $ref: '#/components/schemas/Word'
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                         example: 64c8e2f2b6e2a2a1b2c3d4e5
+ *                       word:
+ *                         type: string
+ *                         example: APPLE
+ *                       hint:
+ *                         type: string
+ *                         example: A kind of fruit
+ *                       difficulty:
+ *                         type: integer
+ *                         minimum: 1
+ *                         maximum: 3
+ *                         example: 1
  *       400:
  *         description: Dữ liệu không hợp lệ
  *       409:
