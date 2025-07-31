@@ -1,0 +1,68 @@
+import express from "express";
+import { createWords } from "../controllers/word.controller.js";
+import { authenticateToken } from "../middleware/auth.middleware.js";
+
+const router = express.Router();
+router.use(authenticateToken as express.RequestHandler);
+
+/**
+ * @swagger
+ * /words:
+ *   post:
+ *     summary: Tạo nhiều câu hỏi (tối đa 10)
+ *     tags:
+ *       - Words
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               words:
+ *                 type: array
+ *                 maxItems: 10
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - word
+ *                     - hint
+ *                     - difficulty
+ *                   properties:
+ *                     word:
+ *                       type: string
+ *                       example: APPLE
+ *                     hint:
+ *                       type: string
+ *                       example: A kind of fruit
+ *                     difficulty:
+ *                       type: integer
+ *                       minimum: 1
+ *                       maximum: 3
+ *     responses:
+ *       201:
+ *         description: Tạo thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Word'
+ *       400:
+ *         description: Dữ liệu không hợp lệ
+ *       409:
+ *         description: Một số từ đã tồn tại
+ *       500:
+ *         description: Lỗi server
+ */
+// Route tạo nhiều câu hỏi (tối đa 10)
+router.post("/words", createWords as any);
+
+export default router;
