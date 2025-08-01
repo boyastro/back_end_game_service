@@ -34,3 +34,29 @@ export const createWords = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Lỗi server", error: err.message });
   }
 };
+// Lấy ngẫu nhiên 1 câu hỏi theo cấp độ difficulty
+export const getRandomWordByDifficulty = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { difficulty } = req.query;
+    const diffNum = Number(difficulty);
+    if (![1, 2, 3].includes(diffNum)) {
+      return res
+        .status(400)
+        .json({ message: "difficulty phải là 1, 2 hoặc 3" });
+    }
+    const count = await Word.countDocuments({ difficulty: diffNum });
+    if (count === 0) {
+      return res
+        .status(404)
+        .json({ message: "Không có câu hỏi cho cấp độ này" });
+    }
+    const random = Math.floor(Math.random() * count);
+    const word = await Word.findOne({ difficulty: diffNum }).skip(random);
+    return res.status(200).json({ data: word });
+  } catch (err: any) {
+    return res.status(500).json({ message: "Lỗi server", error: err.message });
+  }
+};

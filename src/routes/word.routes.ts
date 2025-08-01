@@ -1,5 +1,8 @@
 import express from "express";
-import { createWords } from "../controllers/word.controller.js";
+import {
+  createWords,
+  getRandomWordByDifficulty,
+} from "../controllers/word.controller.js";
 import { authenticateToken } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
@@ -79,5 +82,58 @@ router.use(authenticateToken as express.RequestHandler);
  */
 // Route tạo nhiều câu hỏi (tối đa 10)
 router.post("/make-words", createWords as any);
+
+/**
+ * @swagger
+ * /words/random:
+ *   get:
+ *     summary: Lấy ngẫu nhiên 1 câu hỏi theo cấp độ difficulty
+ *     tags:
+ *       - Words
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: difficulty
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 3
+ *         required: true
+ *         description: Cấp độ câu hỏi (1, 2 hoặc 3)
+ *     responses:
+ *       200:
+ *         description: Thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                       example: 64c8e2f2b6e2a2a1b2c3d4e5
+ *                     word:
+ *                       type: string
+ *                       example: APPLE
+ *                     hint:
+ *                       type: string
+ *                       example: A kind of fruit
+ *                     difficulty:
+ *                       type: integer
+ *                       minimum: 1
+ *                       maximum: 3
+ *                       example: 1
+ *       400:
+ *         description: Sai tham số difficulty
+ *       404:
+ *         description: Không có câu hỏi cho cấp độ này
+ *       500:
+ *         description: Lỗi server
+ */
+// Route lấy ngẫu nhiên 1 câu hỏi theo difficulty
+router.get("/random", getRandomWordByDifficulty as any);
 
 export default router;
