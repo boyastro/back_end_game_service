@@ -40,21 +40,33 @@ export const getRandomWordByDifficulty = async (
   res: Response
 ) => {
   try {
-    const { difficulty } = req.query;
+    const { difficulty, excludeIds } = req.body;
     const diffNum = Number(difficulty);
     if (![1, 2, 3].includes(diffNum)) {
       return res
         .status(400)
         .json({ message: "difficulty phải là 1, 2 hoặc 3" });
     }
-    const count = await Word.countDocuments({ difficulty: diffNum });
+    let excludeArr: string[] = [];
+    if (excludeIds) {
+      if (typeof excludeIds === "string") {
+        excludeArr = excludeIds.split(",").map((id) => id.trim());
+      } else if (Array.isArray(excludeIds)) {
+        excludeArr = excludeIds.map(String);
+      }
+    }
+    const query: any = { difficulty: diffNum };
+    if (excludeArr.length) {
+      query._id = { $nin: excludeArr };
+    }
+    const count = await Word.countDocuments(query);
     if (count === 0) {
       return res
         .status(404)
-        .json({ message: "Không có câu hỏi cho cấp độ này" });
+        .json({ message: "Không có câu hỏi cho cấp độ này hoặc đã dùng hết" });
     }
     const random = Math.floor(Math.random() * count);
-    const word = await Word.findOne({ difficulty: diffNum }).skip(random);
+    const word = await Word.findOne(query).skip(random);
     return res.status(200).json({ data: word });
   } catch (err: any) {
     return res.status(500).json({ message: "Lỗi server", error: err.message });

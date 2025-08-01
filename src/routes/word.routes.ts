@@ -86,21 +86,31 @@ router.post("/make-words", createWords as any);
 /**
  * @swagger
  * /words/random:
- *   get:
+ *   post:
  *     summary: Lấy ngẫu nhiên 1 câu hỏi theo cấp độ difficulty
  *     tags:
  *       - Words
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: difficulty
- *         schema:
- *           type: integer
- *           minimum: 1
- *           maximum: 3
- *         required: true
- *         description: Cấp độ câu hỏi (1, 2 hoặc 3)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               difficulty:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 3
+ *                 example: 2
+ *                 description: Cấp độ câu hỏi (1, 2 hoặc 3)
+ *               excludeIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example: ["abc", "def", "xyz"]
+ *                 description: Danh sách id đã dùng để loại trừ
  *     responses:
  *       200:
  *         description: Thành công
@@ -134,6 +144,6 @@ router.post("/make-words", createWords as any);
  *         description: Lỗi server
  */
 // Route lấy ngẫu nhiên 1 câu hỏi theo difficulty
-router.get("/random", getRandomWordByDifficulty as any);
+router.post("/random", getRandomWordByDifficulty as any);
 
 export default router;
