@@ -1,5 +1,8 @@
 // AWS Lambda handler for API Gateway WebSocket (chess game logic demo)
-import { ApiGatewayManagementApi } from "@aws-sdk/client-apigatewaymanagementapi";
+import {
+  ApiGatewayManagementApiClient,
+  PostToConnectionCommand,
+} from "@aws-sdk/client-apigatewaymanagementapi";
 
 interface GameState {
   board: (string | null)[][];
@@ -15,6 +18,29 @@ interface GameState {
 }
 
 const games: Record<string, GameState> = {};
+
+// Helper function để truy cập game an toàn
+function getGame(roomId: string): GameState | null {
+  if (!roomId || typeof roomId !== "string") {
+    console.error(`Invalid roomId: ${roomId}`);
+    return null;
+  }
+  return games[roomId] || null;
+}
+
+// Helper function để tạo game mới
+function createGame(roomId: string): GameState {
+  const newGame: GameState = {
+    board: initialChessBoard(),
+    currentPlayer: "WHITE",
+    moveHistory: [],
+    winner: null,
+    players: [],
+    status: "waiting",
+  };
+  games[roomId] = newGame;
+  return newGame;
+}
 
 function createInitialBoard() {
   // 8x8 null matrix
@@ -89,22 +115,30 @@ const PROD_WS_ENDPOINT =
 
 async function sendToClient(connectionId: string, data: any) {
   // Luôn sử dụng endpoint production thực tế để broadcast
-  const api = new ApiGatewayManagementApi({
+  const apiGwClient = new ApiGatewayManagementApiClient({
     endpoint: PROD_WS_ENDPOINT,
+    region: "ap-southeast-1",
   });
+
   try {
-    await api.postToConnection({
-      ConnectionId: connectionId,
-      Data: Buffer.from(JSON.stringify(data)),
-    });
+    await apiGwClient.send(
+      new PostToConnectionCommand({
+        ConnectionId: connectionId,
+        Data: Buffer.from(JSON.stringify(data)),
+      })
+    );
+    console.log(`[sendToClient] Đã gửi message tới: ${connectionId}`);
   } catch (err: any) {
     if (err.statusCode === 410) {
       console.log(`Stale connection, removing ${connectionId}`);
       // Remove connectionId from all games where it exists
       for (const roomId in games) {
-        games[roomId].players = games[roomId].players.filter(
-          (id) => id !== connectionId
-        );
+        const game = games[roomId];
+        if (game && game.players) {
+          games[roomId].players = game.players.filter(
+            (id) => id !== connectionId
+          );
+        }
       }
     } else {
       console.error("Error sending to client:", err);
@@ -113,164 +147,566 @@ async function sendToClient(connectionId: string, data: any) {
 }
 
 async function broadcastToRoom(roomId: string, data: any) {
-  const game = games[roomId];
+  const game = getGame(roomId);
   if (!game) return;
-  for (const connId of game.players) {
-    await sendToClient(connId, data);
-  }
+
+  console.log(
+    `[broadcastToRoom] Gửi message tới room ${roomId}, players:`,
+    game.players
+  );
+
+  await Promise.all(
+    game.players.map(async (connId) => {
+      // Tạo một message với connectionId để client biết tin nhắn dành cho ai
+      const messageWithConnId = {
+        ...data,
+        myConnectionId: connId, // trả về connectionId của chính client nhận message
+      };
+
+      try {
+        await sendToClient(connId, messageWithConnId);
+      } catch (err) {
+        console.error(`Error broadcasting to ${connId}:`, err);
+      }
+    })
+  );
+}
+
+// Hàm kiểm tra xem request có phải là API Gateway WebSocket hay không
+function isApiGatewayWsRequest(req: any): boolean {
+  return req && req.requestContext && req.requestContext.connectionId;
 }
 
 // Handler cho từng route
 export const connectHandler = async (req: any, res: any) => {
-  res.status(200).json({ message: "Connected (no-op for chess)" });
+  try {
+    // Kiểm tra xem đây có phải là yêu cầu WebSocket từ API Gateway không
+    if (isApiGatewayWsRequest(req)) {
+      console.log(
+        `[connectHandler] New WebSocket connection: ${req.requestContext.connectionId}`
+      );
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: "Connected to WebSocket" }),
+      };
+    }
+
+    // Kiểm tra xem đây có phải là yêu cầu WebSocket HTTP không
+    const isWebSocketRequest =
+      req.headers &&
+      (req.headers["connection"]?.toLowerCase() === "upgrade" ||
+        req.headers["upgrade"]?.toLowerCase() === "websocket");
+
+    if (isWebSocketRequest) {
+      return res.status(200).send({
+        statusCode: 200,
+        body: JSON.stringify({ message: "Connected (websocket)" }),
+      });
+    }
+
+    // Nếu là HTTP thông thường
+    res.status(200).json({ message: "Connected (no-op for chess)" });
+  } catch (error) {
+    console.error("Error in connectHandler:", error);
+
+    // Kiểm tra nếu là API Gateway WebSocket
+    if (isApiGatewayWsRequest(req)) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          message: "Error connecting",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      };
+    }
+
+    // Nếu là HTTP
+    res.status(500).json({
+      message: "Error connecting",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 };
 
 export const joinHandler = async (req: any, res: any) => {
-  const { roomId = "default" } = req.body;
-  const connectionId =
-    req.headers["x-connection-id"] || req.body.connectionId || "test-conn-id";
-  // Domain and stage no longer needed for WebSocket connections
-  if (!games[roomId]) {
+  try {
+    // Đảm bảo req.body luôn tồn tại và có giá trị
+    let body = req.body || {};
+
+    // Kiểm tra xem body có phải là string không (trường hợp WebSocket)
+    if (typeof req.body === "string") {
+      try {
+        body = JSON.parse(req.body);
+      } catch (e) {
+        console.error("Failed to parse body string:", e);
+      }
+    }
+
+    // Xử lý khi nhận thông điệp từ API Gateway WebSocket
+    const isApiGatewayRequest = isApiGatewayWsRequest(req);
+
+    // Lấy roomId và connectionId từ request
+    const roomId = body.roomId || "default";
+    const connectionId =
+      (isApiGatewayRequest ? req.requestContext.connectionId : null) ||
+      req.headers?.["x-connection-id"] ||
+      body.connectionId ||
+      "test-conn-id";
+
+    console.log(`[joinHandler] Client ${connectionId} joining room ${roomId}`);
+
+    // Sử dụng helper function để lấy hoặc tạo game
+    let game = getGame(roomId);
+    if (!game) {
+      game = createGame(roomId);
+    }
+
+    if (!game.players.includes(connectionId)) game.players.push(connectionId);
+    if (game.players.length === 2 && game.status !== "finished") {
+      game.status = "playing";
+    }
+
+    // Gửi thông tin game đã bắt đầu cho tất cả người chơi
+    await broadcastToRoom(roomId, {
+      type: "gameStarted",
+      data: {
+        // Sửa từ payload thành data để phù hợp với format client
+        roomId,
+        players: game.players,
+        board: game.board,
+        turn: game.currentPlayer,
+        status: game.status,
+      },
+    });
+
+    // Đảm bảo trả về định dạng đúng cho API Gateway WebSocket
+    if (isApiGatewayWsRequest(req)) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: "Joined" }),
+      };
+    }
+
+    // Trả về định dạng thông thường cho HTTP request
+    res.status(200).json({ message: "Joined" });
+  } catch (error) {
+    console.error("Error in joinHandler:", error);
+
+    // Kiểm tra nếu là API Gateway WebSocket
+    if (isApiGatewayWsRequest(req)) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          message: "Error joining game",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      };
+    }
+
+    // Nếu là HTTP
+    res.status(500).json({
+      message: "Error joining game",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+export const moveHandler = async (req: any, res: any) => {
+  try {
+    // Đảm bảo req.body luôn tồn tại và có giá trị
+    let body = req.body || {};
+
+    // Kiểm tra xem body có phải là string không (trường hợp WebSocket)
+    if (typeof req.body === "string") {
+      try {
+        body = JSON.parse(req.body);
+      } catch (e) {
+        console.error("Failed to parse body string:", e);
+        if (isApiGatewayWsRequest(req)) {
+          return {
+            statusCode: 400,
+            body: JSON.stringify({ message: "Invalid JSON in request body" }),
+          };
+        }
+        return res
+          .status(400)
+          .json({ message: "Invalid JSON in request body" });
+      }
+    }
+
+    // Xử lý khi nhận thông điệp từ API Gateway WebSocket
+    const isApiGatewayRequest = isApiGatewayWsRequest(req);
+
+    const roomId = body.roomId || "default";
+    const from = body.from;
+    const to = body.to;
+    const connectionId =
+      (isApiGatewayRequest ? req.requestContext.connectionId : null) ||
+      req.headers?.["x-connection-id"] ||
+      body.connectionId ||
+      "test-conn-id";
+
+    // Sử dụng helper function để lấy game
+    const game = getGame(roomId);
+    if (!game) {
+      if (isApiGatewayRequest) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Room not found" }),
+        };
+      }
+      return res.status(400).json({ message: "Room not found" });
+    }
+
+    if (game.status !== "playing") {
+      if (isApiGatewayRequest) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Game is not active." }),
+        };
+      }
+      return res.status(400).json({ message: "Game is not active." });
+    }
+
+    if (game.players.length < 2) {
+      if (isApiGatewayRequest) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Waiting for opponent." }),
+        };
+      }
+      return res.status(400).json({ message: "Waiting for opponent." });
+    }
+
+    const playerIdx = game.players.indexOf(connectionId);
+    const playerColor = playerIdx === 0 ? "WHITE" : "BLACK";
+
+    if (playerColor !== game.currentPlayer) {
+      if (isApiGatewayRequest) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Not your turn." }),
+        };
+      }
+      return res.status(400).json({ message: "Not your turn." });
+    }
+
+    if (!isValidMove(game.board, from, to, playerColor)) {
+      if (isApiGatewayRequest) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Invalid move." }),
+        };
+      }
+      return res.status(400).json({ message: "Invalid move." });
+    }
+
+    // Move piece
+    if (!from || !to) {
+      if (isApiGatewayRequest) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Invalid move coordinates" }),
+        };
+      }
+      return res.status(400).json({ message: "Invalid move coordinates" });
+    }
+
+    game.board[to.y][to.x] = game.board[from.y][from.x];
+    game.board[from.y][from.x] = null;
+    game.moveHistory.push({ from, to, player: playerColor });
+
+    // Check winner
+    const winner = checkWinner(game.board);
+    if (winner) {
+      game.winner = winner;
+      game.status = "finished";
+      await broadcastToRoom(roomId, {
+        type: "gameOver",
+        data: {
+          // Sửa từ payload thành data để phù hợp với format client
+          winner,
+          board: game.board,
+          moveHistory: game.moveHistory,
+        },
+      });
+
+      if (isApiGatewayRequest) {
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ message: "Game Over", winner }),
+        };
+      }
+      return res.status(200).json({ message: "Game Over", winner });
+    }
+
+    // Switch turn
+    game.currentPlayer = game.currentPlayer === "WHITE" ? "BLACK" : "WHITE";
+    await broadcastToRoom(roomId, {
+      type: "move",
+      data: {
+        // Sửa từ payload thành data để phù hợp với format client
+        board: game.board,
+        move: { from, to, player: playerColor },
+        nextTurn: game.currentPlayer,
+        status: game.status,
+      },
+    });
+
+    if (isApiGatewayRequest) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: "Moved" }),
+      };
+    }
+    res.status(200).json({ message: "Moved" });
+  } catch (error) {
+    console.error("Error in moveHandler:", error);
+
+    if (isApiGatewayWsRequest(req)) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          message: "Error processing move",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      };
+    }
+
+    res.status(500).json({
+      message: "Error processing move",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
+export const restartHandler = async (req: any, res: any) => {
+  try {
+    // Đảm bảo req.body luôn tồn tại và có giá trị
+    let body = req.body || {};
+
+    // Kiểm tra xem body có phải là string không (trường hợp WebSocket)
+    if (typeof req.body === "string") {
+      try {
+        body = JSON.parse(req.body);
+      } catch (e) {
+        console.error("Failed to parse body string:", e);
+        if (isApiGatewayWsRequest(req)) {
+          return {
+            statusCode: 400,
+            body: JSON.stringify({ message: "Invalid JSON in request body" }),
+          };
+        }
+        return res
+          .status(400)
+          .json({ message: "Invalid JSON in request body" });
+      }
+    }
+
+    // Xử lý khi nhận thông điệp từ API Gateway WebSocket
+    const isApiGatewayRequest = isApiGatewayWsRequest(req);
+
+    const roomId = body.roomId || "default";
+    const connectionId =
+      (isApiGatewayRequest ? req.requestContext.connectionId : null) ||
+      req.headers?.["x-connection-id"] ||
+      body.connectionId ||
+      "test-conn-id";
+
+    // Sử dụng helper function để lấy game
+    const game = getGame(roomId);
+    if (!game) {
+      if (isApiGatewayRequest) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Room not found" }),
+        };
+      }
+      return res.status(400).json({ message: "Room not found" });
+    }
+
+    // Tạo game mới với players từ game cũ
     games[roomId] = {
       board: initialChessBoard(),
       currentPlayer: "WHITE",
       moveHistory: [],
       winner: null,
-      players: [],
-      status: "waiting",
+      players: [...game.players],
+      status: "playing",
     };
-  }
-  const game = games[roomId];
-  if (!game.players.includes(connectionId)) game.players.push(connectionId);
-  if (game.players.length === 2 && game.status !== "finished") {
-    game.status = "playing";
-  }
-  await broadcastToRoom(roomId, {
-    type: "gameStarted",
-    payload: {
-      roomId,
-      players: game.players,
-      board: game.board,
-      turn: game.currentPlayer,
-      status: game.status,
-    },
-  });
-  res.status(200).json({ message: "Joined" });
-};
 
-export const moveHandler = async (req: any, res: any) => {
-  const { roomId = "default", from, to } = req.body;
-  const connectionId =
-    req.headers["x-connection-id"] || req.body.connectionId || "test-conn-id";
-  // Domain and stage no longer needed for WebSocket connections
-  if (!games[roomId]) {
-    return res.status(400).json({ message: "Room not found" });
-  }
-  const game = games[roomId];
-  if (game.status !== "playing") {
-    return res.status(400).json({ message: "Game is not active." });
-  }
-  if (game.players.length < 2) {
-    return res.status(400).json({ message: "Waiting for opponent." });
-  }
-  const playerIdx = game.players.indexOf(connectionId);
-  const playerColor = playerIdx === 0 ? "WHITE" : "BLACK";
-  if (playerColor !== game.currentPlayer) {
-    return res.status(400).json({ message: "Not your turn." });
-  }
-  if (!isValidMove(game.board, from, to, playerColor)) {
-    return res.status(400).json({ message: "Invalid move." });
-  }
-  // Move piece
-  game.board[to.y][to.x] = game.board[from.y][from.x];
-  game.board[from.y][from.x] = null;
-  game.moveHistory.push({ from, to, player: playerColor });
-  // Check winner
-  const winner = checkWinner(game.board);
-  if (winner) {
-    game.winner = winner;
-    game.status = "finished";
     await broadcastToRoom(roomId, {
-      type: "gameOver",
-      payload: {
-        winner,
-        board: game.board,
-        moveHistory: game.moveHistory,
+      type: "gameStarted",
+      data: {
+        // Sửa từ payload thành data để phù hợp với format client
+        roomId,
+        players: games[roomId].players,
+        board: games[roomId].board,
+        turn: games[roomId].currentPlayer,
+        status: games[roomId].status,
       },
     });
-    return res.status(200).json({ message: "Game Over", winner });
-  }
-  // Switch turn
-  game.currentPlayer = game.currentPlayer === "WHITE" ? "BLACK" : "WHITE";
-  await broadcastToRoom(roomId, {
-    type: "move",
-    payload: {
-      board: game.board,
-      move: { from, to, player: playerColor },
-      nextTurn: game.currentPlayer,
-      status: game.status,
-    },
-  });
-  res.status(200).json({ message: "Moved" });
-};
 
-export const restartHandler = async (req: any, res: any) => {
-  const { roomId = "default" } = req.body;
-  const connectionId =
-    req.headers["x-connection-id"] || req.body.connectionId || "test-conn-id";
-  // Domain and stage no longer needed for WebSocket connections
-  if (!games[roomId]) {
-    return res.status(400).json({ message: "Room not found" });
+    if (isApiGatewayRequest) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: "Restarted" }),
+      };
+    }
+    res.status(200).json({ message: "Restarted" });
+  } catch (error) {
+    console.error("Error in restartHandler:", error);
+
+    if (isApiGatewayWsRequest(req)) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          message: "Error restarting game",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      };
+    }
+
+    res.status(500).json({
+      message: "Error restarting game",
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
-  const game = games[roomId];
-  games[roomId] = {
-    board: initialChessBoard(),
-    currentPlayer: "WHITE",
-    moveHistory: [],
-    winner: null,
-    players: [...game.players],
-    status: "playing",
-  };
-  await broadcastToRoom(roomId, {
-    type: "gameStarted",
-    payload: {
-      roomId,
-      players: games[roomId].players,
-      board: games[roomId].board,
-      turn: games[roomId].currentPlayer,
-      status: games[roomId].status,
-    },
-  });
-  res.status(200).json({ message: "Restarted" });
 };
 
 export const leaveHandler = async (req: any, res: any) => {
-  const { roomId = "default" } = req.body;
-  const connectionId =
-    req.headers["x-connection-id"] || req.body.connectionId || "test-conn-id";
-  // Domain and stage no longer needed for WebSocket connections
-  if (!games[roomId]) {
-    return res.status(400).json({ message: "Room not found" });
-  }
-  const game = games[roomId];
-  game.players = game.players.filter((id) => id !== connectionId);
-  if (game.players.length === 0) {
-    delete games[roomId];
-  } else {
-    game.status = "waiting";
-    await broadcastToRoom(roomId, {
-      type: "userLeft",
-      payload: {
-        roomId,
-        leaver: connectionId,
-        players: game.players,
-        status: game.status,
-      },
+  try {
+    // Đảm bảo req.body luôn tồn tại và có giá trị
+    let body = req.body || {};
+
+    // Kiểm tra xem body có phải là string không (trường hợp WebSocket)
+    if (typeof req.body === "string") {
+      try {
+        body = JSON.parse(req.body);
+      } catch (e) {
+        console.error("Failed to parse body string:", e);
+        if (isApiGatewayWsRequest(req)) {
+          return {
+            statusCode: 400,
+            body: JSON.stringify({ message: "Invalid JSON in request body" }),
+          };
+        }
+        return res
+          .status(400)
+          .json({ message: "Invalid JSON in request body" });
+      }
+    }
+
+    // Xử lý khi nhận thông điệp từ API Gateway WebSocket
+    const isApiGatewayRequest = isApiGatewayWsRequest(req);
+
+    const roomId = body.roomId || "default";
+    const connectionId =
+      (isApiGatewayRequest ? req.requestContext.connectionId : null) ||
+      req.headers?.["x-connection-id"] ||
+      body.connectionId ||
+      "test-conn-id";
+
+    // Sử dụng helper function để lấy game
+    const game = getGame(roomId);
+    if (!game) {
+      if (isApiGatewayRequest) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Room not found" }),
+        };
+      }
+      return res.status(400).json({ message: "Room not found" });
+    }
+
+    game.players = game.players.filter((id) => id !== connectionId);
+    if (game.players.length === 0) {
+      delete games[roomId];
+    } else {
+      game.status = "waiting";
+      await broadcastToRoom(roomId, {
+        type: "userLeft",
+        data: {
+          // Sửa từ payload thành data để phù hợp với format client
+          roomId,
+          leaver: connectionId,
+          players: game.players,
+          status: game.status,
+        },
+      });
+    }
+
+    if (isApiGatewayRequest) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: "Left room" }),
+      };
+    }
+    res.status(200).json({ message: "Left room" });
+  } catch (error) {
+    console.error("Error in leaveHandler:", error);
+
+    if (isApiGatewayWsRequest(req)) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          message: "Error leaving game",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      };
+    }
+
+    res.status(500).json({
+      message: "Error leaving game",
+      error: error instanceof Error ? error.message : String(error),
     });
   }
-  res.status(200).json({ message: "Left room" });
 };
 
 export const defaultHandler = async (req: any, res: any) => {
-  res.status(200).json({ message: "Default handler (no-op)" });
+  try {
+    // Kiểm tra xem đây có phải là yêu cầu API Gateway WebSocket không
+    if (isApiGatewayWsRequest(req)) {
+      console.log(
+        `[defaultHandler] Received WebSocket request from: ${req.requestContext.connectionId}`
+      );
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: "Default handler - websocket" }),
+      };
+    }
+
+    // Kiểm tra xem đây có phải là yêu cầu WebSocket HTTP không
+    const isWebSocketRequest =
+      req.headers &&
+      (req.headers["connection"]?.toLowerCase() === "upgrade" ||
+        req.headers["upgrade"]?.toLowerCase() === "websocket");
+
+    if (isWebSocketRequest) {
+      return res.status(200).send({
+        statusCode: 200,
+        body: JSON.stringify({ message: "Default handler - websocket" }),
+      });
+    }
+
+    // Nếu là HTTP thông thường
+    res.status(200).json({ message: "Default handler (no-op)" });
+  } catch (error) {
+    console.error("Error in defaultHandler:", error);
+
+    if (isApiGatewayWsRequest(req)) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          message: "Internal server error",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      };
+    }
+
+    res.status(500).json({
+      message: "Internal server error",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 };
