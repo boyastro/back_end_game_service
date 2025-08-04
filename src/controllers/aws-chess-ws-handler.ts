@@ -179,94 +179,69 @@ function isApiGatewayWsRequest(req: any): boolean {
 
 // Handler cho từng route
 export const connectHandler = async (req: any, res: any) => {
-  try {
-    // Kiểm tra xem đây có phải là yêu cầu WebSocket từ API Gateway không
-    if (isApiGatewayWsRequest(req)) {
-      console.log(
-        `[connectHandler] New WebSocket connection: ${req.requestContext.connectionId}`
-      );
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ message: "Connected to WebSocket" }),
-      };
-    }
-
-    // Kiểm tra xem đây có phải là yêu cầu WebSocket HTTP không
-    const isWebSocketRequest =
-      req.headers &&
-      (req.headers["connection"]?.toLowerCase() === "upgrade" ||
-        req.headers["upgrade"]?.toLowerCase() === "websocket");
-
-    if (isWebSocketRequest) {
-      return res.status(200).send({
-        statusCode: 200,
-        body: JSON.stringify({ message: "Connected (websocket)" }),
-      });
-    }
-
-    // Nếu là HTTP thông thường
-    res.status(200).json({ message: "Connected (no-op for chess)" });
-  } catch (error) {
-    console.error("Error in connectHandler:", error);
-
-    // Kiểm tra nếu là API Gateway WebSocket
-    if (isApiGatewayWsRequest(req)) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({
-          message: "Error connecting",
-          error: error instanceof Error ? error.message : String(error),
-        }),
-      };
-    }
-
-    // Nếu là HTTP
-    res.status(500).json({
-      message: "Error connecting",
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  console.log("ConnectHandler called", req.body, req.headers);
+  res.status(200).end();
 };
 
 export const joinHandler = async (req: any, res: any) => {
   try {
     // Đảm bảo req.body luôn tồn tại và có giá trị
     let body = req.body || {};
+    console.log("[joinHandler] req.body:", req.body);
 
     // Kiểm tra xem body có phải là string không (trường hợp WebSocket)
     if (typeof req.body === "string") {
       try {
         body = JSON.parse(req.body);
+        console.log("[joinHandler] Parsed body:", body);
       } catch (e) {
-        console.error("Failed to parse body string:", e);
+        console.error(
+          "[joinHandler] Failed to parse body string:",
+          e,
+          "body:",
+          req.body
+        );
       }
+    } else {
+      console.log("[joinHandler] body is object:", body);
     }
-
-    // Xử lý khi nhận thông điệp từ API Gateway WebSocket
-    const isApiGatewayRequest = isApiGatewayWsRequest(req);
-
     // Lấy roomId và connectionId từ request
     const roomId = body.roomId || "default";
-    const connectionId =
-      (isApiGatewayRequest ? req.requestContext.connectionId : null) ||
-      req.headers?.["x-connection-id"] ||
-      body.connectionId ||
-      "test-conn-id";
-
+    const connectionId = body.connectionId;
     console.log(`[joinHandler] Client ${connectionId} joining room ${roomId}`);
 
     // Sử dụng helper function để lấy hoặc tạo game
     let game = getGame(roomId);
+    console.log(`[joinHandler] getGame(${roomId}):`, game);
     if (!game) {
       game = createGame(roomId);
+      console.log(`[joinHandler] Created new game for room ${roomId}:`, game);
     }
 
-    if (!game.players.includes(connectionId)) game.players.push(connectionId);
+    if (!game.players.includes(connectionId)) {
+      game.players.push(connectionId);
+      console.log(
+        `[joinHandler] Added player ${connectionId} to game.players:`,
+        game.players
+      );
+    } else {
+      console.log(
+        `[joinHandler] Player ${connectionId} already in game.players:`,
+        game.players
+      );
+    }
     if (game.players.length === 2 && game.status !== "finished") {
       game.status = "playing";
+      console.log(
+        `[joinHandler] Set game.status to 'playing' for room ${roomId}`
+      );
     }
 
     // Gửi thông tin game đã bắt đầu cho tất cả người chơi
+    console.log(
+      `[joinHandler] Broadcasting gameStarted to room ${roomId} with players:`,
+      game.players
+    );
     await broadcastToRoom(roomId, {
       type: "gameStarted",
       data: {
@@ -278,36 +253,14 @@ export const joinHandler = async (req: any, res: any) => {
         status: game.status,
       },
     });
-
-    // Đảm bảo trả về định dạng đúng cho API Gateway WebSocket
-    if (isApiGatewayWsRequest(req)) {
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ message: "Joined" }),
-      };
-    }
-
     // Trả về định dạng thông thường cho HTTP request
-    res.status(200).json({ message: "Joined" });
+    console.log(
+      `[joinHandler] Finished joinHandler for connectionId ${connectionId}, roomId ${roomId}`
+    );
+    res.status(200).end();
   } catch (error) {
-    console.error("Error in joinHandler:", error);
-
-    // Kiểm tra nếu là API Gateway WebSocket
-    if (isApiGatewayWsRequest(req)) {
-      return {
-        statusCode: 500,
-        body: JSON.stringify({
-          message: "Error joining game",
-          error: error instanceof Error ? error.message : String(error),
-        }),
-      };
-    }
-
-    // Nếu là HTTP
-    res.status(500).json({
-      message: "Error joining game",
-      error: error instanceof Error ? error.message : String(error),
-    });
+    console.error("[joinHandler] Error in joinHandler:", error);
+    res.status(500).end();
   }
 };
 
