@@ -4,6 +4,8 @@ import {
   PostToConnectionCommand,
 } from "@aws-sdk/client-apigatewaymanagementapi";
 
+import { Request, Response } from "express";
+
 interface GameState {
   board: (string | null)[][];
   currentPlayer: string; // "WHITE" | "BLACK"
@@ -113,7 +115,7 @@ function initialChessBoard(): (string | null)[][] {
 const PROD_WS_ENDPOINT =
   "https://vd7olzoftd.execute-api.ap-southeast-1.amazonaws.com/prod";
 
-async function sendToClient(connectionId: string, data: any) {
+async function sendToClient(connectionId: string, data: any): Promise<boolean> {
   // Luôn sử dụng endpoint production thực tế để broadcast
   const apiGwClient = new ApiGatewayManagementApiClient({
     endpoint: PROD_WS_ENDPOINT,
@@ -128,32 +130,74 @@ async function sendToClient(connectionId: string, data: any) {
       })
     );
     console.log(`[sendToClient] Đã gửi message tới: ${connectionId}`);
+    return true; // Gửi thành công
   } catch (err: any) {
-    if (err.statusCode === 410) {
-      console.log(`Stale connection, removing ${connectionId}`);
+    if (err.$metadata?.httpStatusCode === 410 || err.statusCode === 410) {
+      console.log(
+        `[sendToClient] Stale connection detected, removing ${connectionId}`
+      );
       // Remove connectionId from all games where it exists
+      let removedFromRooms = 0;
       for (const roomId in games) {
         const game = games[roomId];
         if (game && game.players) {
+          const prevLength = game.players.length;
           games[roomId].players = game.players.filter(
             (id) => id !== connectionId
           );
+          if (prevLength !== games[roomId].players.length) {
+            removedFromRooms++;
+            console.log(
+              `[sendToClient] Removed ${connectionId} from room ${roomId}`
+            );
+
+            // Nếu phòng không còn người chơi, xóa phòng
+            if (games[roomId].players.length === 0) {
+              console.log(
+                `[sendToClient] Room ${roomId} is empty, deleting it`
+              );
+              delete games[roomId];
+            }
+            // Nếu phòng chỉ còn 1 người, chuyển trạng thái về waiting
+            else if (
+              games[roomId].players.length < 2 &&
+              games[roomId].status === "playing"
+            ) {
+              games[roomId].status = "waiting";
+              console.log(
+                `[sendToClient] Room ${roomId} has less than 2 players, changing status to waiting`
+              );
+            }
+          }
         }
       }
+      console.log(
+        `[sendToClient] Removed connection ${connectionId} from ${removedFromRooms} rooms`
+      );
+      return false; // Không gửi được do connection không còn tồn tại
     } else {
-      console.error("Error sending to client:", err);
+      console.error("[sendToClient] Error sending to client:", err);
+      return false; // Không gửi được do lỗi khác
     }
   }
 }
 
 async function broadcastToRoom(roomId: string, data: any) {
   const game = getGame(roomId);
-  if (!game) return;
+  if (!game || game.players.length === 0) {
+    console.log(
+      `[broadcastToRoom] No players in room ${roomId}, skipping broadcast`
+    );
+    return;
+  }
 
   console.log(
     `[broadcastToRoom] Gửi message tới room ${roomId}, players:`,
     game.players
   );
+
+  // Giữ track những connections đã bị xóa để cập nhật game.players sau khi broadcast
+  const staleConnections: string[] = [];
 
   await Promise.all(
     game.players.map(async (connId) => {
@@ -164,12 +208,29 @@ async function broadcastToRoom(roomId: string, data: any) {
       };
 
       try {
-        await sendToClient(connId, messageWithConnId);
+        const sentSuccessfully = await sendToClient(connId, messageWithConnId);
+        if (!sentSuccessfully) {
+          staleConnections.push(connId);
+        }
       } catch (err) {
-        console.error(`Error broadcasting to ${connId}:`, err);
+        console.error(
+          `[broadcastToRoom] Error broadcasting to ${connId}:`,
+          err
+        );
+        staleConnections.push(connId);
       }
     })
   );
+
+  // Cập nhật trạng thái phòng nếu cần
+  if (staleConnections.length > 0) {
+    const game = getGame(roomId);
+    if (game) {
+      console.log(
+        `[broadcastToRoom] ${staleConnections.length} stale connections were removed during broadcast`
+      );
+    }
+  }
 }
 
 // Hàm kiểm tra xem request có phải là API Gateway WebSocket hay không
@@ -178,36 +239,59 @@ function isApiGatewayWsRequest(req: any): boolean {
 }
 
 // Handler cho từng route
-export const connectHandler = async (req: any, res: any) => {
+export const connectHandler = async (req: Request, res: Response) => {
   console.log("ConnectHandler called", req.body, req.headers);
   res.status(200).end();
 };
 
-export const joinHandler = async (req: any, res: any) => {
+export const joinHandler = async (req: any, res: Response) => {
   try {
+    // Helper để stringify object có thể có vòng lặp
+    function getCircularReplacer() {
+      const seen = new WeakSet();
+      return (key: string, value: any) => {
+        if (typeof value === "object" && value !== null) {
+          if (seen.has(value)) {
+            return "[Circular]";
+          }
+          seen.add(value);
+        }
+        return value;
+      };
+    }
+
+    // Log toàn bộ req và res để debug (safe stringification)
+    console.log(
+      "[joinHandler] req headers:",
+      JSON.stringify(req.headers, getCircularReplacer(), 2)
+    );
+
     // Đảm bảo req.body luôn tồn tại và có giá trị
     let body = req.body || {};
-    console.log("[joinHandler] req.body:", req.body);
 
     // Kiểm tra xem body có phải là string không (trường hợp WebSocket)
     if (typeof req.body === "string") {
       try {
         body = JSON.parse(req.body);
-        console.log("[joinHandler] Parsed body:", body);
       } catch (e) {
-        console.error(
-          "[joinHandler] Failed to parse body string:",
-          e,
-          "body:",
-          req.body
-        );
+        console.error("[joinHandler] Failed to parse body string:", e);
       }
-    } else {
-      console.log("[joinHandler] body is object:", body);
     }
-    // Lấy roomId và connectionId từ request
+
+    console.log("[joinHandler] Parsed body:", body);
+
+    // Xử lý khi nhận thông điệp từ API Gateway WebSocket
+    const isApiGatewayRequest = isApiGatewayWsRequest(req);
+
+    // Lấy connectionId và roomId từ nhiều nguồn có thể
+    const connectionId =
+      (isApiGatewayRequest ? req.requestContext?.connectionId : null) ||
+      req.headers?.["x-connection-id"] ||
+      body.connectionId ||
+      "unknown-conn-id";
+
     const roomId = body.roomId || "default";
-    const connectionId = body.connectionId;
+
     console.log(`[joinHandler] Client ${connectionId} joining room ${roomId}`);
 
     // Sử dụng helper function để lấy hoặc tạo game
@@ -216,6 +300,41 @@ export const joinHandler = async (req: any, res: any) => {
     if (!game) {
       game = createGame(roomId);
       console.log(`[joinHandler] Created new game for room ${roomId}:`, game);
+    }
+
+    // Kiểm tra xem các connections hiện tại còn active không trước khi thêm player mới
+    if (game.players.length > 0) {
+      console.log(
+        `[joinHandler] Kiểm tra stale connections trong room ${roomId} trước khi thêm player mới`
+      );
+      const activeConnections: string[] = [];
+
+      // Gửi ping message đến từng player để kiểm tra kết nối còn active không
+      for (const connId of game.players) {
+        try {
+          const isActive = await sendToClient(connId, { type: "ping" });
+          if (isActive) {
+            activeConnections.push(connId);
+          } else {
+            console.log(
+              `[joinHandler] Connection ${connId} is stale, removing from room ${roomId}`
+            );
+          }
+        } catch (err) {
+          console.error(
+            `[joinHandler] Error checking connection ${connId}:`,
+            err
+          );
+        }
+      }
+
+      // Cập nhật lại danh sách players
+      if (activeConnections.length !== game.players.length) {
+        console.log(
+          `[joinHandler] Updated player list: ${game.players.length} -> ${activeConnections.length} active connections`
+        );
+        game.players = activeConnections;
+      }
     }
 
     if (!game.players.includes(connectionId)) {
@@ -230,10 +349,17 @@ export const joinHandler = async (req: any, res: any) => {
         game.players
       );
     }
+
+    // Cập nhật trạng thái game
     if (game.players.length === 2 && game.status !== "finished") {
       game.status = "playing";
       console.log(
         `[joinHandler] Set game.status to 'playing' for room ${roomId}`
+      );
+    } else if (game.players.length < 2 && game.status === "playing") {
+      game.status = "waiting";
+      console.log(
+        `[joinHandler] Not enough players, set game.status to 'waiting' for room ${roomId}`
       );
     }
 
@@ -253,13 +379,33 @@ export const joinHandler = async (req: any, res: any) => {
         status: game.status,
       },
     });
-    // Trả về định dạng thông thường cho HTTP request
+
+    // Trả về response phù hợp dựa vào loại request
     console.log(
       `[joinHandler] Finished joinHandler for connectionId ${connectionId}, roomId ${roomId}`
     );
+
+    if (isApiGatewayRequest) {
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: "Joined room successfully" }),
+      };
+    }
+
     res.status(200).end();
   } catch (error) {
     console.error("[joinHandler] Error in joinHandler:", error);
+
+    if (isApiGatewayWsRequest(req)) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          message: "Error joining room",
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      };
+    }
+
     res.status(500).end();
   }
 };
