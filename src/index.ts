@@ -1,3 +1,4 @@
+import wsChessRoutes from "./routes/ws-chess.routes";
 import millionaireRoutes from "./routes/millionaire.routes.js";
 import express from "express";
 import http from "http";
@@ -57,6 +58,7 @@ mongoose
   app.use("/items", itemRoutes);
   app.use("/rewards", rewardRoutes);
   app.use("/caro", caroRoutes);
+  app.use("/chess", wsChessRoutes);
   app.use("/words", wordRoutes);
   app.use("/payments", paymentRoutes);
   app.use("/spin", spinRoutes);
