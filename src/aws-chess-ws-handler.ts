@@ -2,14 +2,18 @@
 import { ApiGatewayManagementApi } from "@aws-sdk/client-apigatewaymanagementapi";
 
 interface GameState {
-  board: any[][];
-  currentPlayer: string;
-  moveHistory: { from: any; to: any }[];
-  winner: string | null;
-  players: string[];
+  board: (string | null)[][];
+  currentPlayer: string; // "WHITE" | "BLACK"
+  moveHistory: {
+    from: { x: number; y: number };
+    to: { x: number; y: number };
+    player: string;
+  }[];
+  winner: string | null; // "WHITE" | "BLACK" | null
+  players: string[]; // connectionIds
+  status: "playing" | "waiting" | "finished";
 }
 
-// In-memory game state (for demo; use Redis/DynamoDB in production)
 const games: Record<string, GameState> = {};
 
 function createInitialBoard() {
@@ -17,6 +21,67 @@ function createInitialBoard() {
   return Array(8)
     .fill(null)
     .map(() => Array(8).fill(null));
+}
+
+function isValidMove(
+  board: (string | null)[][],
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  player: string
+): boolean {
+  // TODO: Implement full chess move validation. For demo, only check from/to are on board and from cell is not null and to cell is null or has opponent's piece.
+  if (!from || !to) return false;
+  if (
+    from.x < 0 ||
+    from.x > 7 ||
+    from.y < 0 ||
+    from.y > 7 ||
+    to.x < 0 ||
+    to.x > 7 ||
+    to.y < 0 ||
+    to.y > 7
+  )
+    return false;
+  if (!board[from.y][from.x]) return false;
+  if (board[from.y][from.x]?.startsWith(player === "WHITE" ? "w" : "b")) {
+    // Player moves their own piece
+    if (
+      board[to.y][to.x] &&
+      board[to.y][to.x]?.startsWith(player === "WHITE" ? "w" : "b")
+    )
+      return false;
+    return true;
+  }
+  return false;
+}
+
+function checkWinner(board: (string | null)[][]): string | null {
+  // TODO: Implement real chess checkmate/stalemate detection. For demo, just check if one king is missing.
+  let whiteKing = false,
+    blackKing = false;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      if (board[y][x] === "wK") whiteKing = true;
+      if (board[y][x] === "bK") blackKing = true;
+    }
+  }
+  if (!whiteKing) return "BLACK";
+  if (!blackKing) return "WHITE";
+  return null;
+}
+
+function initialChessBoard(): (string | null)[][] {
+  // Standard chess starting position
+  return [
+    ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
+    ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
+    [null, null, null, null, null, null, null, null],
+    [null, null, null, null, null, null, null, null],
+    [null, null, null, null, null, null, null, null],
+    [null, null, null, null, null, null, null, null],
+    ["wP", "wP", "wP", "wP", "wP", "wP", "wP", "wP"],
+    ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"],
+  ];
 }
 
 async function sendToClient(
@@ -60,50 +125,144 @@ export const handler = async (event: any) => {
   const roomId = message.roomId || "default";
   if (!games[roomId]) {
     games[roomId] = {
-      board: createInitialBoard(),
+      board: initialChessBoard(),
       currentPlayer: "WHITE",
       moveHistory: [],
       winner: null,
       players: [],
+      status: "waiting",
     };
   }
   const game = games[roomId];
-  // Join
+
+  // Join room
   if (message.action === "join") {
     if (!game.players.includes(connectionId)) game.players.push(connectionId);
-    await sendToClient(domain, stage, connectionId, {
-      type: "game_state",
-      payload: game,
+    if (game.players.length === 2 && game.status !== "finished") {
+      game.status = "playing";
+    }
+    await broadcastToRoom(domain, stage, roomId, {
+      type: "gameStarted",
+      payload: {
+        roomId,
+        players: game.players,
+        board: game.board,
+        turn: game.currentPlayer,
+        status: game.status,
+      },
     });
     return { statusCode: 200, body: "Joined" };
   }
+
   // Move
   if (message.action === "move") {
+    if (game.status !== "playing") {
+      await sendToClient(domain, stage, connectionId, {
+        type: "error",
+        message: "Game is not active.",
+      });
+      return { statusCode: 400, body: "Game not active" };
+    }
+    if (game.players.length < 2) {
+      await sendToClient(domain, stage, connectionId, {
+        type: "error",
+        message: "Waiting for opponent.",
+      });
+      return { statusCode: 400, body: "Waiting for opponent" };
+    }
+    const playerIdx = game.players.indexOf(connectionId);
+    const playerColor = playerIdx === 0 ? "WHITE" : "BLACK";
+    if (playerColor !== game.currentPlayer) {
+      await sendToClient(domain, stage, connectionId, {
+        type: "error",
+        message: "Not your turn.",
+      });
+      return { statusCode: 400, body: "Not your turn" };
+    }
     const { from, to } = message;
-    // TODO: Validate move, update board, switch player, check winner
-    game.moveHistory.push({ from, to });
-    // (Demo: just switch player)
+    if (!isValidMove(game.board, from, to, playerColor)) {
+      await sendToClient(domain, stage, connectionId, {
+        type: "error",
+        message: "Invalid move.",
+      });
+      return { statusCode: 400, body: "Invalid move" };
+    }
+    // Move piece
+    game.board[to.y][to.x] = game.board[from.y][from.x];
+    game.board[from.y][from.x] = null;
+    game.moveHistory.push({ from, to, player: playerColor });
+    // Check winner
+    const winner = checkWinner(game.board);
+    if (winner) {
+      game.winner = winner;
+      game.status = "finished";
+      await broadcastToRoom(domain, stage, roomId, {
+        type: "gameOver",
+        payload: {
+          winner,
+          board: game.board,
+          moveHistory: game.moveHistory,
+        },
+      });
+      return { statusCode: 200, body: "Game Over" };
+    }
+    // Switch turn
     game.currentPlayer = game.currentPlayer === "WHITE" ? "BLACK" : "WHITE";
     await broadcastToRoom(domain, stage, roomId, {
-      type: "game_state",
-      payload: game,
+      type: "move",
+      payload: {
+        board: game.board,
+        move: { from, to, player: playerColor },
+        nextTurn: game.currentPlayer,
+        status: game.status,
+      },
     });
     return { statusCode: 200, body: "Moved" };
   }
+
   // Restart
   if (message.action === "restart") {
     games[roomId] = {
-      board: createInitialBoard(),
+      board: initialChessBoard(),
       currentPlayer: "WHITE",
       moveHistory: [],
       winner: null,
-      players: game.players,
+      players: [...game.players],
+      status: "playing",
     };
     await broadcastToRoom(domain, stage, roomId, {
-      type: "game_state",
-      payload: games[roomId],
+      type: "gameStarted",
+      payload: {
+        roomId,
+        players: games[roomId].players,
+        board: games[roomId].board,
+        turn: games[roomId].currentPlayer,
+        status: games[roomId].status,
+      },
     });
     return { statusCode: 200, body: "Restarted" };
   }
+
+  // Leave
+  if (message.action === "leave") {
+    // Remove player from room
+    game.players = game.players.filter((id) => id !== connectionId);
+    if (game.players.length === 0) {
+      delete games[roomId];
+    } else {
+      game.status = "waiting";
+      await broadcastToRoom(domain, stage, roomId, {
+        type: "userLeft",
+        payload: {
+          roomId,
+          leaver: connectionId,
+          players: game.players,
+          status: game.status,
+        },
+      });
+    }
+    return { statusCode: 200, body: "Left room" };
+  }
+
   return { statusCode: 200, body: "OK" };
 };
