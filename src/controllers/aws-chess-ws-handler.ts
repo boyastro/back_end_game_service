@@ -5,6 +5,7 @@ import {
 } from "@aws-sdk/client-apigatewaymanagementapi";
 
 import { Request, Response } from "express";
+import redisClient from "../utils/redisClient.js";
 
 interface GameState {
   board: (string | null)[][];
@@ -19,19 +20,69 @@ interface GameState {
   status: "playing" | "waiting" | "finished";
 }
 
-const games: Record<string, GameState> = {};
+// Prefix cho các key Redis
+const REDIS_PREFIX = "chess:";
 
-// Helper function để truy cập game an toàn
-function getGame(roomId: string): GameState | null {
+// Helper function để truy cập game an toàn từ Redis
+async function getGame(roomId: string): Promise<GameState | null> {
   if (!roomId || typeof roomId !== "string") {
-    console.error(`Invalid roomId: ${roomId}`);
+    console.error(`[getGame] Invalid roomId: ${roomId}`);
     return null;
   }
-  return games[roomId] || null;
+
+  try {
+    const gameData = await redisClient.get(`${REDIS_PREFIX}room:${roomId}`);
+    if (!gameData) {
+      console.log(`[getGame] Room ${roomId} not found in Redis`);
+      return null;
+    }
+
+    return JSON.parse(gameData) as GameState;
+  } catch (error) {
+    console.error(`[getGame] Error getting game from Redis:`, error);
+    return null;
+  }
 }
 
-// Helper function để tạo game mới
-function createGame(roomId: string): GameState {
+// Helper function để lưu game vào Redis
+async function saveGame(roomId: string, game: GameState): Promise<boolean> {
+  if (!roomId || typeof roomId !== "string") {
+    console.error(`[saveGame] Invalid roomId: ${roomId}`);
+    return false;
+  }
+
+  try {
+    await redisClient.set(
+      `${REDIS_PREFIX}room:${roomId}`,
+      JSON.stringify(game)
+    );
+    console.log(`[saveGame] Saved game for room ${roomId} to Redis`);
+    return true;
+  } catch (error) {
+    console.error(`[saveGame] Error saving game to Redis:`, error);
+    return false;
+  }
+}
+
+// Helper function để xóa game khỏi Redis
+async function deleteGame(roomId: string): Promise<boolean> {
+  if (!roomId || typeof roomId !== "string") {
+    console.error(`[deleteGame] Invalid roomId: ${roomId}`);
+    return false;
+  }
+
+  try {
+    await redisClient.del(`${REDIS_PREFIX}room:${roomId}`);
+    console.log(`[deleteGame] Deleted game for room ${roomId} from Redis`);
+    return true;
+  } catch (error) {
+    console.error(`[deleteGame] Error deleting game from Redis:`, error);
+    return false;
+  }
+}
+
+// Helper function để tạo game mới và lưu vào Redis
+async function createGame(roomId: string): Promise<GameState> {
   const newGame: GameState = {
     board: initialChessBoard(),
     currentPlayer: "WHITE",
@@ -40,7 +91,8 @@ function createGame(roomId: string): GameState {
     players: [],
     status: "waiting",
   };
-  games[roomId] = newGame;
+
+  await saveGame(roomId, newGame);
   return newGame;
 }
 
@@ -57,8 +109,16 @@ function isValidMove(
   to: { x: number; y: number },
   player: string
 ): boolean {
-  // TODO: Implement full chess move validation. For demo, only check from/to are on board and from cell is not null and to cell is null or has opponent's piece.
-  if (!from || !to) return false;
+  // Hầu hết logic kiểm tra nước đi hợp lệ đã được xử lý tại client
+  // Server chỉ kiểm tra các điều kiện cơ bản như phạm vi bàn cờ và ownership của quân cờ
+
+  // Kiểm tra from/to có hợp lệ không
+  if (!from || !to) {
+    console.log(`[isValidMove] from hoặc to undefined`);
+    return false;
+  }
+
+  // Kiểm tra phạm vi bàn cờ
   if (
     from.x < 0 ||
     from.x > 7 ||
@@ -68,19 +128,45 @@ function isValidMove(
     to.x > 7 ||
     to.y < 0 ||
     to.y > 7
-  )
+  ) {
+    console.log(
+      `[isValidMove] Ngoài phạm vi bàn cờ: from=(${from.x},${from.y}), to=(${to.x},${to.y})`
+    );
     return false;
-  if (!board[from.y][from.x]) return false;
-  if (board[from.y][from.x]?.startsWith(player === "WHITE" ? "w" : "b")) {
-    // Player moves their own piece
-    if (
-      board[to.y][to.x] &&
-      board[to.y][to.x]?.startsWith(player === "WHITE" ? "w" : "b")
-    )
-      return false;
-    return true;
   }
-  return false;
+
+  // Kiểm tra ô xuất phát có quân cờ không
+  const piece = board[from.y][from.x];
+  if (!piece) {
+    console.log(
+      `[isValidMove] Không có quân cờ tại vị trí xuất phát (${from.x},${from.y})`
+    );
+    return false;
+  }
+
+  // Kiểm tra người chơi có đang di chuyển quân cờ của mình không
+  const pieceColor = piece.startsWith("w") ? "WHITE" : "BLACK";
+  if (pieceColor !== player) {
+    console.log(
+      `[isValidMove] Người chơi ${player} đang cố di chuyển quân cờ của đối thủ (${pieceColor})`
+    );
+    return false;
+  }
+
+  // Kiểm tra ô đích không chứa quân cờ của chính người chơi
+  const targetPiece = board[to.y][to.x];
+  if (targetPiece && targetPiece.startsWith(player === "WHITE" ? "w" : "b")) {
+    console.log(
+      `[isValidMove] Không thể ăn quân cờ của chính mình tại (${to.x},${to.y})`
+    );
+    return false;
+  }
+
+  // Tin tưởng client đã kiểm tra các quy tắc di chuyển cụ thể của từng loại quân cờ
+  console.log(
+    `[isValidMove] Nước đi hợp lệ: ${piece} từ (${from.x},${from.y}) đến (${to.x},${to.y})`
+  );
+  return true;
 }
 
 function checkWinner(board: (string | null)[][]): string | null {
@@ -136,44 +222,59 @@ async function sendToClient(connectionId: string, data: any): Promise<boolean> {
       console.log(
         `[sendToClient] Stale connection detected, removing ${connectionId}`
       );
-      // Remove connectionId from all games where it exists
-      let removedFromRooms = 0;
-      for (const roomId in games) {
-        const game = games[roomId];
-        if (game && game.players) {
-          const prevLength = game.players.length;
-          games[roomId].players = game.players.filter(
-            (id) => id !== connectionId
-          );
-          if (prevLength !== games[roomId].players.length) {
-            removedFromRooms++;
-            console.log(
-              `[sendToClient] Removed ${connectionId} from room ${roomId}`
-            );
 
-            // Nếu phòng không còn người chơi, xóa phòng
-            if (games[roomId].players.length === 0) {
+      // Lấy danh sách tất cả các phòng từ Redis
+      try {
+        const roomKeys = await redisClient.keys(`${REDIS_PREFIX}room:*`);
+        let removedFromRooms = 0;
+
+        for (const roomKey of roomKeys) {
+          const roomId = roomKey.replace(`${REDIS_PREFIX}room:`, "");
+          const game = await getGame(roomId);
+
+          if (game && game.players.includes(connectionId)) {
+            // Tạo bản sao players mới không bao gồm connection bị xóa
+            const newPlayers = game.players.filter((id) => id !== connectionId);
+
+            if (newPlayers.length !== game.players.length) {
+              removedFromRooms++;
               console.log(
-                `[sendToClient] Room ${roomId} is empty, deleting it`
+                `[sendToClient] Removed ${connectionId} from room ${roomId}`
               );
-              delete games[roomId];
-            }
-            // Nếu phòng chỉ còn 1 người, chuyển trạng thái về waiting
-            else if (
-              games[roomId].players.length < 2 &&
-              games[roomId].status === "playing"
-            ) {
-              games[roomId].status = "waiting";
-              console.log(
-                `[sendToClient] Room ${roomId} has less than 2 players, changing status to waiting`
-              );
+
+              if (newPlayers.length === 0) {
+                // Xóa phòng nếu không còn người chơi nào
+                console.log(
+                  `[sendToClient] Room ${roomId} is empty, deleting it`
+                );
+                await deleteGame(roomId);
+              } else {
+                // Cập nhật trạng thái phòng
+                if (newPlayers.length < 2 && game.status === "playing") {
+                  game.status = "waiting";
+                  console.log(
+                    `[sendToClient] Room ${roomId} has less than 2 players, changing status to waiting`
+                  );
+                }
+
+                // Cập nhật danh sách người chơi và lưu lại
+                game.players = newPlayers;
+                await saveGame(roomId, game);
+              }
             }
           }
         }
+
+        console.log(
+          `[sendToClient] Removed connection ${connectionId} from ${removedFromRooms} rooms`
+        );
+      } catch (error) {
+        console.error(
+          `[sendToClient] Error cleaning up stale connection:`,
+          error
+        );
       }
-      console.log(
-        `[sendToClient] Removed connection ${connectionId} from ${removedFromRooms} rooms`
-      );
+
       return false; // Không gửi được do connection không còn tồn tại
     } else {
       console.error("[sendToClient] Error sending to client:", err);
@@ -183,7 +284,7 @@ async function sendToClient(connectionId: string, data: any): Promise<boolean> {
 }
 
 async function broadcastToRoom(roomId: string, data: any) {
-  const game = getGame(roomId);
+  const game = await getGame(roomId);
   if (!game || game.players.length === 0) {
     console.log(
       `[broadcastToRoom] No players in room ${roomId}, skipping broadcast`
@@ -224,11 +325,26 @@ async function broadcastToRoom(roomId: string, data: any) {
 
   // Cập nhật trạng thái phòng nếu cần
   if (staleConnections.length > 0) {
-    const game = getGame(roomId);
-    if (game) {
+    // Lấy lại trạng thái game mới nhất
+    const updatedGame = await getGame(roomId);
+    if (updatedGame) {
       console.log(
         `[broadcastToRoom] ${staleConnections.length} stale connections were removed during broadcast`
       );
+
+      // Lọc ra những players còn active
+      updatedGame.players = updatedGame.players.filter(
+        (id) => !staleConnections.includes(id)
+      );
+
+      // Lưu lại trạng thái cập nhật
+      await saveGame(roomId, updatedGame);
+
+      // Nếu không còn players nào, xóa phòng
+      if (updatedGame.players.length === 0) {
+        console.log(`[broadcastToRoom] Room ${roomId} is empty, deleting it`);
+        await deleteGame(roomId);
+      }
     }
   }
 }
@@ -295,10 +411,10 @@ export const joinHandler = async (req: any, res: Response) => {
     console.log(`[joinHandler] Client ${connectionId} joining room ${roomId}`);
 
     // Sử dụng helper function để lấy hoặc tạo game
-    let game = getGame(roomId);
+    let game = await getGame(roomId);
     console.log(`[joinHandler] getGame(${roomId}):`, game);
     if (!game) {
-      game = createGame(roomId);
+      game = await createGame(roomId);
       console.log(`[joinHandler] Created new game for room ${roomId}:`, game);
     }
 
@@ -362,6 +478,9 @@ export const joinHandler = async (req: any, res: Response) => {
         `[joinHandler] Not enough players, set game.status to 'waiting' for room ${roomId}`
       );
     }
+
+    // Lưu trạng thái game mới vào Redis
+    await saveGame(roomId, game);
 
     // Gửi thông tin game đã bắt đầu cho tất cả người chơi
     console.log(
@@ -437,16 +556,28 @@ export const moveHandler = async (req: any, res: any) => {
     const isApiGatewayRequest = isApiGatewayWsRequest(req);
 
     const roomId = body.roomId || "default";
+    // Chuyển đổi tọa độ từ format client gửi lên thành format server xử lý
+    // Client gửi from: { x: col, y: row }, to: { x: col, y: row }
+    // Server cần from: { x: col, y: row }, to: { x: col, y: row }
     const from = body.from;
     const to = body.to;
+
+    console.log(
+      `[moveHandler] Nước đi từ (${from?.x},${from?.y}) đến (${to?.x},${to?.y})`
+    );
+
     const connectionId =
       (isApiGatewayRequest ? req.requestContext.connectionId : null) ||
       req.headers?.["x-connection-id"] ||
       body.connectionId ||
       "test-conn-id";
 
+    console.log(
+      `[moveHandler] connectionId: ${connectionId}, roomId: ${roomId}`
+    );
+
     // Sử dụng helper function để lấy game
-    const game = getGame(roomId);
+    const game = await getGame(roomId);
     if (!game) {
       if (isApiGatewayRequest) {
         return {
@@ -500,19 +631,21 @@ export const moveHandler = async (req: any, res: any) => {
       return res.status(400).json({ message: "Invalid move." });
     }
 
-    // Move piece
-    if (!from || !to) {
-      if (isApiGatewayRequest) {
-        return {
-          statusCode: 400,
-          body: JSON.stringify({ message: "Invalid move coordinates" }),
-        };
-      }
-      return res.status(400).json({ message: "Invalid move coordinates" });
-    }
+    // Nước đi hợp lệ, thực hiện di chuyển quân cờ
+    console.log(
+      `[moveHandler] Di chuyển quân cờ ${game.board[from.y][from.x]} từ (${
+        from.x
+      },${from.y}) đến (${to.x},${to.y})`
+    );
 
-    game.board[to.y][to.x] = game.board[from.y][from.x];
+    // Lưu lại quân cờ đang di chuyển
+    const movingPiece = game.board[from.y][from.x];
+
+    // Cập nhật bàn cờ
+    game.board[to.y][to.x] = movingPiece;
     game.board[from.y][from.x] = null;
+
+    // Ghi lại lịch sử nước đi
     game.moveHistory.push({ from, to, player: playerColor });
 
     // Check winner
@@ -520,6 +653,10 @@ export const moveHandler = async (req: any, res: any) => {
     if (winner) {
       game.winner = winner;
       game.status = "finished";
+
+      // Lưu trạng thái game mới vào Redis
+      await saveGame(roomId, game);
+
       await broadcastToRoom(roomId, {
         type: "gameOver",
         data: {
@@ -541,24 +678,44 @@ export const moveHandler = async (req: any, res: any) => {
 
     // Switch turn
     game.currentPlayer = game.currentPlayer === "WHITE" ? "BLACK" : "WHITE";
+    console.log(`[moveHandler] Chuyển lượt chơi sang ${game.currentPlayer}`);
+
+    // Lưu trạng thái game mới vào Redis
+    await saveGame(roomId, game);
+
+    // Broadcast kết quả nước đi cho tất cả người chơi
     await broadcastToRoom(roomId, {
       type: "move",
       data: {
-        // Sửa từ payload thành data để phù hợp với format client
         board: game.board,
-        move: { from, to, player: playerColor },
+        move: {
+          from,
+          to,
+          piece: movingPiece,
+          player: playerColor,
+        },
         nextTurn: game.currentPlayer,
         status: game.status,
       },
     });
 
+    console.log(
+      `[moveHandler] Đã broadcast kết quả nước đi cho room ${roomId}`
+    );
+
     if (isApiGatewayRequest) {
       return {
         statusCode: 200,
-        body: JSON.stringify({ message: "Moved" }),
+        body: JSON.stringify({
+          message: "Moved successfully",
+          nextTurn: game.currentPlayer,
+        }),
       };
     }
-    res.status(200).json({ message: "Moved" });
+    res.status(200).json({
+      message: "Moved successfully",
+      nextTurn: game.currentPlayer,
+    });
   } catch (error) {
     console.error("Error in moveHandler:", error);
 
@@ -613,7 +770,7 @@ export const restartHandler = async (req: any, res: any) => {
       "test-conn-id";
 
     // Sử dụng helper function để lấy game
-    const game = getGame(roomId);
+    const game = await getGame(roomId);
     if (!game) {
       if (isApiGatewayRequest) {
         return {
@@ -625,7 +782,7 @@ export const restartHandler = async (req: any, res: any) => {
     }
 
     // Tạo game mới với players từ game cũ
-    games[roomId] = {
+    const newGame: GameState = {
       board: initialChessBoard(),
       currentPlayer: "WHITE",
       moveHistory: [],
@@ -634,15 +791,18 @@ export const restartHandler = async (req: any, res: any) => {
       status: "playing",
     };
 
+    // Lưu game mới vào Redis
+    await saveGame(roomId, newGame);
+
     await broadcastToRoom(roomId, {
       type: "gameStarted",
       data: {
         // Sửa từ payload thành data để phù hợp với format client
         roomId,
-        players: games[roomId].players,
-        board: games[roomId].board,
-        turn: games[roomId].currentPlayer,
-        status: games[roomId].status,
+        players: newGame.players,
+        board: newGame.board,
+        turn: newGame.currentPlayer,
+        status: newGame.status,
       },
     });
 
@@ -707,7 +867,7 @@ export const leaveHandler = async (req: any, res: any) => {
       "test-conn-id";
 
     // Sử dụng helper function để lấy game
-    const game = getGame(roomId);
+    const game = await getGame(roomId);
     if (!game) {
       if (isApiGatewayRequest) {
         return {
@@ -718,11 +878,21 @@ export const leaveHandler = async (req: any, res: any) => {
       return res.status(400).json({ message: "Room not found" });
     }
 
-    game.players = game.players.filter((id) => id !== connectionId);
-    if (game.players.length === 0) {
-      delete games[roomId];
+    // Lọc ra danh sách players mới không bao gồm người rời đi
+    const updatedPlayers = game.players.filter((id) => id !== connectionId);
+
+    if (updatedPlayers.length === 0) {
+      // Nếu không còn người chơi, xóa phòng
+      await deleteGame(roomId);
     } else {
+      // Cập nhật trạng thái game
+      game.players = updatedPlayers;
       game.status = "waiting";
+
+      // Lưu trạng thái mới
+      await saveGame(roomId, game);
+
+      // Thông báo cho các người chơi còn lại
       await broadcastToRoom(roomId, {
         type: "userLeft",
         data: {
