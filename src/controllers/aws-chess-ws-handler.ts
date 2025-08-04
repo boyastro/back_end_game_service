@@ -17,7 +17,7 @@ interface GameState {
   }[];
   winner: string | null; // "WHITE" | "BLACK" | null
   players: string[]; // connectionIds
-  status: "playing" | "waiting" | "finished";
+  status: "playing" | "waiting" | "finished" | "preparing";
 }
 
 // Prefix cho các key Redis
@@ -468,11 +468,16 @@ export const joinHandler = async (req: any, res: Response) => {
 
     // Cập nhật trạng thái game
     if (game.players.length === 2 && game.status !== "finished") {
-      game.status = "playing";
+      // Nếu đủ 2 người chơi, đặt trạng thái là "preparing" và đợi 5 giây trước khi bắt đầu
+      game.status = "preparing";
       console.log(
-        `[joinHandler] Set game.status to 'playing' for room ${roomId}`
+        `[joinHandler] Room ${roomId} has 2 players, preparing to start in 5 seconds`
       );
-    } else if (game.players.length < 2 && game.status === "playing") {
+    } else if (
+      game.players.length < 2 &&
+      (game.status === "playing" || game.status === "preparing")
+    ) {
+      // Nếu không đủ 2 người chơi nhưng trạng thái là playing hoặc preparing, đặt lại thành waiting
       game.status = "waiting";
       console.log(
         `[joinHandler] Not enough players, set game.status to 'waiting' for room ${roomId}`
@@ -482,22 +487,66 @@ export const joinHandler = async (req: any, res: Response) => {
     // Lưu trạng thái game mới vào Redis
     await saveGame(roomId, game);
 
-    // Gửi thông tin game đã bắt đầu cho tất cả người chơi
+    // Gửi thông tin cập nhật cho tất cả người chơi
     console.log(
-      `[joinHandler] Broadcasting gameStarted to room ${roomId} with players:`,
+      `[joinHandler] Broadcasting update to room ${roomId} with players:`,
       game.players
     );
+
+    // Thông báo ngay cho người chơi về trạng thái hiện tại
     await broadcastToRoom(roomId, {
-      type: "gameStarted",
+      type: "gameUpdate",
       data: {
-        // Sửa từ payload thành data để phù hợp với format client
         roomId,
         players: game.players,
         board: game.board,
         turn: game.currentPlayer,
         status: game.status,
+        message:
+          game.players.length === 1
+            ? "Đang chờ người chơi thứ hai tham gia..."
+            : "Đã đủ người chơi, trò chơi sẽ bắt đầu trong 5 giây",
       },
     });
+
+    // Nếu đủ 2 người chơi, đợi 5 giây rồi bắt đầu trò chơi
+    if (game.players.length === 2 && game.status === "preparing") {
+      setTimeout(async () => {
+        try {
+          // Lấy lại trạng thái game mới nhất từ Redis
+          const updatedGame = await getGame(roomId);
+
+          // Kiểm tra xem còn đủ 2 người chơi không
+          if (updatedGame && updatedGame.players.length === 2) {
+            // Cập nhật trạng thái thành playing
+            updatedGame.status = "playing";
+            await saveGame(roomId, updatedGame);
+
+            // Gửi thông tin game đã bắt đầu cho tất cả người chơi
+            console.log(
+              `[joinHandler] Broadcasting gameStarted to room ${roomId} with players:`,
+              updatedGame.players
+            );
+
+            await broadcastToRoom(roomId, {
+              type: "gameStarted",
+              data: {
+                roomId,
+                players: updatedGame.players,
+                board: updatedGame.board,
+                turn: updatedGame.currentPlayer,
+                status: updatedGame.status,
+              },
+            });
+          }
+        } catch (error) {
+          console.error(
+            `[joinHandler] Error starting game after delay:`,
+            error
+          );
+        }
+      }, 5000); // Đợi 5 giây
+    }
 
     // Trả về response phù hợp dựa vào loại request
     console.log(
@@ -589,13 +638,18 @@ export const moveHandler = async (req: any, res: any) => {
     }
 
     if (game.status !== "playing") {
+      const errorMessage =
+        game.status === "preparing"
+          ? "Trò chơi đang chuẩn bị bắt đầu, vui lòng đợi."
+          : "Trò chơi không ở trạng thái đang chơi.";
+
       if (isApiGatewayRequest) {
         return {
           statusCode: 400,
-          body: JSON.stringify({ message: "Game is not active." }),
+          body: JSON.stringify({ message: errorMessage }),
         };
       }
-      return res.status(400).json({ message: "Game is not active." });
+      return res.status(400).json({ message: errorMessage });
     }
 
     if (game.players.length < 2) {
