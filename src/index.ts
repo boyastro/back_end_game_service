@@ -1,4 +1,4 @@
-import wsChessRoutes from "./routes/ws-chess.routes";
+import wsChessRoutes from "./routes/ws-chess.routes.js";
 import millionaireRoutes from "./routes/millionaire.routes.js";
 import express from "express";
 import http from "http";

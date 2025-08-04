@@ -7,7 +7,7 @@ import {
   restartHandler,
   leaveHandler,
   defaultHandler,
-} from "../controllers/aws-chess-ws-handler";
+} from "../controllers/aws-chess-ws-handler.js";
 
 const router = express.Router();
 

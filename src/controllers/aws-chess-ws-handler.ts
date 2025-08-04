@@ -84,14 +84,18 @@ function initialChessBoard(): (string | null)[][] {
   ];
 }
 
+const PROD_WS_ENDPOINT =
+  "https://vd7olzoftd.execute-api.ap-southeast-1.amazonaws.com/prod";
+
 async function sendToClient(
   domain: string,
   stage: string,
   connectionId: string,
   data: any
 ) {
+  // Luôn sử dụng endpoint production thực tế để broadcast
   const api = new ApiGatewayManagementApi({
-    endpoint: `https://${domain}/${stage}`,
+    endpoint: PROD_WS_ENDPOINT,
   });
   await api.postToConnection({
     ConnectionId: connectionId,
