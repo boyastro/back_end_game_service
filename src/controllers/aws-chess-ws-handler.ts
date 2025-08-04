@@ -87,32 +87,36 @@ function initialChessBoard(): (string | null)[][] {
 const PROD_WS_ENDPOINT =
   "https://vd7olzoftd.execute-api.ap-southeast-1.amazonaws.com/prod";
 
-async function sendToClient(
-  domain: string,
-  stage: string,
-  connectionId: string,
-  data: any
-) {
+async function sendToClient(connectionId: string, data: any) {
   // Luôn sử dụng endpoint production thực tế để broadcast
   const api = new ApiGatewayManagementApi({
     endpoint: PROD_WS_ENDPOINT,
   });
-  await api.postToConnection({
-    ConnectionId: connectionId,
-    Data: Buffer.from(JSON.stringify(data)),
-  });
+  try {
+    await api.postToConnection({
+      ConnectionId: connectionId,
+      Data: Buffer.from(JSON.stringify(data)),
+    });
+  } catch (err: any) {
+    if (err.statusCode === 410) {
+      console.log(`Stale connection, removing ${connectionId}`);
+      // Remove connectionId from all games where it exists
+      for (const roomId in games) {
+        games[roomId].players = games[roomId].players.filter(
+          (id) => id !== connectionId
+        );
+      }
+    } else {
+      console.error("Error sending to client:", err);
+    }
+  }
 }
 
-async function broadcastToRoom(
-  domain: string,
-  stage: string,
-  roomId: string,
-  data: any
-) {
+async function broadcastToRoom(roomId: string, data: any) {
   const game = games[roomId];
   if (!game) return;
   for (const connId of game.players) {
-    await sendToClient(domain, stage, connId, data);
+    await sendToClient(connId, data);
   }
 }
 
@@ -125,8 +129,7 @@ export const joinHandler = async (req: any, res: any) => {
   const { roomId = "default" } = req.body;
   const connectionId =
     req.headers["x-connection-id"] || req.body.connectionId || "test-conn-id";
-  const domain = req.headers["x-domain-name"] || "localhost";
-  const stage = req.headers["x-stage"] || "dev";
+  // Domain and stage no longer needed for WebSocket connections
   if (!games[roomId]) {
     games[roomId] = {
       board: initialChessBoard(),
@@ -142,7 +145,7 @@ export const joinHandler = async (req: any, res: any) => {
   if (game.players.length === 2 && game.status !== "finished") {
     game.status = "playing";
   }
-  await broadcastToRoom(domain, stage, roomId, {
+  await broadcastToRoom(roomId, {
     type: "gameStarted",
     payload: {
       roomId,
@@ -159,8 +162,7 @@ export const moveHandler = async (req: any, res: any) => {
   const { roomId = "default", from, to } = req.body;
   const connectionId =
     req.headers["x-connection-id"] || req.body.connectionId || "test-conn-id";
-  const domain = req.headers["x-domain-name"] || "localhost";
-  const stage = req.headers["x-stage"] || "dev";
+  // Domain and stage no longer needed for WebSocket connections
   if (!games[roomId]) {
     return res.status(400).json({ message: "Room not found" });
   }
@@ -188,7 +190,7 @@ export const moveHandler = async (req: any, res: any) => {
   if (winner) {
     game.winner = winner;
     game.status = "finished";
-    await broadcastToRoom(domain, stage, roomId, {
+    await broadcastToRoom(roomId, {
       type: "gameOver",
       payload: {
         winner,
@@ -200,7 +202,7 @@ export const moveHandler = async (req: any, res: any) => {
   }
   // Switch turn
   game.currentPlayer = game.currentPlayer === "WHITE" ? "BLACK" : "WHITE";
-  await broadcastToRoom(domain, stage, roomId, {
+  await broadcastToRoom(roomId, {
     type: "move",
     payload: {
       board: game.board,
@@ -216,8 +218,7 @@ export const restartHandler = async (req: any, res: any) => {
   const { roomId = "default" } = req.body;
   const connectionId =
     req.headers["x-connection-id"] || req.body.connectionId || "test-conn-id";
-  const domain = req.headers["x-domain-name"] || "localhost";
-  const stage = req.headers["x-stage"] || "dev";
+  // Domain and stage no longer needed for WebSocket connections
   if (!games[roomId]) {
     return res.status(400).json({ message: "Room not found" });
   }
@@ -230,7 +231,7 @@ export const restartHandler = async (req: any, res: any) => {
     players: [...game.players],
     status: "playing",
   };
-  await broadcastToRoom(domain, stage, roomId, {
+  await broadcastToRoom(roomId, {
     type: "gameStarted",
     payload: {
       roomId,
@@ -247,8 +248,7 @@ export const leaveHandler = async (req: any, res: any) => {
   const { roomId = "default" } = req.body;
   const connectionId =
     req.headers["x-connection-id"] || req.body.connectionId || "test-conn-id";
-  const domain = req.headers["x-domain-name"] || "localhost";
-  const stage = req.headers["x-stage"] || "dev";
+  // Domain and stage no longer needed for WebSocket connections
   if (!games[roomId]) {
     return res.status(400).json({ message: "Room not found" });
   }
@@ -258,7 +258,7 @@ export const leaveHandler = async (req: any, res: any) => {
     delete games[roomId];
   } else {
     game.status = "waiting";
-    await broadcastToRoom(domain, stage, roomId, {
+    await broadcastToRoom(roomId, {
       type: "userLeft",
       payload: {
         roomId,
