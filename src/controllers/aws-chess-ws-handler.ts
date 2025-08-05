@@ -860,13 +860,41 @@ export const moveHandler = async (req: any, res: any) => {
       );
     }
 
-    // Cập nhật bàn cờ
+    // Xử lý nước nhập thành (di chuyển cả vua và xe)
+    const isCastling =
+      movingPiece &&
+      (movingPiece === "wK" || movingPiece === "bK") &&
+      Math.abs(to.x - from.x) > 1; // Vua di chuyển hơn 1 ô theo chiều ngang
+
+    // Cập nhật bàn cờ - di chuyển vua
     game.board[to.y][to.x] = promotedPiece;
     game.board[from.y][from.x] = null;
+
+    // Nếu là nước nhập thành, cần di chuyển cả xe
+    if (isCastling) {
+      const isKingSide = to.x > from.x; // Nhập thành bên vua (phải) hay bên hậu (trái)
+      const rookFromX = isKingSide ? 7 : 0; // Vị trí ban đầu của xe
+      const rookToX = isKingSide ? to.x - 1 : to.x + 1; // Vị trí mới của xe
+      const rookY = from.y; // Xe cùng hàng với vua
+
+      // Lấy quân xe
+      const rookPiece = game.board[rookY][rookFromX];
+
+      // Di chuyển xe
+      game.board[rookY][rookToX] = rookPiece;
+      game.board[rookY][rookFromX] = null;
+
+      console.log(
+        `[moveHandler] Nhập thành ${
+          isKingSide ? "bên vua" : "bên hậu"
+        }: Di chuyển xe từ (${rookFromX},${rookY}) đến (${rookToX},${rookY})`
+      );
+    }
 
     // Ghi lại lịch sử nước đi (có promotion nếu có)
     const moveHistoryEntry: any = { from, to, player: playerColor };
     if (promotion) moveHistoryEntry.promotion = promotion;
+    if (isCastling) moveHistoryEntry.castling = true;
     game.moveHistory.push(moveHistoryEntry);
 
     // Check winner
@@ -901,28 +929,8 @@ export const moveHandler = async (req: any, res: any) => {
     game.currentPlayer = game.currentPlayer === "WHITE" ? "BLACK" : "WHITE";
     console.log(`[moveHandler] Chuyển lượt chơi sang ${game.currentPlayer}`);
 
-    // Kiểm tra nếu nước đi là castling (nhập thành)
-    const isCastling =
-      movingPiece &&
-      (movingPiece === "wK" || movingPiece === "bK") &&
-      Math.abs(to.x - from.x) > 1; // Vua di chuyển hơn 1 ô theo chiều ngang
-
     // Lưu trạng thái game mới vào Redis
     await saveGame(roomId, game);
-
-    // Xác định nếu đây là nước nhập thành
-    const castlingInfo = isCastling
-      ? {
-          castling: true,
-          castlingSide: to.x > from.x ? "kingside" : "queenside",
-        }
-      : {};
-
-    if (isCastling) {
-      console.log(
-        `[moveHandler] Detected castling move (${castlingInfo.castlingSide})`
-      );
-    }
 
     // Broadcast kết quả nước đi cho tất cả người chơi
     await broadcastToRoom(roomId, {
@@ -935,7 +943,12 @@ export const moveHandler = async (req: any, res: any) => {
           piece: promotedPiece, // Dùng promotedPiece thay vì movingPiece để hiển thị quân đã phong hậu
           player: playerColor,
           ...(promotion ? { promotion } : {}),
-          ...castlingInfo, // Thêm thông tin castling nếu đây là nước nhập thành
+          ...(isCastling
+            ? {
+                castling: true,
+                castlingSide: to.x > from.x ? "kingside" : "queenside",
+              }
+            : {}),
         },
         nextTurn: game.currentPlayer,
         status: game.status,
@@ -992,9 +1005,36 @@ export const moveHandler = async (req: any, res: any) => {
           );
         }
 
-        // Cập nhật bàn cờ sau nước đi của AI
+        // Xử lý nước nhập thành của AI (di chuyển cả vua và xe)
+        const isAICastling =
+          aiMovingPiece &&
+          (aiMovingPiece === "wK" || aiMovingPiece === "bK") &&
+          Math.abs(aiMove.to.x - aiMove.from.x) > 1; // Vua di chuyển hơn 1 ô theo chiều ngang
+
+        // Cập nhật bàn cờ sau nước đi của AI - di chuyển vua
         game.board[aiMove.to.y][aiMove.to.x] = aiPromotedPiece;
         game.board[aiMove.from.y][aiMove.from.x] = null;
+
+        // Nếu là nước nhập thành, cần di chuyển cả xe
+        if (isAICastling) {
+          const isKingSide = aiMove.to.x > aiMove.from.x; // Nhập thành bên vua (phải) hay bên hậu (trái)
+          const rookFromX = isKingSide ? 7 : 0; // Vị trí ban đầu của xe
+          const rookToX = isKingSide ? aiMove.to.x - 1 : aiMove.to.x + 1; // Vị trí mới của xe
+          const rookY = aiMove.from.y; // Xe cùng hàng với vua
+
+          // Lấy quân xe
+          const rookPiece = game.board[rookY][rookFromX];
+
+          // Di chuyển xe
+          game.board[rookY][rookToX] = rookPiece;
+          game.board[rookY][rookFromX] = null;
+
+          console.log(
+            `[moveHandler] AI nhập thành ${
+              isKingSide ? "bên vua" : "bên hậu"
+            }: Di chuyển xe từ (${rookFromX},${rookY}) đến (${rookToX},${rookY})`
+          );
+        }
 
         // Ghi lại lịch sử nước đi của AI
         const aiMoveHistoryEntry: any = {
@@ -1003,6 +1043,7 @@ export const moveHandler = async (req: any, res: any) => {
           player: aiColor,
         };
         if (aiPromotion) aiMoveHistoryEntry.promotion = aiPromotion;
+        if (isAICastling) aiMoveHistoryEntry.castling = true;
         game.moveHistory.push(aiMoveHistoryEntry);
 
         // Kiểm tra xem AI có thắng không
@@ -1035,27 +1076,6 @@ export const moveHandler = async (req: any, res: any) => {
           // Lưu trạng thái game mới vào Redis
           await saveGame(roomId, game);
 
-          // Kiểm tra nếu nước đi của AI là castling (nhập thành)
-          const isAICastling =
-            aiMovingPiece &&
-            (aiMovingPiece === "wK" || aiMovingPiece === "bK") &&
-            Math.abs(aiMove.to.x - aiMove.from.x) > 1;
-
-          // Thông tin castling nếu đây là nước nhập thành
-          const aiCastlingInfo = isAICastling
-            ? {
-                castling: true,
-                castlingSide:
-                  aiMove.to.x > aiMove.from.x ? "kingside" : "queenside",
-              }
-            : {};
-
-          if (isAICastling) {
-            console.log(
-              `[moveHandler] AI performed castling (${aiCastlingInfo.castlingSide})`
-            );
-          }
-
           // Broadcast kết quả nước đi của AI cho người chơi
           await broadcastToRoom(roomId, {
             type: "move",
@@ -1067,7 +1087,13 @@ export const moveHandler = async (req: any, res: any) => {
                 piece: aiPromotedPiece,
                 player: aiColor,
                 ...(aiPromotion ? { promotion: aiPromotion } : {}),
-                ...aiCastlingInfo, // Thêm thông tin castling nếu đây là nước nhập thành
+                ...(isAICastling
+                  ? {
+                      castling: true,
+                      castlingSide:
+                        aiMove.to.x > aiMove.from.x ? "kingside" : "queenside",
+                    }
+                  : {}),
                 isAIMove: true,
               },
               nextTurn: game.currentPlayer,
