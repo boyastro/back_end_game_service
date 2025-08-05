@@ -614,8 +614,23 @@ export const moveHandler = async (req: any, res: any) => {
     // Chuyển đổi tọa độ từ format client gửi lên thành format server xử lý
     // Client gửi from: { x: col, y: row }, to: { x: col, y: row }
     // Server cần from: { x: col, y: row }, to: { x: col, y: row }
-    const from = body.from;
-    const to = body.to;
+    let from = body.from;
+    let to = body.to;
+    // Nếu from/to là string kiểu '{x=7, y=6}' thì parse về object
+    if (typeof from === "string") {
+      try {
+        from = JSON.parse(from.replace(/([a-zA-Z0-9_]+)=/g, '"$1":'));
+      } catch (e) {
+        console.error("[moveHandler] Lỗi parse from:", from, e);
+      }
+    }
+    if (typeof to === "string") {
+      try {
+        to = JSON.parse(to.replace(/([a-zA-Z0-9_]+)=/g, '"$1":'));
+      } catch (e) {
+        console.error("[moveHandler] Lỗi parse to:", to, e);
+      }
+    }
 
     console.log(
       `[moveHandler] Nước đi từ (${from?.x},${from?.y}) đến (${to?.x},${to?.y})`
