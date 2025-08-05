@@ -866,9 +866,20 @@ export const moveHandler = async (req: any, res: any) => {
       (movingPiece === "wK" || movingPiece === "bK") &&
       Math.abs(to.x - from.x) > 1; // Vua di chuyển hơn 1 ô theo chiều ngang
 
+    // Xử lý bắt tốt qua đường (en passant)
+    const isEnPassant =
+      movingPiece &&
+      (movingPiece === "wP" || movingPiece === "bP") && // Là quân tốt
+      Math.abs(to.x - from.x) === 1 && // Di chuyển chéo
+      Math.abs(to.y - from.y) === 1 && // Di chuyển chéo
+      game.board[to.y][to.x] === null; // Ô đích không có quân (tức là không phải ăn quân thông thường)
+
     // Cập nhật bàn cờ - di chuyển vua
     game.board[to.y][to.x] = promotedPiece;
     game.board[from.y][from.x] = null;
+
+    // Thông tin về quân tốt bị bắt trong en passant
+    let capturedPawnPosition = null;
 
     // Nếu là nước nhập thành, cần di chuyển cả xe
     if (isCastling) {
@@ -891,10 +902,30 @@ export const moveHandler = async (req: any, res: any) => {
       );
     }
 
+    // Nếu là nước bắt tốt qua đường, xóa quân tốt bị bắt
+    if (isEnPassant) {
+      // Vị trí của quân tốt bị bắt (ở cùng hàng với quân tốt đi, cùng cột với ô đích)
+      const capturedPawnX = to.x;
+      const capturedPawnY = from.y;
+
+      // Lưu vị trí quân tốt bị bắt để thông báo cho client
+      capturedPawnPosition = { x: capturedPawnX, y: capturedPawnY };
+
+      // Xóa quân tốt bị bắt khỏi bàn cờ
+      console.log(
+        `[moveHandler] Bắt tốt qua đường: Xóa quân tốt tại (${capturedPawnX},${capturedPawnY})`
+      );
+      game.board[capturedPawnY][capturedPawnX] = null;
+    }
+
     // Ghi lại lịch sử nước đi (có promotion nếu có)
     const moveHistoryEntry: any = { from, to, player: playerColor };
     if (promotion) moveHistoryEntry.promotion = promotion;
     if (isCastling) moveHistoryEntry.castling = true;
+    if (isEnPassant) {
+      moveHistoryEntry.enPassant = true;
+      moveHistoryEntry.capturedPawn = capturedPawnPosition;
+    }
     game.moveHistory.push(moveHistoryEntry);
 
     // Check winner
@@ -947,6 +978,12 @@ export const moveHandler = async (req: any, res: any) => {
             ? {
                 castling: true,
                 castlingSide: to.x > from.x ? "kingside" : "queenside",
+              }
+            : {}),
+          ...(isEnPassant
+            ? {
+                enPassant: true,
+                capturedPawn: capturedPawnPosition,
               }
             : {}),
         },
@@ -1011,6 +1048,17 @@ export const moveHandler = async (req: any, res: any) => {
           (aiMovingPiece === "wK" || aiMovingPiece === "bK") &&
           Math.abs(aiMove.to.x - aiMove.from.x) > 1; // Vua di chuyển hơn 1 ô theo chiều ngang
 
+        // Xử lý bắt tốt qua đường (en passant) của AI
+        const isAIEnPassant =
+          aiMovingPiece &&
+          (aiMovingPiece === "wP" || aiMovingPiece === "bP") && // Là quân tốt
+          Math.abs(aiMove.to.x - aiMove.from.x) === 1 && // Di chuyển chéo
+          Math.abs(aiMove.to.y - aiMove.from.y) === 1 && // Di chuyển chéo
+          game.board[aiMove.to.y][aiMove.to.x] === null; // Ô đích không có quân
+
+        // Thông tin về quân tốt bị bắt trong en passant của AI
+        let aiCapturedPawnPosition = null;
+
         // Cập nhật bàn cờ sau nước đi của AI - di chuyển vua
         game.board[aiMove.to.y][aiMove.to.x] = aiPromotedPiece;
         game.board[aiMove.from.y][aiMove.from.x] = null;
@@ -1036,6 +1084,22 @@ export const moveHandler = async (req: any, res: any) => {
           );
         }
 
+        // Nếu là nước bắt tốt qua đường, xóa quân tốt bị bắt
+        if (isAIEnPassant) {
+          // Vị trí của quân tốt bị bắt (ở cùng hàng với quân tốt đi, cùng cột với ô đích)
+          const capturedPawnX = aiMove.to.x;
+          const capturedPawnY = aiMove.from.y;
+
+          // Lưu vị trí quân tốt bị bắt để thông báo cho client
+          aiCapturedPawnPosition = { x: capturedPawnX, y: capturedPawnY };
+
+          // Xóa quân tốt bị bắt khỏi bàn cờ
+          console.log(
+            `[moveHandler] AI bắt tốt qua đường: Xóa quân tốt tại (${capturedPawnX},${capturedPawnY})`
+          );
+          game.board[capturedPawnY][capturedPawnX] = null;
+        }
+
         // Ghi lại lịch sử nước đi của AI
         const aiMoveHistoryEntry: any = {
           from: aiMove.from,
@@ -1044,6 +1108,10 @@ export const moveHandler = async (req: any, res: any) => {
         };
         if (aiPromotion) aiMoveHistoryEntry.promotion = aiPromotion;
         if (isAICastling) aiMoveHistoryEntry.castling = true;
+        if (isAIEnPassant) {
+          aiMoveHistoryEntry.enPassant = true;
+          aiMoveHistoryEntry.capturedPawn = aiCapturedPawnPosition;
+        }
         game.moveHistory.push(aiMoveHistoryEntry);
 
         // Kiểm tra xem AI có thắng không
@@ -1092,6 +1160,12 @@ export const moveHandler = async (req: any, res: any) => {
                       castling: true,
                       castlingSide:
                         aiMove.to.x > aiMove.from.x ? "kingside" : "queenside",
+                    }
+                  : {}),
+                ...(isAIEnPassant
+                  ? {
+                      enPassant: true,
+                      capturedPawn: aiCapturedPawnPosition,
                     }
                   : {}),
                 isAIMove: true,
