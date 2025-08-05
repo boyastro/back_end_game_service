@@ -785,12 +785,31 @@ export const moveHandler = async (req: any, res: any) => {
     // Lưu lại quân cờ đang di chuyển
     const movingPiece = game.board[from.y][from.x];
 
+    // Xử lý phong hậu nếu có trường promotion
+    let promotedPiece = movingPiece;
+    let promotion = undefined;
+    if (
+      body.promotion &&
+      movingPiece &&
+      movingPiece[1] === "P" &&
+      ((movingPiece[0] === "w" && to.y === 0) ||
+        (movingPiece[0] === "b" && to.y === 7))
+    ) {
+      promotedPiece = movingPiece[0] + body.promotion; // "wQ" hoặc "bQ"
+      promotion = body.promotion;
+      console.log(
+        `[moveHandler] Phong hậu: ${movingPiece} -> ${promotedPiece}`
+      );
+    }
+
     // Cập nhật bàn cờ
-    game.board[to.y][to.x] = movingPiece;
+    game.board[to.y][to.x] = promotedPiece;
     game.board[from.y][from.x] = null;
 
-    // Ghi lại lịch sử nước đi
-    game.moveHistory.push({ from, to, player: playerColor });
+    // Ghi lại lịch sử nước đi (có promotion nếu có)
+    const moveHistoryEntry: any = { from, to, player: playerColor };
+    if (promotion) moveHistoryEntry.promotion = promotion;
+    game.moveHistory.push(moveHistoryEntry);
 
     // Check winner
     const winner = checkWinner(game.board);
@@ -835,8 +854,9 @@ export const moveHandler = async (req: any, res: any) => {
         move: {
           from,
           to,
-          piece: movingPiece,
+          piece: promotedPiece, // Dùng promotedPiece thay vì movingPiece để hiển thị quân đã phong hậu
           player: playerColor,
+          ...(promotion ? { promotion } : {}),
         },
         nextTurn: game.currentPlayer,
         status: game.status,
