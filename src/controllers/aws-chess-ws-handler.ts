@@ -579,6 +579,12 @@ export const joinHandler = async (req: any, res: Response) => {
 };
 
 export const moveHandler = async (req: any, res: any) => {
+  // Log chi tiết request để debug
+  console.log("[moveHandler] req.body:", req.body);
+  console.log("[moveHandler] req.headers:", req.headers);
+  if (req.requestContext) {
+    console.log("[moveHandler] req.requestContext:", req.requestContext);
+  }
   try {
     // Đảm bảo req.body luôn tồn tại và có giá trị
     let body = req.body || {};
