@@ -867,12 +867,31 @@ export const moveHandler = async (req: any, res: any) => {
       Math.abs(to.x - from.x) > 1; // Vua di chuyển hơn 1 ô theo chiều ngang
 
     // Xử lý bắt tốt qua đường (en passant) - từ thông tin client gửi lên
-    const isEnPassant = body.enPassant === true;
+    const isEnPassant = body.enPassant === true || body.enPassant === "true";
     let capturedPawnPosition = null;
 
     if (isEnPassant && body.capturedPawn) {
       // Lấy vị trí quân tốt bị bắt từ thông tin client gửi lên
       capturedPawnPosition = body.capturedPawn;
+
+      // Nếu capturedPawn là string kiểu '{x=7, y=3}' thì parse về object
+      if (typeof capturedPawnPosition === "string") {
+        try {
+          capturedPawnPosition = JSON.parse(
+            capturedPawnPosition.replace(/([a-zA-Z0-9_]+)=/g, '"$1":')
+          );
+          console.log(
+            `[moveHandler] Đã parse capturedPawn từ string: ${body.capturedPawn}`
+          );
+        } catch (e) {
+          console.error(
+            "[moveHandler] Lỗi parse capturedPawn:",
+            body.capturedPawn,
+            e
+          );
+        }
+      }
+
       console.log(
         `[moveHandler] Nhận thông tin bắt tốt qua đường từ client. Quân tốt bị bắt ở (${capturedPawnPosition.x},${capturedPawnPosition.y})`
       );
@@ -916,6 +935,11 @@ export const moveHandler = async (req: any, res: any) => {
 
       // Xóa quân tốt bị bắt
       game.board[capturedY][capturedX] = null;
+
+      // Log lại trạng thái bàn cờ sau khi xóa quân tốt
+      console.log(
+        `[moveHandler] Đã cập nhật bàn cờ sau khi xóa quân tốt bị bắt qua đường`
+      );
     }
 
     // Ghi lại lịch sử nước đi (có promotion nếu có)
@@ -962,6 +986,9 @@ export const moveHandler = async (req: any, res: any) => {
 
     // Lưu trạng thái game mới vào Redis
     await saveGame(roomId, game);
+
+    // Log trạng thái bàn cờ trước khi broadcast
+    console.log(`[moveHandler] Bàn cờ đã cập nhật và sẵn sàng để broadcast`);
 
     // Broadcast kết quả nước đi cho tất cả người chơi
     await broadcastToRoom(roomId, {
@@ -1098,6 +1125,11 @@ export const moveHandler = async (req: any, res: any) => {
             `[moveHandler] AI bắt tốt qua đường: Xóa quân tốt tại (${capturedPawnX},${capturedPawnY})`
           );
           game.board[capturedPawnY][capturedPawnX] = null;
+
+          // Log lại trạng thái bàn cờ sau khi xóa quân tốt
+          console.log(
+            `[moveHandler] Đã cập nhật bàn cờ sau khi AI bắt tốt qua đường`
+          );
         }
 
         // Ghi lại lịch sử nước đi của AI
@@ -1143,6 +1175,11 @@ export const moveHandler = async (req: any, res: any) => {
 
           // Lưu trạng thái game mới vào Redis
           await saveGame(roomId, game);
+
+          // Log trạng thái bàn cờ trước khi broadcast
+          console.log(
+            `[moveHandler] Bàn cờ đã cập nhật sau nước đi của AI và sẵn sàng để broadcast`
+          );
 
           // Broadcast kết quả nước đi của AI cho người chơi
           await broadcastToRoom(roomId, {
