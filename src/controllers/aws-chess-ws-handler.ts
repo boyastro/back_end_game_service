@@ -866,20 +866,21 @@ export const moveHandler = async (req: any, res: any) => {
       (movingPiece === "wK" || movingPiece === "bK") &&
       Math.abs(to.x - from.x) > 1; // Vua di chuyển hơn 1 ô theo chiều ngang
 
-    // Xử lý bắt tốt qua đường (en passant)
-    const isEnPassant =
-      movingPiece &&
-      (movingPiece === "wP" || movingPiece === "bP") && // Là quân tốt
-      Math.abs(to.x - from.x) === 1 && // Di chuyển chéo
-      Math.abs(to.y - from.y) === 1 && // Di chuyển chéo
-      game.board[to.y][to.x] === null; // Ô đích không có quân (tức là không phải ăn quân thông thường)
+    // Xử lý bắt tốt qua đường (en passant) - từ thông tin client gửi lên
+    const isEnPassant = body.enPassant === true;
+    let capturedPawnPosition = null;
 
-    // Cập nhật bàn cờ - di chuyển vua
+    if (isEnPassant && body.capturedPawn) {
+      // Lấy vị trí quân tốt bị bắt từ thông tin client gửi lên
+      capturedPawnPosition = body.capturedPawn;
+      console.log(
+        `[moveHandler] Nhận thông tin bắt tốt qua đường từ client. Quân tốt bị bắt ở (${capturedPawnPosition.x},${capturedPawnPosition.y})`
+      );
+    }
+
+    // Cập nhật bàn cờ - di chuyển quân cờ
     game.board[to.y][to.x] = promotedPiece;
     game.board[from.y][from.x] = null;
-
-    // Thông tin về quân tốt bị bắt trong en passant
-    let capturedPawnPosition = null;
 
     // Nếu là nước nhập thành, cần di chuyển cả xe
     if (isCastling) {
@@ -903,19 +904,18 @@ export const moveHandler = async (req: any, res: any) => {
     }
 
     // Nếu là nước bắt tốt qua đường, xóa quân tốt bị bắt
-    if (isEnPassant) {
-      // Vị trí của quân tốt bị bắt (ở cùng hàng với quân tốt đi, cùng cột với ô đích)
-      const capturedPawnX = to.x;
-      const capturedPawnY = from.y;
-
-      // Lưu vị trí quân tốt bị bắt để thông báo cho client
-      capturedPawnPosition = { x: capturedPawnX, y: capturedPawnY };
-
-      // Xóa quân tốt bị bắt khỏi bàn cờ
+    if (isEnPassant && capturedPawnPosition) {
+      // Xóa quân tốt bị bắt khỏi bàn cờ dựa trên vị trí từ client gửi lên
       console.log(
-        `[moveHandler] Bắt tốt qua đường: Xóa quân tốt tại (${capturedPawnX},${capturedPawnY})`
+        `[moveHandler] Bắt tốt qua đường: Xóa quân tốt tại (${capturedPawnPosition.x},${capturedPawnPosition.y})`
       );
-      game.board[capturedPawnY][capturedPawnX] = null;
+
+      // Chuyển đổi tọa độ từ định dạng client (nếu cần)
+      const capturedX = capturedPawnPosition.x;
+      const capturedY = capturedPawnPosition.y;
+
+      // Xóa quân tốt bị bắt
+      game.board[capturedY][capturedX] = null;
     }
 
     // Ghi lại lịch sử nước đi (có promotion nếu có)
