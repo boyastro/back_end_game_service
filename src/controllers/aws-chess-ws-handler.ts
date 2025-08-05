@@ -6,6 +6,7 @@ import {
 
 import { Request, Response } from "express";
 import redisClient from "../utils/redisClient.js";
+import { generateAIMove } from "../utils/chess-ai-bot.js";
 
 interface GameState {
   board: (string | null)[][];
@@ -473,14 +474,21 @@ export const joinHandler = async (req: any, res: Response) => {
       console.log(
         `[joinHandler] Room ${roomId} has 2 players, preparing to start in 5 seconds`
       );
-    } else if (
-      game.players.length < 2 &&
-      (game.status === "playing" || game.status === "preparing")
-    ) {
-      // Nếu không đủ 2 người chơi nhưng trạng thái là playing hoặc preparing, đặt lại thành waiting
+    } else if (game.players.length === 1 && game.status !== "finished") {
+      // Nếu chỉ có 1 người chơi, đặt trạng thái là "waiting" và đợi người chơi thứ 2
+      // Sẽ chuyển sang AI sau một khoảng thời gian nếu không có người chơi thứ 2
       game.status = "waiting";
       console.log(
-        `[joinHandler] Not enough players, set game.status to 'waiting' for room ${roomId}`
+        `[joinHandler] Room ${roomId} has 1 player, waiting for second player for 20 seconds before using AI`
+      );
+    } else if (
+      game.players.length < 1 &&
+      (game.status === "playing" || game.status === "preparing")
+    ) {
+      // Nếu không có người chơi nào nhưng trạng thái là playing hoặc preparing, đặt lại thành waiting
+      game.status = "waiting";
+      console.log(
+        `[joinHandler] No players, set game.status to 'waiting' for room ${roomId}`
       );
     }
 
@@ -536,6 +544,7 @@ export const joinHandler = async (req: any, res: Response) => {
                 board: updatedGame.board,
                 turn: updatedGame.currentPlayer,
                 status: updatedGame.status,
+                withAI: false,
               },
             });
           }
@@ -546,6 +555,52 @@ export const joinHandler = async (req: any, res: Response) => {
           );
         }
       }, 5000); // Đợi 5 giây
+    } else if (game.players.length === 1 && game.status === "waiting") {
+      // Đợi 20 giây, nếu vẫn chỉ có 1 người chơi thì bắt đầu với AI bot
+      setTimeout(async () => {
+        try {
+          // Lấy lại trạng thái game mới nhất từ Redis
+          const updatedGame = await getGame(roomId);
+
+          // Chỉ kích hoạt AI nếu vẫn còn 1 người chơi và đang ở trạng thái waiting
+          if (
+            updatedGame &&
+            updatedGame.players.length === 1 &&
+            updatedGame.status === "waiting"
+          ) {
+            console.log(
+              `[joinHandler] No second player joined after 20 seconds, activating AI for room ${roomId}`
+            );
+
+            // Cập nhật trạng thái thành playing
+            updatedGame.status = "playing";
+            await saveGame(roomId, updatedGame);
+
+            // Gửi thông tin game đã bắt đầu với AI
+            console.log(
+              `[joinHandler] Broadcasting gameStarted with AI to room ${roomId} with player:`,
+              updatedGame.players[0]
+            );
+
+            await broadcastToRoom(roomId, {
+              type: "gameStarted",
+              data: {
+                roomId,
+                players: updatedGame.players,
+                board: updatedGame.board,
+                turn: updatedGame.currentPlayer,
+                status: updatedGame.status,
+                withAI: true,
+              },
+            });
+          }
+        } catch (error) {
+          console.error(
+            `[joinHandler] Error starting AI game for room ${roomId}:`,
+            error
+          );
+        }
+      }, 10000); // Đợi 20 giây trước khi kích hoạt AI
     }
 
     // Trả về response phù hợp dựa vào loại request
@@ -742,7 +797,10 @@ export const moveHandler = async (req: any, res: any) => {
       return res.status(400).json({ message: errorMessage });
     }
 
-    if (game.players.length < 2) {
+    // Kiểm tra nếu chỉ có 1 người chơi, AI bot sẽ đóng vai trò người chơi thứ 2
+    const useAIBot = game.players.length === 1;
+
+    if (game.players.length < 1) {
       if (isApiGatewayRequest) {
         return {
           statusCode: 400,
@@ -866,6 +924,114 @@ export const moveHandler = async (req: any, res: any) => {
     console.log(
       `[moveHandler] Đã broadcast kết quả nước đi cho room ${roomId}`
     );
+
+    // Nếu chỉ có 1 người chơi, AI bot sẽ thực hiện nước đi tiếp theo
+    if (useAIBot && game.status === "playing") {
+      console.log(`[moveHandler] AI bot đang suy nghĩ nước đi tiếp theo...`);
+
+      // Đợi một chút để tạo cảm giác AI đang "suy nghĩ"
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Xác định màu của AI (ngược với người chơi hiện tại)
+      const aiColor = game.currentPlayer; // Lúc này currentPlayer đã được chuyển sang đối thủ
+
+      // Tạo nước đi cho AI
+      const aiMove = generateAIMove(game.board, aiColor);
+
+      if (aiMove) {
+        console.log(
+          `[moveHandler] AI bot di chuyển từ (${aiMove.from.x},${aiMove.from.y}) đến (${aiMove.to.x},${aiMove.to.y})`
+        );
+
+        // Lưu lại quân cờ AI đang di chuyển
+        const aiMovingPiece = game.board[aiMove.from.y][aiMove.from.x];
+
+        // Xử lý phong hậu nếu cần
+        let aiPromotedPiece = aiMovingPiece;
+        let aiPromotion = aiMove.promotion;
+
+        if (
+          aiPromotion &&
+          aiMovingPiece &&
+          aiMovingPiece[1] === "P" &&
+          ((aiMovingPiece[0] === "w" && aiMove.to.y === 0) ||
+            (aiMovingPiece[0] === "b" && aiMove.to.y === 7))
+        ) {
+          aiPromotedPiece = aiMovingPiece[0] + aiPromotion;
+          console.log(
+            `[moveHandler] AI phong hậu: ${aiMovingPiece} -> ${aiPromotedPiece}`
+          );
+        }
+
+        // Cập nhật bàn cờ sau nước đi của AI
+        game.board[aiMove.to.y][aiMove.to.x] = aiPromotedPiece;
+        game.board[aiMove.from.y][aiMove.from.x] = null;
+
+        // Ghi lại lịch sử nước đi của AI
+        const aiMoveHistoryEntry: any = {
+          from: aiMove.from,
+          to: aiMove.to,
+          player: aiColor,
+        };
+        if (aiPromotion) aiMoveHistoryEntry.promotion = aiPromotion;
+        game.moveHistory.push(aiMoveHistoryEntry);
+
+        // Kiểm tra xem AI có thắng không
+        const aiWinner = checkWinner(game.board);
+        if (aiWinner) {
+          game.winner = aiWinner;
+          game.status = "finished";
+
+          // Lưu trạng thái game mới vào Redis
+          await saveGame(roomId, game);
+
+          await broadcastToRoom(roomId, {
+            type: "gameOver",
+            data: {
+              winner: aiWinner,
+              board: game.board,
+              moveHistory: game.moveHistory,
+            },
+          });
+
+          console.log(`[moveHandler] AI bot thắng!`);
+        } else {
+          // Chuyển lượt về người chơi
+          game.currentPlayer =
+            game.currentPlayer === "WHITE" ? "BLACK" : "WHITE";
+          console.log(
+            `[moveHandler] Sau nước đi của AI, chuyển lượt chơi sang ${game.currentPlayer}`
+          );
+
+          // Lưu trạng thái game mới vào Redis
+          await saveGame(roomId, game);
+
+          // Broadcast kết quả nước đi của AI cho người chơi
+          await broadcastToRoom(roomId, {
+            type: "move",
+            data: {
+              board: game.board,
+              move: {
+                from: aiMove.from,
+                to: aiMove.to,
+                piece: aiPromotedPiece,
+                player: aiColor,
+                ...(aiPromotion ? { promotion: aiPromotion } : {}),
+                isAIMove: true,
+              },
+              nextTurn: game.currentPlayer,
+              status: game.status,
+            },
+          });
+
+          console.log(
+            `[moveHandler] Đã broadcast kết quả nước đi của AI cho room ${roomId}`
+          );
+        }
+      } else {
+        console.log(`[moveHandler] AI bot không tìm thấy nước đi hợp lệ`);
+      }
+    }
 
     if (isApiGatewayRequest) {
       return {
