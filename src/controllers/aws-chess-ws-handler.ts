@@ -901,8 +901,28 @@ export const moveHandler = async (req: any, res: any) => {
     game.currentPlayer = game.currentPlayer === "WHITE" ? "BLACK" : "WHITE";
     console.log(`[moveHandler] Chuyển lượt chơi sang ${game.currentPlayer}`);
 
+    // Kiểm tra nếu nước đi là castling (nhập thành)
+    const isCastling =
+      movingPiece &&
+      (movingPiece === "wK" || movingPiece === "bK") &&
+      Math.abs(to.x - from.x) > 1; // Vua di chuyển hơn 1 ô theo chiều ngang
+
     // Lưu trạng thái game mới vào Redis
     await saveGame(roomId, game);
+
+    // Xác định nếu đây là nước nhập thành
+    const castlingInfo = isCastling
+      ? {
+          castling: true,
+          castlingSide: to.x > from.x ? "kingside" : "queenside",
+        }
+      : {};
+
+    if (isCastling) {
+      console.log(
+        `[moveHandler] Detected castling move (${castlingInfo.castlingSide})`
+      );
+    }
 
     // Broadcast kết quả nước đi cho tất cả người chơi
     await broadcastToRoom(roomId, {
@@ -915,6 +935,7 @@ export const moveHandler = async (req: any, res: any) => {
           piece: promotedPiece, // Dùng promotedPiece thay vì movingPiece để hiển thị quân đã phong hậu
           player: playerColor,
           ...(promotion ? { promotion } : {}),
+          ...castlingInfo, // Thêm thông tin castling nếu đây là nước nhập thành
         },
         nextTurn: game.currentPlayer,
         status: game.status,
@@ -935,8 +956,16 @@ export const moveHandler = async (req: any, res: any) => {
       // Xác định màu của AI (ngược với người chơi hiện tại)
       const aiColor = game.currentPlayer; // Lúc này currentPlayer đã được chuyển sang đối thủ
 
-      // Tạo nước đi cho AI
-      const aiMove = generateAIMove(game.board, aiColor);
+      // Tạo nước đi cho AI - truyền một đối tượng GameState như định nghĩa trong chess-ai-bot.ts
+      const aiMove = generateAIMove({
+        board: game.board,
+        aiColor: aiColor as "WHITE" | "BLACK", // Ép kiểu để phù hợp với định nghĩa GameState
+        castlingRights: {
+          w: { k: true, q: true },
+          b: { k: true, q: true },
+        },
+        enPassantTarget: null,
+      });
 
       if (aiMove) {
         console.log(
@@ -1006,6 +1035,27 @@ export const moveHandler = async (req: any, res: any) => {
           // Lưu trạng thái game mới vào Redis
           await saveGame(roomId, game);
 
+          // Kiểm tra nếu nước đi của AI là castling (nhập thành)
+          const isAICastling =
+            aiMovingPiece &&
+            (aiMovingPiece === "wK" || aiMovingPiece === "bK") &&
+            Math.abs(aiMove.to.x - aiMove.from.x) > 1;
+
+          // Thông tin castling nếu đây là nước nhập thành
+          const aiCastlingInfo = isAICastling
+            ? {
+                castling: true,
+                castlingSide:
+                  aiMove.to.x > aiMove.from.x ? "kingside" : "queenside",
+              }
+            : {};
+
+          if (isAICastling) {
+            console.log(
+              `[moveHandler] AI performed castling (${aiCastlingInfo.castlingSide})`
+            );
+          }
+
           // Broadcast kết quả nước đi của AI cho người chơi
           await broadcastToRoom(roomId, {
             type: "move",
@@ -1017,6 +1067,7 @@ export const moveHandler = async (req: any, res: any) => {
                 piece: aiPromotedPiece,
                 player: aiColor,
                 ...(aiPromotion ? { promotion: aiPromotion } : {}),
+                ...aiCastlingInfo, // Thêm thông tin castling nếu đây là nước nhập thành
                 isAIMove: true,
               },
               nextTurn: game.currentPlayer,

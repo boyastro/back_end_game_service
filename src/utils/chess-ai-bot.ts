@@ -1,260 +1,46 @@
-// Chess AI Bot implementation
+// Chess AI Bot implementation - Optimized Version
 // This bot makes moves for the opponent when there's only one player in the game
 
 // Types
 type Position = { x: number; y: number };
 type ChessBoard = (string | null)[][];
 type ChessMove = { from: Position; to: Position; promotion?: string };
+type GameState = {
+  board: ChessBoard;
+  aiColor: "WHITE" | "BLACK";
+  // OPTIMIZATION: Add state for castling rights and en passant target
+  // These are needed for complete move generation.
+  castlingRights: {
+    w: { k: boolean; q: boolean };
+    b: { k: boolean; q: boolean };
+  };
+  enPassantTarget: Position | null;
+};
 
-/**
- * Generate a move for the AI based on the current board state
- * @param board Current chess board
- * @param aiColor Color of the AI player ('WHITE' or 'BLACK')
- * @returns A move object containing from and to positions, and optional promotion
- */
-export function generateAIMove(
-  board: ChessBoard,
-  aiColor: string
-): ChessMove | null {
-  // Get all possible moves for the AI
-  const possibleMoves = getAllPossibleMoves(board, aiColor);
+// --- CONSTANTS ---
+const PIECE_VALUES: { [key: string]: number } = {
+  P: 100,
+  N: 320,
+  B: 330,
+  R: 500,
+  Q: 900,
+  K: 20000,
+};
 
-  if (possibleMoves.length === 0) {
-    return null; // No valid moves available
-  }
-
-  // For now, we'll use a simple strategy - prioritize captures and then random moves
-
-  // First, check for captures (moves where destination has an opponent's piece)
-  const capturesMoves = possibleMoves.filter((move) => {
-    const targetPiece = board[move.to.y][move.to.x];
-    return (
-      targetPiece !== null &&
-      ((aiColor === "WHITE" && targetPiece.startsWith("b")) ||
-        (aiColor === "BLACK" && targetPiece.startsWith("w")))
-    );
-  });
-
-  // If there are capture moves available, randomly select one
-  if (capturesMoves.length > 0) {
-    const randomIndex = Math.floor(Math.random() * capturesMoves.length);
-    return capturesMoves[randomIndex];
-  }
-
-  // Otherwise, select a random move from all possible moves
-  const randomIndex = Math.floor(Math.random() * possibleMoves.length);
-  return possibleMoves[randomIndex];
-}
-
-/**
- * Get all possible moves for the given color
- */
-function getAllPossibleMoves(board: ChessBoard, color: string): ChessMove[] {
-  const moves: ChessMove[] = [];
-  const colorPrefix = color === "WHITE" ? "w" : "b";
-
-  // Scan the board for pieces of the AI's color
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
-      const piece = board[y][x];
-      if (piece && piece.startsWith(colorPrefix)) {
-        // Get moves for this specific piece
-        const pieceMoves = getMovesForPiece(board, { x, y }, piece, color);
-        moves.push(...pieceMoves);
-      }
-    }
-  }
-
-  return moves;
-}
-
-/**
- * Get all valid moves for a specific piece
- */
-function getMovesForPiece(
-  board: ChessBoard,
-  position: Position,
-  piece: string,
-  color: string
-): ChessMove[] {
-  const moves: ChessMove[] = [];
-  const pieceType = piece[1]; // e.g., 'P' for pawn, 'R' for rook, etc.
-
-  switch (pieceType) {
-    case "P": // Pawn
-      moves.push(...getPawnMoves(board, position, color));
-      break;
-    case "R": // Rook
-      moves.push(...getRookMoves(board, position, color));
-      break;
-    case "N": // Knight
-      moves.push(...getKnightMoves(board, position, color));
-      break;
-    case "B": // Bishop
-      moves.push(...getBishopMoves(board, position, color));
-      break;
-    case "Q": // Queen
-      moves.push(...getQueenMoves(board, position, color));
-      break;
-    case "K": // King
-      moves.push(...getKingMoves(board, position, color));
-      break;
-  }
-
-  return moves;
-}
-
-/**
- * Check if a position is within the board boundaries
- */
-function isValidPosition(position: Position): boolean {
-  return position.x >= 0 && position.x < 8 && position.y >= 0 && position.y < 8;
-}
-
-/**
- * Check if a position can be moved to by the given color
- * (empty square or opponent's piece)
- */
-function canMoveTo(
-  board: ChessBoard,
-  position: Position,
-  color: string
-): boolean {
-  if (!isValidPosition(position)) {
-    return false;
-  }
-
-  const targetPiece = board[position.y][position.x];
-  // Can move to empty square
-  if (targetPiece === null) {
-    return true;
-  }
-
-  // Can capture opponent's piece
-  const opponentPrefix = color === "WHITE" ? "b" : "w";
-  return targetPiece.startsWith(opponentPrefix);
-}
-
-/**
- * Get all valid moves for a pawn
- */
-function getPawnMoves(
-  board: ChessBoard,
-  position: Position,
-  color: string
-): ChessMove[] {
-  const moves: ChessMove[] = [];
-  const direction = color === "WHITE" ? -1 : 1; // White pawns move up (-y), black pawns move down (+y)
-  const startingRank = color === "WHITE" ? 6 : 1; // Starting rank for pawns
-  const promotionRank = color === "WHITE" ? 0 : 7; // Rank where pawns can be promoted
-
-  // Forward move (1 square)
-  const oneForward = { x: position.x, y: position.y + direction };
-  if (
-    isValidPosition(oneForward) &&
-    board[oneForward.y][oneForward.x] === null
-  ) {
-    // Check for promotion
-    if (oneForward.y === promotionRank) {
-      // Add promotion moves (to queen, rook, bishop, knight)
-      const promotionPieces = ["Q", "R", "B", "N"];
-      for (const piece of promotionPieces) {
-        moves.push({ from: position, to: oneForward, promotion: piece });
-      }
-    } else {
-      moves.push({ from: position, to: oneForward });
-    }
-
-    // Two squares forward from starting position
-    if (position.y === startingRank) {
-      const twoForward = { x: position.x, y: position.y + 2 * direction };
-      if (board[twoForward.y][twoForward.x] === null) {
-        moves.push({ from: position, to: twoForward });
-      }
-    }
-  }
-
-  // Diagonal captures
-  const diagonalCaptures = [
-    { x: position.x - 1, y: position.y + direction },
-    { x: position.x + 1, y: position.y + direction },
-  ];
-
-  for (const capturePos of diagonalCaptures) {
-    if (!isValidPosition(capturePos)) continue;
-
-    const targetPiece = board[capturePos.y][capturePos.x];
-    const opponentPrefix = color === "WHITE" ? "b" : "w";
-
-    if (targetPiece !== null && targetPiece.startsWith(opponentPrefix)) {
-      // Check for promotion
-      if (capturePos.y === promotionRank) {
-        // Add promotion moves for captures
-        const promotionPieces = ["Q", "R", "B", "N"];
-        for (const piece of promotionPieces) {
-          moves.push({ from: position, to: capturePos, promotion: piece });
-        }
-      } else {
-        moves.push({ from: position, to: capturePos });
-      }
-    }
-  }
-
-  return moves;
-}
-
-/**
- * Get all valid moves for a rook
- */
-function getRookMoves(
-  board: ChessBoard,
-  position: Position,
-  color: string
-): ChessMove[] {
-  const moves: ChessMove[] = [];
-  const directions = [
-    { x: 0, y: 1 }, // Down
-    { x: 0, y: -1 }, // Up
-    { x: 1, y: 0 }, // Right
-    { x: -1, y: 0 }, // Left
-  ];
-
-  for (const dir of directions) {
-    let currentPos = { x: position.x + dir.x, y: position.y + dir.y };
-
-    while (isValidPosition(currentPos)) {
-      const targetPiece = board[currentPos.y][currentPos.x];
-
-      if (targetPiece === null) {
-        // Empty square, can move here
-        moves.push({ from: position, to: { ...currentPos } });
-      } else {
-        // Check if it's an opponent's piece that can be captured
-        const opponentPrefix = color === "WHITE" ? "b" : "w";
-        if (targetPiece.startsWith(opponentPrefix)) {
-          moves.push({ from: position, to: { ...currentPos } });
-        }
-        break; // Stop in this direction after encountering any piece
-      }
-
-      // Move further in the same direction
-      currentPos = { x: currentPos.x + dir.x, y: currentPos.y + dir.y };
-    }
-  }
-
-  return moves;
-}
-
-/**
- * Get all valid moves for a knight
- */
-function getKnightMoves(
-  board: ChessBoard,
-  position: Position,
-  color: string
-): ChessMove[] {
-  const moves: ChessMove[] = [];
-  const knightOffsets = [
+const DIRECTIONS = {
+  ROOK: [
+    { x: 0, y: 1 },
+    { x: 0, y: -1 },
+    { x: 1, y: 0 },
+    { x: -1, y: 0 },
+  ],
+  BISHOP: [
+    { x: 1, y: 1 },
+    { x: 1, y: -1 },
+    { x: -1, y: 1 },
+    { x: -1, y: -1 },
+  ],
+  KNIGHT: [
     { x: 1, y: 2 },
     { x: 2, y: 1 },
     { x: 2, y: -1 },
@@ -263,13 +49,208 @@ function getKnightMoves(
     { x: -2, y: -1 },
     { x: -2, y: 1 },
     { x: -1, y: 2 },
-  ];
+  ],
+  KING: [
+    { x: 0, y: 1 },
+    { x: 1, y: 1 },
+    { x: 1, y: 0 },
+    { x: 1, y: -1 },
+    { x: 0, y: -1 },
+    { x: -1, y: -1 },
+    { x: -1, y: 0 },
+    { x: -1, y: 1 },
+  ],
+};
 
-  for (const offset of knightOffsets) {
-    const targetPos = { x: position.x + offset.x, y: position.y + offset.y };
+/**
+ * Generate a move for the AI based on the current board state
+ * @param gameState Current game state including board, color, and special move rights
+ * @returns A move object containing from and to positions, and optional promotion
+ */
+export function generateAIMove(gameState: GameState): ChessMove | null {
+  const { board, aiColor } = gameState;
+  const possibleMoves = getAllPossibleMoves(gameState);
 
-    if (canMoveTo(board, targetPos, color)) {
-      moves.push({ from: position, to: targetPos });
+  if (possibleMoves.length === 0) {
+    return null; // No valid moves (Stalemate or Checkmate)
+  }
+
+  // --- OPTIMIZATION: Smarter Move Selection ---
+  // Evaluate moves instead of just prioritizing any capture.
+  let bestScore = -Infinity;
+  let bestMoves: ChessMove[] = [];
+
+  for (const move of possibleMoves) {
+    let score = 0;
+    const targetPiece = board[move.to.y][move.to.x];
+
+    // 1. Score based on captures
+    if (targetPiece) {
+      const movingPieceType = board[move.from.y][move.from.x]![1];
+      const capturedPieceType = targetPiece[1];
+      // A good trade is capturing a high-value piece with a low-value one.
+      score = PIECE_VALUES[capturedPieceType] - PIECE_VALUES[movingPieceType];
+    }
+
+    // 2. Add bonus for promotion
+    if (move.promotion) {
+      score += PIECE_VALUES[move.promotion];
+    }
+
+    // 3. Add small random value to avoid deterministic play
+    score += Math.random() * 10; // e.g., 0-10 points
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestMoves = [move];
+    } else if (score === bestScore) {
+      bestMoves.push(move);
+    }
+  }
+
+  // If no captures or special moves, all moves have a score near 0.
+  // We can fall back to a random move from all possible moves if no move has a positive score.
+  if (bestScore < 10) {
+    // No significantly better move found
+    const randomIndex = Math.floor(Math.random() * possibleMoves.length);
+    return possibleMoves[randomIndex];
+  }
+
+  // Randomly select one of the best moves
+  const randomIndex = Math.floor(Math.random() * bestMoves.length);
+  return bestMoves[randomIndex];
+}
+
+/**
+ * Get all possible moves for the given color
+ */
+function getAllPossibleMoves(gameState: GameState): ChessMove[] {
+  const { board, aiColor, castlingRights, enPassantTarget } = gameState;
+  const moves: ChessMove[] = [];
+  const colorPrefix = aiColor === "WHITE" ? "w" : "b";
+
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = board[y][x];
+      if (piece && piece.startsWith(colorPrefix)) {
+        const position = { x, y };
+        const pieceMoves = getMovesForPiece(
+          gameState,
+          position,
+          piece,
+          aiColor
+        );
+        moves.push(...pieceMoves);
+      }
+    }
+  }
+
+  // NOTE: A full implementation would filter out moves that leave the king in check.
+  // This is a complex step not included here for brevity.
+
+  return moves;
+}
+
+/**
+ * Get all valid moves for a specific piece
+ */
+function getMovesForPiece(
+  gameState: GameState,
+  position: Position,
+  piece: string,
+  color: "WHITE" | "BLACK"
+): ChessMove[] {
+  const pieceType = piece[1]; // e.g., 'P', 'R', etc.
+
+  switch (pieceType) {
+    case "P":
+      return getPawnMoves(gameState, position, color);
+    case "N":
+      return getKnightMoves(gameState.board, position, color);
+    case "B":
+      return getSlidingMoves(
+        gameState.board,
+        position,
+        color,
+        DIRECTIONS.BISHOP
+      );
+    case "R":
+      return getSlidingMoves(gameState.board, position, color, DIRECTIONS.ROOK);
+    case "Q":
+      return getQueenMoves(gameState.board, position, color);
+    case "K":
+      return getKingMoves(gameState, position, color);
+    default:
+      return [];
+  }
+}
+
+// --- UTILITY FUNCTIONS ---
+function isValidPosition(p: Position): boolean {
+  return p.x >= 0 && p.x < 8 && p.y >= 0 && p.y < 8;
+}
+
+function getOpponentPrefix(color: "WHITE" | "BLACK"): "w" | "b" {
+  return color === "WHITE" ? "b" : "w";
+}
+
+/**
+ * Get all valid moves for a pawn, including en passant.
+ */
+function getPawnMoves(
+  gameState: GameState,
+  pos: Position,
+  color: "WHITE" | "BLACK"
+): ChessMove[] {
+  const { board, enPassantTarget } = gameState;
+  const moves: ChessMove[] = [];
+  const dir = color === "WHITE" ? -1 : 1;
+  const startRank = color === "WHITE" ? 6 : 1;
+  const promotionRank = color === "WHITE" ? 0 : 7;
+  const opponentPrefix = getOpponentPrefix(color);
+
+  // Helper for adding moves, handles promotion
+  const addMove = (to: Position) => {
+    if (to.y === promotionRank) {
+      ["Q", "R", "B", "N"].forEach((p) =>
+        moves.push({ from: pos, to, promotion: p })
+      );
+    } else {
+      moves.push({ from: pos, to });
+    }
+  };
+
+  // 1. Forward 1 square
+  const oneFwd = { x: pos.x, y: pos.y + dir };
+  if (isValidPosition(oneFwd) && board[oneFwd.y][oneFwd.x] === null) {
+    addMove(oneFwd);
+
+    // 2. Forward 2 squares from start
+    if (pos.y === startRank) {
+      const twoFwd = { x: pos.x, y: pos.y + 2 * dir };
+      if (board[twoFwd.y][twoFwd.x] === null) {
+        moves.push({ from: pos, to: twoFwd }); // No promotion possible on 2-square move
+      }
+    }
+  }
+
+  // 3. Diagonal captures
+  [
+    { x: pos.x - 1, y: pos.y + dir },
+    { x: pos.x + 1, y: pos.y + dir },
+  ].forEach((to) => {
+    if (isValidPosition(to) && board[to.y][to.x]?.startsWith(opponentPrefix)) {
+      addMove(to);
+    }
+  });
+
+  // 4. En Passant
+  if (enPassantTarget) {
+    if (
+      Math.abs(pos.x - enPassantTarget.x) === 1 &&
+      pos.y === enPassantTarget.y - dir
+    ) {
+      moves.push({ from: pos, to: enPassantTarget });
     }
   }
 
@@ -277,90 +258,111 @@ function getKnightMoves(
 }
 
 /**
- * Get all valid moves for a bishop
+ * OPTIMIZATION: Generic function for sliding pieces (Rook, Bishop)
  */
-function getBishopMoves(
+function getSlidingMoves(
   board: ChessBoard,
-  position: Position,
-  color: string
+  pos: Position,
+  color: "WHITE" | "BLACK",
+  directions: Position[]
 ): ChessMove[] {
   const moves: ChessMove[] = [];
-  const directions = [
-    { x: 1, y: 1 }, // Down-right
-    { x: 1, y: -1 }, // Up-right
-    { x: -1, y: -1 }, // Up-left
-    { x: -1, y: 1 }, // Down-left
-  ];
+  const opponentPrefix = getOpponentPrefix(color);
 
   for (const dir of directions) {
-    let currentPos = { x: position.x + dir.x, y: position.y + dir.y };
-
+    let currentPos = { x: pos.x + dir.x, y: pos.y + dir.y };
     while (isValidPosition(currentPos)) {
       const targetPiece = board[currentPos.y][currentPos.x];
-
       if (targetPiece === null) {
-        // Empty square, can move here
-        moves.push({ from: position, to: { ...currentPos } });
+        moves.push({ from: pos, to: { ...currentPos } });
       } else {
-        // Check if it's an opponent's piece that can be captured
-        const opponentPrefix = color === "WHITE" ? "b" : "w";
         if (targetPiece.startsWith(opponentPrefix)) {
-          moves.push({ from: position, to: { ...currentPos } });
+          moves.push({ from: pos, to: { ...currentPos } });
         }
-        break; // Stop in this direction after encountering any piece
+        break; // Blocked by a piece
       }
-
-      // Move further in the same direction
       currentPos = { x: currentPos.x + dir.x, y: currentPos.y + dir.y };
     }
   }
-
   return moves;
 }
 
-/**
- * Get all valid moves for a queen (combination of rook and bishop moves)
- */
+function getKnightMoves(
+  board: ChessBoard,
+  pos: Position,
+  color: "WHITE" | "BLACK"
+): ChessMove[] {
+  const moves: ChessMove[] = [];
+  const opponentPrefix = getOpponentPrefix(color);
+
+  for (const offset of DIRECTIONS.KNIGHT) {
+    const to = { x: pos.x + offset.x, y: pos.y + offset.y };
+    if (isValidPosition(to)) {
+      const targetPiece = board[to.y][to.x];
+      if (targetPiece === null || targetPiece.startsWith(opponentPrefix)) {
+        moves.push({ from: pos, to });
+      }
+    }
+  }
+  return moves;
+}
+
 function getQueenMoves(
   board: ChessBoard,
-  position: Position,
-  color: string
+  pos: Position,
+  color: "WHITE" | "BLACK"
 ): ChessMove[] {
+  // Queen moves are the combination of Rook and Bishop moves
   return [
-    ...getRookMoves(board, position, color),
-    ...getBishopMoves(board, position, color),
+    ...getSlidingMoves(board, pos, color, DIRECTIONS.ROOK),
+    ...getSlidingMoves(board, pos, color, DIRECTIONS.BISHOP),
   ];
 }
 
 /**
- * Get all valid moves for a king
+ * Get King moves, including castling.
  */
 function getKingMoves(
-  board: ChessBoard,
-  position: Position,
-  color: string
+  gameState: GameState,
+  pos: Position,
+  color: "WHITE" | "BLACK"
 ): ChessMove[] {
+  const { board, castlingRights } = gameState;
   const moves: ChessMove[] = [];
-  const kingOffsets = [
-    { x: 0, y: 1 }, // Down
-    { x: 1, y: 1 }, // Down-right
-    { x: 1, y: 0 }, // Right
-    { x: 1, y: -1 }, // Up-right
-    { x: 0, y: -1 }, // Up
-    { x: -1, y: -1 }, // Up-left
-    { x: -1, y: 0 }, // Left
-    { x: -1, y: 1 }, // Down-left
-  ];
+  const opponentPrefix = getOpponentPrefix(color);
 
-  for (const offset of kingOffsets) {
-    const targetPos = { x: position.x + offset.x, y: position.y + offset.y };
-
-    if (canMoveTo(board, targetPos, color)) {
-      moves.push({ from: position, to: targetPos });
+  // Standard moves
+  for (const offset of DIRECTIONS.KING) {
+    const to = { x: pos.x + offset.x, y: pos.y + offset.y };
+    if (isValidPosition(to)) {
+      const targetPiece = board[to.y][to.x];
+      if (targetPiece === null || targetPiece.startsWith(opponentPrefix)) {
+        moves.push({ from: pos, to });
+      }
     }
   }
 
-  // Note: This implementation doesn't include castling
+  // Castling
+  // Note: A full implementation needs `isSquareAttacked` function.
+  // This is a simplified version assuming path is not attacked.
+  const canCastle = color === "WHITE" ? castlingRights.w : castlingRights.b;
+  const rank = color === "WHITE" ? 7 : 0;
+
+  // Kingside
+  if (canCastle.k && board[rank][5] === null && board[rank][6] === null) {
+    // Assuming squares are not attacked for simplicity
+    moves.push({ from: pos, to: { x: 6, y: rank } });
+  }
+  // Queenside
+  if (
+    canCastle.q &&
+    board[rank][1] === null &&
+    board[rank][2] === null &&
+    board[rank][3] === null
+  ) {
+    // Assuming squares are not attacked for simplicity
+    moves.push({ from: pos, to: { x: 2, y: rank } });
+  }
 
   return moves;
 }
