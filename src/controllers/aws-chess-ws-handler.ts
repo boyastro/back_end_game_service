@@ -578,6 +578,75 @@ export const joinHandler = async (req: any, res: Response) => {
   }
 };
 
+// Handler khi client disconnect khỏi WebSocket
+export const disconnectHandler = async (req: any, res: any) => {
+  try {
+    // Lấy connectionId từ request
+    const { connectionId } = req.body;
+    if (!connectionId) {
+      console.warn(
+        "[disconnectHandler] Không tìm thấy connectionId trong request"
+      );
+      if (res) return res.status(400).json({ message: "Missing connectionId" });
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ message: "Missing connectionId" }),
+      };
+    }
+
+    // Lấy danh sách tất cả các phòng từ Redis
+    const roomKeys = await redisClient.keys(`${REDIS_PREFIX}room:*`);
+    let removedFromRooms = 0;
+
+    for (const roomKey of roomKeys) {
+      const roomId = roomKey.replace(`${REDIS_PREFIX}room:`, "");
+      const game = await getGame(roomId);
+      if (game && game.players.includes(connectionId)) {
+        // Xóa connectionId khỏi danh sách players
+        const newPlayers = game.players.filter((id) => id !== connectionId);
+        removedFromRooms++;
+        if (newPlayers.length === 0) {
+          // Xóa phòng nếu không còn người chơi nào
+          await deleteGame(roomId);
+          console.log(`[disconnectHandler] Room ${roomId} is empty, deleted`);
+        } else {
+          // Cập nhật lại danh sách players và trạng thái phòng
+          game.players = newPlayers;
+          if (game.status === "playing" && newPlayers.length < 2) {
+            game.status = "waiting";
+          }
+          await saveGame(roomId, game);
+          console.log(
+            `[disconnectHandler] Removed ${connectionId} from room ${roomId}`
+          );
+        }
+      }
+    }
+    console.log(
+      `[disconnectHandler] Đã xóa connectionId ${connectionId} khỏi ${removedFromRooms} phòng`
+    );
+    if (res) return res.status(200).json({ message: "Disconnected" });
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: "Disconnected" }),
+    };
+  } catch (error) {
+    console.error("[disconnectHandler] Error:", error);
+    if (res)
+      return res.status(500).json({
+        message: "Error disconnecting",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        message: "Error disconnecting",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    };
+  }
+};
+
 export const moveHandler = async (req: any, res: any) => {
   // Log chi tiết request để debug
   console.log("[moveHandler] req.body:", req.body);

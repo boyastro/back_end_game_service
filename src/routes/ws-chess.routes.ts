@@ -7,6 +7,7 @@ import {
   restartHandler,
   leaveHandler,
   defaultHandler,
+  disconnectHandler,
 } from "../controllers/aws-chess-ws-handler.js";
 
 const router = express.Router();
@@ -17,6 +18,7 @@ router.post("/join", joinHandler as any);
 router.post("/move", moveHandler as any);
 router.post("/restart", restartHandler as any);
 router.post("/leave", leaveHandler as any);
+router.post("/disconnect", disconnectHandler as any);
 router.post("/default", defaultHandler as any);
 
 export default router;
