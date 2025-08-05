@@ -1111,6 +1111,12 @@ export const restartHandler = async (req: any, res: any) => {
       return res.status(400).json({ message: "Room not found" });
     }
 
+    // Kiểm tra xem game có đang chơi với AI không (game có 1 người chơi)
+    const isPlayingWithAI = game.players.length === 1;
+    console.log(
+      `[restartHandler] Room ${roomId} is playing with AI: ${isPlayingWithAI}`
+    );
+
     // Tạo game mới với players từ game cũ
     const newGame: GameState = {
       board: initialChessBoard(),
@@ -1133,6 +1139,7 @@ export const restartHandler = async (req: any, res: any) => {
         board: newGame.board,
         turn: newGame.currentPlayer,
         status: newGame.status,
+        withAI: isPlayingWithAI, // Thêm trường withAI để client biết đang chơi với AI
       },
     });
 
