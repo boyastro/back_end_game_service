@@ -36,64 +36,73 @@ mongoose
   .catch((err: unknown) => console.error("❌ MongoDB connection error:", err));
 
 // Connect to Redis before starting the app
-(async () => {
-  await redisClient.connect();
-  console.log("✅ Connected to Redis");
+console.log("✅ Redis client imported from utils/redisClient.js");
 
-  // Đăng ký route Stripe webhook trước khi dùng express.json()
-  app.use("/stripe", stripeWebhookRoutes);
+// Đăng ký route Stripe webhook trước khi dùng express.json()
+app.use("/stripe", stripeWebhookRoutes);
 
-  app.use(express.json());
-  app.use(cors({ origin: "*" }));
+app.use(express.json());
+app.use(cors({ origin: "*" }));
 
-  app.get("/", (req, res) => {
-    res.send("Hello from TypeScript + Express!");
-  });
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
-  app.use("/users", userRoutes);
-  app.use("/auth", authRoutes);
-  app.use("/rooms", roomRoutes);
-  app.use("/match-history", matchHistoryRoutes);
-  app.use("/leaderboard", leaderboardRoutes);
-  app.use("/items", itemRoutes);
-  app.use("/rewards", rewardRoutes);
-  app.use("/caro", caroRoutes);
-  app.use("/chess", wsChessRoutes);
-  app.use("/words", wordRoutes);
-  app.use("/payments", paymentRoutes);
-  app.use("/spin", spinRoutes);
-  app.use("/millionaire", millionaireRoutes);
-  app.get("/whoami", (req, res) => {
-    res.send(`This is container: ${process.env.HOSTNAME || process.pid}`);
-  });
+app.get("/", (req, res) => {
+  res.send("Hello from TypeScript + Express!");
+});
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(specs));
+app.use("/users", userRoutes);
+app.use("/auth", authRoutes);
+app.use("/rooms", roomRoutes);
+app.use("/match-history", matchHistoryRoutes);
+app.use("/leaderboard", leaderboardRoutes);
+app.use("/items", itemRoutes);
+app.use("/rewards", rewardRoutes);
+app.use("/caro", caroRoutes);
+app.use("/chess", wsChessRoutes);
+app.use("/words", wordRoutes);
+app.use("/payments", paymentRoutes);
+app.use("/spin", spinRoutes);
+app.use("/millionaire", millionaireRoutes);
+app.get("/whoami", (req, res) => {
+  res.send(`This is container: ${process.env.HOSTNAME || process.pid}`);
+});
 
-  // Đăng ký route WebSocket API Gateway
-  app.use("/websocket", websocketRoutes);
+// Đăng ký route WebSocket API Gateway
+app.use("/websocket", websocketRoutes);
 
-  // Prometheus metrics
-  client.collectDefaultMetrics();
-  app.get("/metrics", async (req, res) => {
-    res.set("Content-Type", client.register.contentType);
-    res.end(await client.register.metrics());
-  });
+// Prometheus metrics
+client.collectDefaultMetrics();
+app.get("/metrics", async (req, res) => {
+  res.set("Content-Type", client.register.contentType);
+  res.end(await client.register.metrics());
+});
 
-  // Create HTTP server and integrate with Socket.io
-  const server = http.createServer(app);
-  const io = new Server(server, { cors: { origin: "*" } });
+// Create HTTP server and integrate with Socket.io
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 
-  // Redis adapter for Socket.io (for scaling horizontally)
-  const pubClient = createRedisClient({ url: "redis://redis:6379" });
+// Redis adapter for Socket.io (for scaling horizontally)
+try {
+  // Tạo pubClient và subClient dựa trên redisClient hiện tại
+  // Sử dụng địa chỉ Redis URL từ biến môi trường hoặc mặc định
+  const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379";
+  const pubClient = createRedisClient({ url: REDIS_URL });
   const subClient = pubClient.duplicate();
-  await pubClient.connect();
-  await subClient.connect();
+
+  // Kết nối pub/sub clients
+  await Promise.all([pubClient.connect(), subClient.connect()]);
+
+  // Thiết lập adapter
   io.adapter(createAdapter(pubClient, subClient));
+  console.log("✅ Socket.IO Redis adapter configured successfully");
+} catch (error) {
+  console.error("❌ Error configuring Socket.IO Redis adapter:", error);
+  // Tiếp tục mà không sử dụng Redis adapter nếu có lỗi
+}
 
-  // Register chat socket logic (usersOnlineGauge is now updated in chat.socket.ts)
-  registerChatSocket(io);
+// Register chat socket logic (usersOnlineGauge is now updated in chat.socket.ts)
+registerChatSocket(io);
 
-  server.listen(PORT, () => {
-    console.log(`🚀 Server running at http://localhost:${PORT}`);
-  });
-})();
+server.listen(PORT, () => {
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
+});
 
 export default app;
