@@ -335,10 +335,37 @@ function orderMoves(
     if (targetPiece) {
       const victimValue = PIECE_VALUES[targetPiece[1]];
       const aggressorValue = movingPiece ? PIECE_VALUES[movingPiece[1]] : 0;
-      score += victimValue * 100 - aggressorValue;
-      if (["Q", "R", "B", "N"].includes(targetPiece[1])) {
-        score += victimValue * 10;
+
+      // Cải tiến: Phân tích hệ số trao đổi quân
+      const exchangeValue = victimValue - aggressorValue / 2;
+      score += exchangeValue * 120; // Tăng hệ số từ 100 lên 120
+
+      // Cải tiến: Ưu tiên cao hơn cho việc ăn các quân có giá trị cao
+      if (targetPiece[1] === "Q") {
+        score += victimValue * 30; // Tăng rất cao cho việc ăn hậu
+      } else if (targetPiece[1] === "R") {
+        score += victimValue * 20; // Tăng cao cho việc ăn xe
+      } else if (["B", "N"].includes(targetPiece[1])) {
+        score += victimValue * 15; // Tăng cho việc ăn tượng và mã
       }
+
+      // Cải tiến: Ưu tiên ăn quân không được bảo vệ
+      if (
+        !isSquareDefendedBy(
+          board,
+          move.to.x,
+          move.to.y,
+          targetPiece[0] as "w" | "b"
+        )
+      ) {
+        score += victimValue * 25; // Thưởng lớn cho việc ăn quân không được bảo vệ
+      }
+
+      // Cải tiến: Ưu tiên ăn quân bằng quân có giá trị thấp hơn
+      if (aggressorValue < victimValue) {
+        score += (victimValue - aggressorValue) * 10;
+      }
+
       // Ưu tiên đặc biệt nếu nước đi này ăn vua đối phương
       const oppColor = aiColor === "WHITE" ? "BLACK" : "WHITE";
       const oppKingPrefix = oppColor === "WHITE" ? "w" : "b";
@@ -350,14 +377,54 @@ function orderMoves(
     // 3. Ưu tiên các nước thăng cấp tốt
     if (move.promotion) {
       score += PIECE_VALUES[move.promotion] - PIECE_VALUES["P"] + 500;
+      // Ưu tiên thăng cấp thành hậu
+      if (move.promotion === "Q") {
+        score += 200;
+      }
     }
 
     // 4. Ưu tiên các nước kiểm soát trung tâm
     if (move.to.x >= 2 && move.to.x <= 5 && move.to.y >= 2 && move.to.y <= 5) {
-      score += 10;
+      score += 15; // Tăng từ 10 lên 15
     }
 
-    // 5. Ưu tiên nước chiếu vua đối phương
+    // 5. PHÒNG THỦ: Kiểm tra xem nước đi này có bảo vệ quân quan trọng không
+    if (movingPiece) {
+      // Kiểm tra các quân quan trọng trong khu vực xung quanh đích đến
+      for (const dir of [...DIRECTIONS.KING]) {
+        const nearbyPos = { x: move.to.x + dir.x, y: move.to.y + dir.y };
+        if (isValidPosition(nearbyPos)) {
+          const nearbyPiece = board[nearbyPos.y][nearbyPos.x];
+          if (
+            nearbyPiece &&
+            nearbyPiece.startsWith(aiColor === "WHITE" ? "w" : "b")
+          ) {
+            // Bảo vệ các quân có giá trị cao
+            if (nearbyPiece[1] === "Q") {
+              score += 180; // Thưởng cao cho việc bảo vệ hậu
+            } else if (nearbyPiece[1] === "R") {
+              score += 120; // Thưởng cho việc bảo vệ xe
+            } else if (["B", "N"].includes(nearbyPiece[1])) {
+              score += 80; // Thưởng cho việc bảo vệ tượng và mã
+            }
+
+            // Thưởng thêm nếu quân đang được bảo vệ đang bị tấn công
+            if (
+              isSquareAttackedBy(
+                board,
+                nearbyPos.x,
+                nearbyPos.y,
+                aiColor === "WHITE" ? "b" : "w"
+              )
+            ) {
+              score += PIECE_VALUES[nearbyPiece[1]] * 0.3;
+            }
+          }
+        }
+      }
+    }
+
+    // 6. Ưu tiên nước chiếu vua đối phương
     const oppColor = aiColor === "WHITE" ? "BLACK" : "WHITE";
     const nextState = makeMove(gameState, move);
     const oppKingPos = (() => {
@@ -383,20 +450,135 @@ function orderMoves(
         aiColor === "WHITE" ? "w" : "b"
       )
     ) {
-      score += 300;
+      score += 350; // Tăng từ 300 lên 350 cho nước chiếu
+
+      // Kiểm tra nếu là chiếu hết
       const oppMoves = getAllPossibleMoves({ ...nextState, aiColor: oppColor });
-      if (oppMoves.length === 0) score += 2000;
+      if (oppMoves.length === 0) {
+        score += 5000; // Tăng từ 2000 lên 5000 cho nước chiếu hết
+      } else {
+        // Ưu tiên nước chiếu mà đối thủ khó thoát
+        if (oppMoves.length <= 2) {
+          score += 1000; // Thưởng cho nước chiếu mà đối thủ ít nước thoát
+        }
+
+        // Kiểm tra xem các nước thoát chiếu có dẫn đến mất quân hoặc vị trí xấu không
+        let escapeMovesAreGood = false;
+        for (const escapeMove of oppMoves) {
+          const escapeState = makeMove(
+            { ...nextState, aiColor: oppColor },
+            escapeMove
+          );
+          // Nếu nước thoát chiếu dẫn đến mất quân quan trọng, đó là chiếu tốt
+          if (
+            nextState.board[escapeMove.to.y][escapeMove.to.x] &&
+            nextState.board[escapeMove.to.y][escapeMove.to.x]!.startsWith(
+              aiColor === "WHITE" ? "w" : "b"
+            )
+          ) {
+            if (
+              ["Q", "R", "B", "N"].includes(
+                nextState.board[escapeMove.to.y][escapeMove.to.x]![1]
+              )
+            ) {
+              escapeMovesAreGood = true;
+              break;
+            }
+          }
+        }
+
+        if (!escapeMovesAreGood) {
+          score += 200; // Thưởng thêm cho nước chiếu bắt buộc đối thủ phải hy sinh quân
+        }
+      }
     }
 
-    // 6. Ưu tiên nước bảo vệ quân lớn
+    // 7. THOÁT CHIẾU: Ưu tiên cao cho nước thoát chiếu nếu đang bị chiếu
+    const myPrefix = aiColor === "WHITE" ? "w" : "b";
+    const myKingPos = (() => {
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const p = board[y][x];
+          if (p && p.startsWith(myPrefix) && p[1] === "K") {
+            return { x, y };
+          }
+        }
+      }
+      return null;
+    })();
+
+    if (
+      myKingPos &&
+      isSquareAttacked(board, myKingPos, aiColor === "WHITE" ? "b" : "w")
+    ) {
+      // Kiểm tra xem nước đi có giúp thoát chiếu không
+      const kingMoving = movingPiece && movingPiece[1] === "K";
+      const kingPosAfterMove = kingMoving ? move.to : myKingPos;
+
+      if (
+        !isSquareAttacked(
+          nextState.board,
+          kingPosAfterMove,
+          aiColor === "WHITE" ? "b" : "w"
+        )
+      ) {
+        score += 1500; // Ưu tiên rất cao cho việc thoát chiếu
+      }
+    }
+
+    // 8. Ưu tiên nước bảo vệ quân lớn
     if (movingPiece && ["Q", "R", "B", "N"].includes(movingPiece[1])) {
+      // Kiểm tra xem vị trí đích có được bảo vệ không
       const defended = isSquareDefendedBy(
         nextState.board,
         move.to.x,
         move.to.y,
         aiColor === "WHITE" ? "w" : "b"
       );
-      if (defended) score += PIECE_VALUES[movingPiece[1]] * 0.5;
+
+      // Kiểm tra xem vị trí đích có an toàn không (không bị tấn công hoặc được bảo vệ tốt)
+      const attacked = isSquareAttackedBy(
+        nextState.board,
+        move.to.x,
+        move.to.y,
+        aiColor === "WHITE" ? "b" : "w"
+      );
+
+      // Nếu vị trí an toàn (không bị tấn công) hoặc được bảo vệ tốt (giá trị bảo vệ > giá trị tấn công)
+      if (!attacked) {
+        // Vị trí không bị tấn công - thưởng cao hơn
+        score += PIECE_VALUES[movingPiece[1]] * 0.7;
+      } else if (defended) {
+        // Vị trí bị tấn công nhưng được bảo vệ
+        const defenders = getDefenders(
+          nextState.board,
+          { x: move.to.x, y: move.to.y },
+          aiColor === "WHITE" ? "w" : "b"
+        );
+        const attackers = getAttackers(
+          nextState.board,
+          { x: move.to.x, y: move.to.y },
+          aiColor === "WHITE" ? "b" : "w"
+        );
+
+        // Nếu số lượng quân bảo vệ nhiều hơn số lượng quân tấn công
+        if (defenders.length > attackers.length) {
+          score += PIECE_VALUES[movingPiece[1]] * 0.6;
+        } else {
+          // Tính toán giá trị quân tấn công và quân phòng thủ
+          const minAttackerValue = getMinPieceValue(attackers);
+
+          // Nếu quân có giá trị thấp đang tấn công quân có giá trị cao, phạt mạnh
+          if (minAttackerValue < PIECE_VALUES[movingPiece[1]]) {
+            score -= PIECE_VALUES[movingPiece[1]] * 0.4;
+          } else {
+            score += PIECE_VALUES[movingPiece[1]] * 0.3;
+          }
+        }
+      } else {
+        // Quân đang di chuyển đến vị trí không an toàn, phạt nặng
+        score -= PIECE_VALUES[movingPiece[1]] * 0.8;
+      }
     }
 
     scoreMap.set(move, score);
@@ -571,11 +753,13 @@ export function evaluateBoard(gameState: GameState): number {
         // Đánh giá phần thưởng/phạt dựa trên loại quân
         const pieceImportance =
           pieceType === "Q"
-            ? 1.0 // Hậu: quan trọng nhất
+            ? 1.5 // Hậu: quan trọng nhất (tăng lên 1.5)
             : pieceType === "R"
-            ? 0.8 // Xe: quan trọng thứ 2
+            ? 1.0 // Xe: quan trọng thứ 2 (tăng lên 1.0)
             : pieceType === "B" || pieceType === "N"
-            ? 0.6 // Tượng/Mã: quan trọng thứ 3
+            ? 0.8 // Tượng/Mã: quan trọng thứ 3 (tăng lên 0.8)
+            : pieceType === "P" && (y === 1 || y === 6 || y === 2 || y === 5)
+            ? 0.5 // Tốt ở vị trí quan trọng (tăng lên 0.5)
             : pieceType === "P"
             ? 0.3
             : 0.1; // Tốt: ít quan trọng nhất
@@ -583,22 +767,50 @@ export function evaluateBoard(gameState: GameState): number {
         // Quân bị tấn công
         if (isAttacked) {
           if (isDefended) {
-            // Quân bị tấn công nhưng được bảo vệ - phạt nhẹ vì có thể bị trao đổi
-            score -= pieceValue * 0.2 * pieceImportance;
+            // Quân bị tấn công nhưng được bảo vệ
+            // Kiểm tra giá trị quân tấn công so với quân đang xét
+            const attackers = getAttackers(board, { x, y }, oppPrefix);
+            const defenders = getDefenders(board, { x, y }, myPrefix);
+
+            // Nếu quân tấn công nhỏ hơn, ít phạt hơn
+            if (getMinPieceValue(attackers) < pieceValue) {
+              score -= pieceValue * 0.1 * pieceImportance; // Giảm phạt khi quân tấn công yếu hơn
+            } else {
+              // Nếu có nhiều quân bảo vệ hơn quân tấn công, ít phạt hơn
+              if (defenders.length > attackers.length) {
+                score -= pieceValue * 0.15 * pieceImportance;
+              } else {
+                score -= pieceValue * 0.25 * pieceImportance;
+              }
+            }
           } else {
             // Quân không được bảo vệ và bị tấn công - phạt rất nặng
-            // Hậu không được bảo vệ và bị tấn công: phạt rất nặng
-            score -= pieceValue * 0.9 * pieceImportance;
+            // Hậu không được bảo vệ và bị tấn công: phạt cực kỳ nặng
+            if (pieceType === "Q") {
+              score -= pieceValue * 1.5; // Phạt nặng hơn cho hậu không được bảo vệ
+            } else if (pieceType === "R") {
+              score -= pieceValue * 1.2; // Phạt nặng hơn cho xe không được bảo vệ
+            } else {
+              score -= pieceValue * 1.0 * pieceImportance;
+            }
           }
         }
         // Quân không bị tấn công
         else {
           if (isDefended) {
-            // Quân không bị tấn công và được bảo vệ tốt - thưởng
-            score += pieceValue * 0.1 * pieceImportance;
+            // Quân không bị tấn công và được bảo vệ tốt - thưởng nhiều hơn
+            score += pieceValue * 0.2 * pieceImportance;
+
+            // Thưởng thêm cho quân quan trọng được bảo vệ bởi nhiều quân
+            if (pieceType === "Q" || pieceType === "R") {
+              const defenders = getDefenders(board, { x, y }, myPrefix);
+              if (defenders.length >= 2) {
+                score += pieceValue * 0.15; // Thưởng thêm cho quân quan trọng được bảo vệ nhiều lớp
+              }
+            }
           } else if (pieceValue > PIECE_VALUES["P"]) {
-            // Quân giá trị cao không được bảo vệ - phạt nhẹ
-            score -= pieceValue * 0.15 * pieceImportance;
+            // Quân giá trị cao không được bảo vệ - phạt nặng hơn
+            score -= pieceValue * 0.25 * pieceImportance;
           }
         }
 
@@ -763,6 +975,100 @@ function isSquareAttackedBy(
   attackerPrefix: "w" | "b"
 ): boolean {
   return isSquareAttacked(board, { x, y }, attackerPrefix);
+}
+
+// Lấy danh sách tất cả các quân đang tấn công một ô
+function getAttackers(
+  board: ChessBoard,
+  pos: Position,
+  attackerPrefix: "w" | "b"
+): { piece: string; position: Position }[] {
+  const attackers: { piece: string; position: Position }[] = [];
+
+  // 1. Kiểm tra tấn công bởi tốt
+  const pawnDir = attackerPrefix === "w" ? -1 : 1;
+  for (const dx of [-1, 1]) {
+    const checkPos = { x: pos.x + dx, y: pos.y + pawnDir };
+    if (isValidPosition(checkPos)) {
+      const piece = board[checkPos.y][checkPos.x];
+      if (piece && piece.startsWith(attackerPrefix) && piece[1] === "P") {
+        attackers.push({ piece, position: checkPos });
+      }
+    }
+  }
+
+  // 2. Kiểm tra tấn công bởi mã
+  for (const offset of DIRECTIONS.KNIGHT) {
+    const checkPos = { x: pos.x + offset.x, y: pos.y + offset.y };
+    if (isValidPosition(checkPos)) {
+      const piece = board[checkPos.y][checkPos.x];
+      if (piece && piece.startsWith(attackerPrefix) && piece[1] === "N") {
+        attackers.push({ piece, position: checkPos });
+      }
+    }
+  }
+
+  // 3. Kiểm tra tấn công bởi vua
+  for (const offset of DIRECTIONS.KING) {
+    const checkPos = { x: pos.x + offset.x, y: pos.y + offset.y };
+    if (isValidPosition(checkPos)) {
+      const piece = board[checkPos.y][checkPos.x];
+      if (piece && piece.startsWith(attackerPrefix) && piece[1] === "K") {
+        attackers.push({ piece, position: checkPos });
+      }
+    }
+  }
+
+  // 4. Kiểm tra tấn công bởi xe, tượng, hậu
+  // Hướng xe (file/rank)
+  for (const dir of DIRECTIONS.ROOK) {
+    let current = { x: pos.x + dir.x, y: pos.y + dir.y };
+    while (isValidPosition(current)) {
+      const piece = board[current.y][current.x];
+      if (piece) {
+        if (piece.startsWith(attackerPrefix) && ["Q", "R"].includes(piece[1])) {
+          attackers.push({ piece, position: current });
+        }
+        break;
+      }
+      current = { x: current.x + dir.x, y: current.y + dir.y };
+    }
+  }
+
+  // Hướng tượng (diagonal)
+  for (const dir of DIRECTIONS.BISHOP) {
+    let current = { x: pos.x + dir.x, y: pos.y + dir.y };
+    while (isValidPosition(current)) {
+      const piece = board[current.y][current.x];
+      if (piece) {
+        if (piece.startsWith(attackerPrefix) && ["Q", "B"].includes(piece[1])) {
+          attackers.push({ piece, position: current });
+        }
+        break;
+      }
+      current = { x: current.x + dir.x, y: current.y + dir.y };
+    }
+  }
+
+  return attackers;
+}
+
+// Lấy danh sách tất cả các quân đang bảo vệ một ô
+function getDefenders(
+  board: ChessBoard,
+  pos: Position,
+  defenderPrefix: "w" | "b"
+): { piece: string; position: Position }[] {
+  return getAttackers(board, pos, defenderPrefix);
+}
+
+// Lấy giá trị nhỏ nhất trong các quân tấn công
+function getMinPieceValue(
+  pieces: { piece: string; position: Position }[]
+): number {
+  if (pieces.length === 0) return Infinity;
+
+  return Math.min(...pieces.map((p) => PIECE_VALUES[p.piece[1]]));
 }
 
 // Tạo trạng thái mới sau khi đi một nước
