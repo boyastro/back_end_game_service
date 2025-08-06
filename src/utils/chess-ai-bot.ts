@@ -62,6 +62,9 @@ export const DIRECTIONS = {
   ],
 };
 
+// Biến toàn cục để theo dõi trạng thái tổng thể
+let totalPieces = 32; // Ban đầu có 32 quân trên bàn cờ
+
 /**
  * Generate a move for the AI using minimax with alpha-beta pruning and advanced evaluation
  * @param gameState Current game state including board, color, and special move rights
@@ -167,6 +170,14 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
         currentBestMoves = [move];
       } else if (score === currentBestScore) {
         currentBestMoves.push(move);
+      }
+
+      // Phản hồi sớm nếu tìm thấy nước thắng tuyệt đối
+      if (score > 9000000) {
+        bestScore = score;
+        bestMoves = [move];
+        // Ngắt vòng lặp nếu tìm thấy nước thắng
+        break;
       }
     }
 
@@ -544,6 +555,23 @@ function orderMoves(
         score += victimValue * 15; // Tăng cho việc ăn tượng và mã
       }
 
+      // Phân tích tình huống tàn cuộc
+      if (totalPieces <= 8) {
+        // Trong tàn cuộc
+        // Ưu tiên cao hơn cho việc ăn quân để giảm vật chất đối thủ
+        score += victimValue * 8;
+
+        // Ưu tiên cao nhất cho việc thăng cấp tốt trong tàn cuộc
+        if (
+          movingPiece &&
+          movingPiece[1] === "P" &&
+          ((movingPiece.startsWith("w") && move.to.y === 0) ||
+            (movingPiece.startsWith("b") && move.to.y === 7))
+        ) {
+          score += 900; // Gần bằng giá trị của hậu
+        }
+      }
+
       // Cải tiến: Ưu tiên ăn quân không được bảo vệ
       if (
         !isSquareDefendedBy(
@@ -601,7 +629,36 @@ function orderMoves(
 
     // 4. Ưu tiên các nước kiểm soát trung tâm
     if (move.to.x >= 2 && move.to.x <= 5 && move.to.y >= 2 && move.to.y <= 5) {
+      // Trung tâm mở rộng
       score += 15; // Tăng từ 10 lên 15
+
+      // Đặc biệt ưu tiên kiểm soát 4 ô trung tâm chính (d4, d5, e4, e5)
+      if (
+        move.to.x >= 3 &&
+        move.to.x <= 4 &&
+        move.to.y >= 3 &&
+        move.to.y <= 4
+      ) {
+        score += 10; // Thưởng thêm cho trung tâm chính
+      }
+    }
+
+    // Khuyến khích phát triển quân trong giai đoạn đầu
+    if (totalPieces > 28) {
+      // Đầu trận
+      // Khuyến khích di chuyển quân ra khỏi vị trí ban đầu
+      const movingPieceType = movingPiece ? movingPiece[1] : null;
+      const isWhite = movingPiece && movingPiece.startsWith("w");
+      const startingRank = isWhite ? 7 : 0; // Hàng ban đầu của quân
+
+      if (
+        movingPieceType &&
+        ["N", "B"].includes(movingPieceType) &&
+        move.from.y === startingRank &&
+        move.to.y !== startingRank
+      ) {
+        score += 25; // Khuyến khích phát triển tượng, mã
+      }
     }
 
     // 5. PHÒNG THỦ: Kiểm tra xem nước đi này có bảo vệ quân quan trọng không
@@ -826,11 +883,21 @@ export function evaluateBoard(gameState: GameState): number {
   let totalPieces = 0;
   let myBigPieceCount = 0;
   let oppBigPieceCount = 0;
+  let myMaterial = 0;
+  let oppMaterial = 0;
 
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const piece = board[y][x];
       if (!piece) continue;
+
+      // Cập nhật tổng giá trị vật chất
+      const pieceValue = PIECE_VALUES[piece[1]];
+      if (piece.startsWith(myPrefix)) {
+        myMaterial += pieceValue;
+      } else {
+        oppMaterial += pieceValue;
+      }
 
       // Chỉ đếm quân lớn (không phải tốt)
       if (piece[1] !== "P" && piece[1] !== "K") {
@@ -855,6 +922,22 @@ export function evaluateBoard(gameState: GameState): number {
   const centerControlWeight = isMiddlegame ? 15 : 10;
   const mobilityWeight = isEndgame ? 10 : isMiddlegame ? 8 : 5; // Tính điểm cho tính linh động
   const kingTempoWeight = isEndgame ? 15 : 0; // Giá trị của thời gian trong tàn cuộc
+  const materialAdvantageWeight = isEndgame ? 1.3 : isMiddlegame ? 1.1 : 1.0; // Tăng giá trị vật chất trong tàn cuộc
+
+  // Cập nhật điểm dựa trên chênh lệch vật chất
+  let materialScore = 0;
+  // Nếu có lợi thế vật chất, càng ít quân trên bàn càng tốt (dễ thắng)
+  if (myMaterial > oppMaterial) {
+    materialScore = (myMaterial - oppMaterial) * materialAdvantageWeight;
+    // Trong tàn cuộc, khuyến khích trao đổi quân khi có lợi thế
+    if (isEndgame) {
+      materialScore *= (30 - totalPieces) / 20;
+    }
+  } else {
+    materialScore = myMaterial - oppMaterial;
+  }
+
+  score += materialScore;
 
   // Bảng giá trị vị trí cho các quân - khuyến khích các vị trí tốt
   const piecePositionBonus = {
@@ -1054,12 +1137,21 @@ export function evaluateBoard(gameState: GameState): number {
   score += myMoves.length * mobilityWeight;
   score -= oppMoves.length * mobilityWeight;
 
+  // Kiểm soát tính linh động và sự phát triển
+  if (myMoves.length > oppMoves.length * 1.3) {
+    // Nếu có nhiều hơn 30% số nước so với đối thủ
+    score += 30; // Thưởng thêm cho việc có nhiều lựa chọn hơn
+  }
+
+  // Phạt khi bị hạn chế nước đi nhiều hơn so với đối thủ
+  if (myMoves.length * 1.3 < oppMoves.length) {
+    score -= 30;
+  }
+
   // Trong tàn cuộc, đánh giá cao tempo (ai đi trước) nếu có nhiều nước đi hơn
   if (isEndgame && myMoves.length > oppMoves.length) {
     score += kingTempoWeight;
-  }
-
-  // 5. Bảo vệ quân lớn: Đánh giá tất cả các quân
+  } // 5. Bảo vệ quân lớn: Đánh giá tất cả các quân
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const piece = board[y][x];
@@ -1203,6 +1295,24 @@ export function evaluateBoard(gameState: GameState): number {
 
   // Đánh giá cấu trúc tốt (đơn giản hóa để tăng tốc)
   score += evaluatePawnStructure(board, myPrefix, oppPrefix) * 0.7;
+
+  // Phân tích vị trí hiện tại để tìm thay đổi
+  // Tăng điểm nếu có trùng lặp vị trí từ lịch sử
+  const positionKey = boardToFEN(board, aiColor);
+  const repetitionCount = positionHistory.get(positionKey) || 0;
+
+  // Cập nhật lịch sử vị trí
+  positionHistory.set(positionKey, repetitionCount + 1);
+
+  // Phạt nghiêm khắc cho việc lặp lại vị trí (tránh hòa do lặp 3 lần)
+  if (repetitionCount >= 1) {
+    score -= 50 * repetitionCount; // Phạt càng nặng khi càng lặp lại nhiều
+  }
+
+  // Phạt các nước lặp lại
+  if (repetitionCount >= 2) {
+    score -= 200; // Phạt nặng khi vị trí lặp lại 3 lần (sắp hòa)
+  }
 
   return score;
 }
