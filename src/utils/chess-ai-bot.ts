@@ -68,6 +68,9 @@ export const DIRECTIONS = {
  * @returns A move object containing from and to positions, and optional promotion
  */
 export function generateAIMove(gameState: GameState): ChessMove | null {
+  // Reset lịch sử vị trí để tránh lặp
+  resetPositionHistory();
+
   const possibleMoves = getAllPossibleMoves(gameState);
   if (possibleMoves.length === 0) return null;
 
@@ -211,6 +214,15 @@ const transpositionTable = new Map<
   string,
   { score: number; depth: number; flag: string }
 >();
+
+// Mảng lưu lịch sử các vị trí xuất hiện để tránh lặp lại
+// Lưu trữ dạng FEN của bàn cờ và số lần xuất hiện
+const positionHistory = new Map<string, number>();
+
+// Reset lịch sử vị trí khi bắt đầu một trận đấu mới
+export function resetPositionHistory() {
+  positionHistory.clear();
+}
 
 // Killer moves - lưu trữ các nước tốt ở mỗi độ sâu
 const killerMoves: ChessMove[][] = Array(10)
@@ -841,6 +853,8 @@ export function evaluateBoard(gameState: GameState): number {
   const developmentWeight = isOpening ? 15 : isMiddlegame ? 10 : 5;
   const kingActivityWeight = isEndgame ? 30 : isMiddlegame ? 10 : 0;
   const centerControlWeight = isMiddlegame ? 15 : 10;
+  const mobilityWeight = isEndgame ? 10 : isMiddlegame ? 8 : 5; // Tính điểm cho tính linh động
+  const kingTempoWeight = isEndgame ? 15 : 0; // Giá trị của thời gian trong tàn cuộc
 
   // Bảng giá trị vị trí cho các quân - khuyến khích các vị trí tốt
   const piecePositionBonus = {
@@ -986,7 +1000,7 @@ export function evaluateBoard(gameState: GameState): number {
               Math.abs(oppKingPos.x - x) + Math.abs(oppKingPos.y - y);
             // Thưởng cho việc đưa vua gần vua đối phương trong tàn cuộc
             if (myBigPieceCount > oppBigPieceCount) {
-              kingBonus += (14 - distanceToOppKing) * 5;
+              kingBonus += (14 - distanceToOppKing) * kingTempoWeight;
             }
           }
         }
@@ -1027,6 +1041,22 @@ export function evaluateBoard(gameState: GameState): number {
     score -= 200;
     const myMoves = getAllPossibleMoves(gameState);
     if (myMoves.length === 0) score -= 2000; // Thua tuyệt đối
+  }
+
+  // 4. Đánh giá linh động (mobility) - số nước đi có thể thực hiện
+  const myMoves = getAllPossibleMoves(gameState);
+  const oppMoves = getAllPossibleMoves({
+    ...gameState,
+    aiColor: aiColor === "WHITE" ? "BLACK" : "WHITE",
+  });
+
+  // Thưởng cho tính linh động trong trận đấu
+  score += myMoves.length * mobilityWeight;
+  score -= oppMoves.length * mobilityWeight;
+
+  // Trong tàn cuộc, đánh giá cao tempo (ai đi trước) nếu có nhiều nước đi hơn
+  if (isEndgame && myMoves.length > oppMoves.length) {
+    score += kingTempoWeight;
   }
 
   // 5. Bảo vệ quân lớn: Đánh giá tất cả các quân
@@ -1530,22 +1560,18 @@ function getMovesForPiece(
   color: "WHITE" | "BLACK"
 ): ChessMove[] {
   const pieceType = piece[1]; // e.g., 'P', 'R', etc.
+  const { board } = gameState;
 
   // Tối ưu: Chỉ xét các nước đi của quân mạnh trước để cải thiện alpha-beta pruning
   switch (pieceType) {
     case "Q":
-      return getQueenMoves(gameState.board, position, color);
+      return getQueenMoves(board, position, color);
     case "R":
-      return getSlidingMoves(gameState.board, position, color, DIRECTIONS.ROOK);
+      return getSlidingMoves(board, position, color, DIRECTIONS.ROOK);
     case "B":
-      return getSlidingMoves(
-        gameState.board,
-        position,
-        color,
-        DIRECTIONS.BISHOP
-      );
+      return getSlidingMoves(board, position, color, DIRECTIONS.BISHOP);
     case "N":
-      return getKnightMoves(gameState.board, position, color);
+      return getKnightMoves(board, position, color);
     case "P":
       return getPawnMoves(gameState, position, color);
     case "K":
@@ -1752,12 +1778,13 @@ function getKnightMoves(
 ): ChessMove[] {
   const moves: ChessMove[] = [];
   const opponentPrefix = getOpponentPrefix(color);
+  const myPrefix = color === "WHITE" ? "w" : "b";
 
   for (const offset of DIRECTIONS.KNIGHT) {
     const to = { x: pos.x + offset.x, y: pos.y + offset.y };
     if (isValidPosition(to)) {
       const targetPiece = board[to.y][to.x];
-      // Allow capturing opponent's king
+      // Đảm bảo không đi vào ô có quân của mình và cho phép ăn vua đối phương
       if (
         targetPiece === null ||
         targetPiece.startsWith(opponentPrefix) ||
