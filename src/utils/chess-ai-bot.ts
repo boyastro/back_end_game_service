@@ -71,19 +71,37 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
   const possibleMoves = getAllPossibleMoves(gameState);
   if (possibleMoves.length === 0) return null;
 
-  // Depth: 4 ply để tăng khả năng nhìn trước, với alpha-beta pruning hiệu quả
-  const SEARCH_DEPTH = 4;
+  // Giảm độ sâu tìm kiếm xuống 3 để tăng tốc AI
+  const SEARCH_DEPTH = 3;
   let bestScore = -Infinity;
   let bestMoves: ChessMove[] = [];
 
-  for (const move of possibleMoves) {
+  // Thêm cơ chế timeout để tránh AI suy nghĩ quá lâu
+  const START_TIME = Date.now();
+  const MAX_THINK_TIME = 2000; // Tối đa 2 giây suy nghĩ
+
+  // Tối ưu: Nếu có nhiều nước, giới hạn số nước xem xét
+  // Ưu tiên các nước tốt nhất dựa trên đánh giá cơ bản
+  const movesToConsider =
+    possibleMoves.length > 15
+      ? orderMoves(possibleMoves, gameState, 0, []).slice(0, 15)
+      : possibleMoves;
+
+  for (const move of movesToConsider) {
+    // Kiểm tra timeout - nếu quá thời gian suy nghĩ thì dừng và trả về nước tốt nhất hiện tại
+    if (Date.now() - START_TIME > MAX_THINK_TIME && bestMoves.length > 0) {
+      break;
+    }
+
     const nextState = makeMove(gameState, move);
     const score = minimax(
       nextState,
       SEARCH_DEPTH - 1,
       false,
       -Infinity,
-      Infinity
+      Infinity,
+      START_TIME,
+      MAX_THINK_TIME
     );
     if (score > bestScore) {
       bestScore = score;
@@ -92,6 +110,12 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
       bestMoves.push(move);
     }
   }
+
+  // Nếu không tìm được nước nào (do timeout) thì chọn nước đầu tiên
+  if (bestMoves.length === 0 && possibleMoves.length > 0) {
+    return possibleMoves[0];
+  }
+
   // Chọn ngẫu nhiên trong các nước tốt nhất
   return bestMoves[Math.floor(Math.random() * bestMoves.length)];
 }
@@ -114,12 +138,19 @@ function minimax(
   depth: number,
   maximizing: boolean,
   alpha: number,
-  beta: number
+  beta: number,
+  startTime: number,
+  maxTime: number
 ): number {
+  // Kiểm tra timeout - tránh suy nghĩ quá lâu
+  if (Date.now() - startTime > maxTime) {
+    return evaluateBoard(gameState); // Trả về đánh giá hiện tại nếu hết thời gian
+  }
+
   // Nếu độ sâu = 0, thực hiện quiescence search để ổn định đánh giá
   if (depth === 0) {
-    // Giảm độ sâu quiescence xuống 2 để tăng tốc
-    return quiescenceSearch(gameState, 2, maximizing, alpha, beta);
+    // Giảm độ sâu quiescence xuống 1 để tăng tốc đáng kể
+    return quiescenceSearch(gameState, 1, maximizing, alpha, beta);
   }
 
   let moves = getAllPossibleMoves(gameState);
@@ -135,7 +166,15 @@ function minimax(
     let maxEval = -Infinity;
     for (const move of moves) {
       const nextState = makeMove(gameState, move);
-      const evalScore = minimax(nextState, depth - 1, false, alpha, beta);
+      const evalScore = minimax(
+        nextState,
+        depth - 1,
+        false,
+        alpha,
+        beta,
+        startTime,
+        maxTime
+      );
 
       if (evalScore > maxEval) {
         maxEval = evalScore;
@@ -166,7 +205,15 @@ function minimax(
 
     for (const move of opponentMoves) {
       const nextState = makeMove(opponentState, move);
-      const evalScore = minimax(nextState, depth - 1, true, alpha, beta);
+      const evalScore = minimax(
+        nextState,
+        depth - 1,
+        true,
+        alpha,
+        beta,
+        startTime,
+        maxTime
+      );
 
       if (evalScore < minEval) {
         minEval = evalScore;
@@ -262,12 +309,21 @@ function orderMoves(
     scoreMap.set(move, score);
   }
 
-  // Sắp xếp theo điểm giảm dần
-  return [...moves].sort((a, b) => {
+  // Sắp xếp theo điểm giảm dần và chỉ lấy 60% số nước tốt nhất để tăng tốc
+  const sortedMoves = [...moves].sort((a, b) => {
     const scoreA = scoreMap.get(a) || 0;
     const scoreB = scoreMap.get(b) || 0;
     return scoreB - scoreA;
   });
+
+  // Tối ưu: Giới hạn số nước xem xét để tăng tốc
+  // Vẫn đảm bảo có ít nhất 5 nước tốt nhất để duy trì chất lượng
+  const limitedMoves =
+    moves.length > 8
+      ? sortedMoves.slice(0, Math.max(5, Math.floor(moves.length * 0.6)))
+      : sortedMoves;
+
+  return limitedMoves;
 }
 
 // Hàm đánh giá bàn cờ nâng cao
@@ -519,11 +575,12 @@ export function evaluateBoard(gameState: GameState): number {
   }
 
   // Cải thiện tính di động: khuyến khích kiểm soát trung tâm và di chuyển
-  const mobilityScore = getAllPossibleMoves(gameState).length * 2;
+  // Tối ưu: Chỉ dùng 50% số nước khả thi để tăng tốc đánh giá
+  const mobilityScore = Math.floor(getAllPossibleMoves(gameState).length * 1.5);
   score += mobilityScore;
 
-  // Đánh giá cấu trúc tốt
-  score += evaluatePawnStructure(board, myPrefix, oppPrefix);
+  // Đánh giá cấu trúc tốt (đơn giản hóa để tăng tốc)
+  score += evaluatePawnStructure(board, myPrefix, oppPrefix) * 0.7;
 
   return score;
 }
@@ -534,34 +591,9 @@ function isSquareAttacked(
   pos: Position,
   attackerPrefix: "w" | "b"
 ): boolean {
-  // Kiểm tra bởi quân mã
-  for (const offset of DIRECTIONS.KNIGHT) {
-    const to = { x: pos.x + offset.x, y: pos.y + offset.y };
-    if (isValidPosition(to)) {
-      const piece = board[to.y][to.x];
-      if (piece && piece.startsWith(attackerPrefix) && piece[1] === "N")
-        return true;
-    }
-  }
-  // Kiểm tra bởi quân hậu, xe, tượng
-  for (const dir of [...DIRECTIONS.ROOK, ...DIRECTIONS.BISHOP]) {
-    let current = { x: pos.x + dir.x, y: pos.y + dir.y };
-    while (isValidPosition(current)) {
-      const piece = board[current.y][current.x];
-      if (piece) {
-        if (piece.startsWith(attackerPrefix)) {
-          if (
-            ((dir.x === 0 || dir.y === 0) && ["Q", "R"].includes(piece[1])) ||
-            (dir.x !== 0 && dir.y !== 0 && ["Q", "B"].includes(piece[1]))
-          )
-            return true;
-        }
-        break;
-      }
-      current = { x: current.x + dir.x, y: current.y + dir.y };
-    }
-  }
-  // Kiểm tra bởi quân tốt
+  // Tối ưu: Kiểm tra trước các hướng tấn công thường gặp hơn
+
+  // 1. Kiểm tra bởi quân tốt (tối ưu: kiểm tra trước vì nhanh nhất)
   const pawnDir = attackerPrefix === "w" ? -1 : 1;
   for (const dx of [-1, 1]) {
     const to = { x: pos.x + dx, y: pos.y + pawnDir };
@@ -571,7 +603,8 @@ function isSquareAttacked(
         return true;
     }
   }
-  // Kiểm tra bởi vua
+
+  // 2. Kiểm tra bởi vua (tối ưu: kiểm tra tiếp vì khá nhanh)
   for (const offset of DIRECTIONS.KING) {
     const to = { x: pos.x + offset.x, y: pos.y + offset.y };
     if (isValidPosition(to)) {
@@ -580,6 +613,48 @@ function isSquareAttacked(
         return true;
     }
   }
+
+  // 3. Kiểm tra bởi quân mã
+  for (const offset of DIRECTIONS.KNIGHT) {
+    const to = { x: pos.x + offset.x, y: pos.y + offset.y };
+    if (isValidPosition(to)) {
+      const piece = board[to.y][to.x];
+      if (piece && piece.startsWith(attackerPrefix) && piece[1] === "N")
+        return true;
+    }
+  }
+  // 4. Kiểm tra bởi quân hậu, xe, tượng
+  // Tối ưu: Kiểm tra 4 hướng chính trước (xe), sau đó là 4 hướng chéo (tượng)
+  // Hướng xe (file/rank) - trước tiên kiểm tra bởi xe/hậu (thường xảy ra hơn)
+  for (const dir of DIRECTIONS.ROOK) {
+    let current = { x: pos.x + dir.x, y: pos.y + dir.y };
+    while (isValidPosition(current)) {
+      const piece = board[current.y][current.x];
+      if (piece) {
+        if (piece.startsWith(attackerPrefix) && ["Q", "R"].includes(piece[1])) {
+          return true;
+        }
+        break;
+      }
+      current = { x: current.x + dir.x, y: current.y + dir.y };
+    }
+  }
+
+  // Hướng tượng (diagonal) - sau đó mới kiểm tra bởi tượng/hậu
+  for (const dir of DIRECTIONS.BISHOP) {
+    let current = { x: pos.x + dir.x, y: pos.y + dir.y };
+    while (isValidPosition(current)) {
+      const piece = board[current.y][current.x];
+      if (piece) {
+        if (piece.startsWith(attackerPrefix) && ["Q", "B"].includes(piece[1])) {
+          return true;
+        }
+        break;
+      }
+      current = { x: current.x + dir.x, y: current.y + dir.y };
+    }
+  }
+
   return false;
 }
 
