@@ -71,6 +71,23 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
   const possibleMoves = getAllPossibleMoves(gameState);
   if (possibleMoves.length === 0) return null;
 
+  // Kiểm tra trước nếu có nước đi ăn vua, ưu tiên chọn ngay lập tức
+  const kingCaptureMoves = possibleMoves.filter((move) => {
+    const targetPiece = gameState.board[move.to.y][move.to.x];
+    if (!targetPiece) return false;
+
+    const oppColor = gameState.aiColor === "WHITE" ? "BLACK" : "WHITE";
+    const oppKingPrefix = oppColor === "WHITE" ? "w" : "b";
+    return targetPiece.startsWith(oppKingPrefix) && targetPiece[1] === "K";
+  });
+
+  if (kingCaptureMoves.length > 0) {
+    // Nếu có nước ăn vua, chọn ngay lập tức
+    return kingCaptureMoves[
+      Math.floor(Math.random() * kingCaptureMoves.length)
+    ];
+  }
+
   // Giảm độ sâu tìm kiếm xuống 3 để tăng tốc AI
   const SEARCH_DEPTH = 3;
   let bestScore = -Infinity;
@@ -145,6 +162,36 @@ function minimax(
   // Kiểm tra timeout - tránh suy nghĩ quá lâu
   if (Date.now() - startTime > maxTime) {
     return evaluateBoard(gameState); // Trả về đánh giá hiện tại nếu hết thời gian
+  }
+
+  // Kiểm tra trước nếu có nước đi ăn vua của đối phương, trả về giá trị cực lớn
+  if (maximizing) {
+    const moves = getAllPossibleMoves(gameState);
+    for (const move of moves) {
+      const targetPiece = gameState.board[move.to.y][move.to.x];
+      if (targetPiece) {
+        const oppColor = gameState.aiColor === "WHITE" ? "BLACK" : "WHITE";
+        const oppKingPrefix = oppColor === "WHITE" ? "w" : "b";
+        if (targetPiece.startsWith(oppKingPrefix) && targetPiece[1] === "K") {
+          return 10000000; // Giá trị cực lớn cho nước ăn vua
+        }
+      }
+    }
+  } else {
+    // Nếu đối thủ có nước ăn vua của AI, trả về giá trị cực nhỏ
+    const opponentColor: "WHITE" | "BLACK" =
+      gameState.aiColor === "WHITE" ? "BLACK" : "WHITE";
+    const opponentState: GameState = { ...gameState, aiColor: opponentColor };
+    const moves = getAllPossibleMoves(opponentState);
+    for (const move of moves) {
+      const targetPiece = opponentState.board[move.to.y][move.to.x];
+      if (targetPiece) {
+        const aiKingPrefix = gameState.aiColor === "WHITE" ? "w" : "b";
+        if (targetPiece.startsWith(aiKingPrefix) && targetPiece[1] === "K") {
+          return -10000000; // Giá trị cực nhỏ nếu đối thủ có thể ăn vua của AI
+        }
+      }
+    }
   }
 
   // Nếu độ sâu = 0, thực hiện quiescence search để ổn định đánh giá
@@ -278,32 +325,78 @@ function orderMoves(
         m.to.x === move.to.x &&
         m.to.y === move.to.y
     );
-
     if (isKiller) {
-      score += 10000; // Điểm rất cao cho killer moves
+      score += 10000;
     }
 
     // 2. Ưu tiên các nước ăn quân
     const movingPiece = board[move.from.y][move.from.x];
     const targetPiece = board[move.to.y][move.to.x];
-
     if (targetPiece) {
-      // MVV-LVA (Most Valuable Victim - Least Valuable Aggressor)
-      // Ưu tiên ăn quân có giá trị cao bằng quân có giá trị thấp
       const victimValue = PIECE_VALUES[targetPiece[1]];
       const aggressorValue = movingPiece ? PIECE_VALUES[movingPiece[1]] : 0;
-
       score += victimValue * 100 - aggressorValue;
+      if (["Q", "R", "B", "N"].includes(targetPiece[1])) {
+        score += victimValue * 10;
+      }
+      // Ưu tiên đặc biệt nếu nước đi này ăn vua đối phương
+      const oppColor = aiColor === "WHITE" ? "BLACK" : "WHITE";
+      const oppKingPrefix = oppColor === "WHITE" ? "w" : "b";
+      if (targetPiece.startsWith(oppKingPrefix) && targetPiece[1] === "K") {
+        score += 9999999; // Điểm cực lớn cho nước ăn vua - tăng lên để đảm bảo luôn ưu tiên cao nhất
+      }
     }
 
     // 3. Ưu tiên các nước thăng cấp tốt
     if (move.promotion) {
-      score += PIECE_VALUES[move.promotion] - PIECE_VALUES["P"];
+      score += PIECE_VALUES[move.promotion] - PIECE_VALUES["P"] + 500;
     }
 
     // 4. Ưu tiên các nước kiểm soát trung tâm
     if (move.to.x >= 2 && move.to.x <= 5 && move.to.y >= 2 && move.to.y <= 5) {
       score += 10;
+    }
+
+    // 5. Ưu tiên nước chiếu vua đối phương
+    const oppColor = aiColor === "WHITE" ? "BLACK" : "WHITE";
+    const nextState = makeMove(gameState, move);
+    const oppKingPos = (() => {
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const p = nextState.board[y][x];
+          if (
+            p &&
+            p.startsWith(oppColor === "WHITE" ? "w" : "b") &&
+            p[1] === "K"
+          ) {
+            return { x, y };
+          }
+        }
+      }
+      return null;
+    })();
+    if (
+      oppKingPos &&
+      isSquareAttacked(
+        nextState.board,
+        oppKingPos,
+        aiColor === "WHITE" ? "w" : "b"
+      )
+    ) {
+      score += 300;
+      const oppMoves = getAllPossibleMoves({ ...nextState, aiColor: oppColor });
+      if (oppMoves.length === 0) score += 2000;
+    }
+
+    // 6. Ưu tiên nước bảo vệ quân lớn
+    if (movingPiece && ["Q", "R", "B", "N"].includes(movingPiece[1])) {
+      const defended = isSquareDefendedBy(
+        nextState.board,
+        move.to.x,
+        move.to.y,
+        aiColor === "WHITE" ? "w" : "b"
+      );
+      if (defended) score += PIECE_VALUES[movingPiece[1]] * 0.5;
     }
 
     scoreMap.set(move, score);
@@ -315,14 +408,10 @@ function orderMoves(
     const scoreB = scoreMap.get(b) || 0;
     return scoreB - scoreA;
   });
-
-  // Tối ưu: Giới hạn số nước xem xét để tăng tốc
-  // Vẫn đảm bảo có ít nhất 5 nước tốt nhất để duy trì chất lượng
   const limitedMoves =
     moves.length > 8
       ? sortedMoves.slice(0, Math.max(5, Math.floor(moves.length * 0.6)))
       : sortedMoves;
-
   return limitedMoves;
 }
 
@@ -452,20 +541,18 @@ export function evaluateBoard(gameState: GameState): number {
   }
   // 2. Kiểm tra chiếu vua đối phương
   if (oppKingPos && isSquareAttacked(board, oppKingPos, myPrefix)) {
-    score += 50; // thưởng lớn khi chiếu vua đối phương
-    // Nếu chiếu bí (không còn nước đi cho đối thủ)
+    score += 200;
     const oppMoves = getAllPossibleMoves({
       ...gameState,
       aiColor: aiColor === "WHITE" ? "BLACK" : "WHITE",
     });
-    if (oppMoves.length === 0) score += 1000; // Chiếu bí, thắng tuyệt đối
+    if (oppMoves.length === 0) score += 2000;
   }
   // 3. Trừ điểm nếu vua mình bị chiếu
   if (myKingPos && isSquareAttacked(board, myKingPos, oppPrefix)) {
-    score -= 50;
-    // Nếu bị chiếu bí (không còn nước đi cho mình)
+    score -= 200;
     const myMoves = getAllPossibleMoves(gameState);
-    if (myMoves.length === 0) score -= 1000; // Thua tuyệt đối
+    if (myMoves.length === 0) score -= 2000; // Thua tuyệt đối
   }
   // 4. Bảo vệ quân lớn: Đánh giá tất cả các quân
   for (let y = 0; y < 8; y++) {
@@ -701,6 +788,20 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
   const { board, aiColor, castlingRights, enPassantTarget } = gameState;
   const moves: ChessMove[] = [];
   const colorPrefix = aiColor === "WHITE" ? "w" : "b";
+  const opponentPrefix = aiColor === "WHITE" ? "b" : "w";
+
+  // Tìm vị trí vua đối phương
+  let opponentKingPos: Position | null = null;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = board[y][x];
+      if (piece && piece.startsWith(opponentPrefix) && piece[1] === "K") {
+        opponentKingPos = { x, y };
+        break;
+      }
+    }
+    if (opponentKingPos) break;
+  }
 
   // Tối ưu: Duyệt quân cờ mạnh trước để cải thiện alpha-beta pruning
   const piecesCoordinates: Position[] = [];
@@ -730,13 +831,96 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
     if (piece) {
       const pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
       moves.push(...pieceMoves);
+
+      // Kiểm tra đặc biệt cho các nước ăn vua
+      if (opponentKingPos) {
+        // Đảm bảo nước ăn vua được thêm vào nếu quân này có thể tấn công vua
+        const canAttackKing = checkIfCanAttackKing(
+          board,
+          position,
+          piece[1],
+          opponentKingPos
+        );
+        if (canAttackKing) {
+          moves.push({ from: position, to: opponentKingPos });
+        }
+      }
     }
   }
 
-  // NOTE: A full implementation would filter out moves that leave the king in check.
-  // This is a complex step not included here for brevity.
-
   return moves;
+}
+
+// Hàm kiểm tra nếu một quân có thể tấn công vua đối phương
+function checkIfCanAttackKing(
+  board: ChessBoard,
+  pos: Position,
+  pieceType: string,
+  kingPos: Position
+): boolean {
+  const dx = kingPos.x - pos.x;
+  const dy = kingPos.y - pos.y;
+
+  switch (pieceType) {
+    case "P":
+      // Tốt chỉ ăn chéo
+      const piece = board[pos.y][pos.x];
+      if (!piece) return false;
+
+      return (
+        Math.abs(dx) === 1 &&
+        ((piece.startsWith("w") && dy === -1) ||
+          (piece.startsWith("b") && dy === 1))
+      );
+    case "N":
+      // Mã di chuyển hình chữ L
+      return (
+        (Math.abs(dx) === 1 && Math.abs(dy) === 2) ||
+        (Math.abs(dx) === 2 && Math.abs(dy) === 1)
+      );
+    case "B":
+      // Tượng di chuyển theo đường chéo
+      return (
+        Math.abs(dx) === Math.abs(dy) && checkClearPath(board, pos, kingPos)
+      );
+    case "R":
+      // Xe di chuyển theo hàng và cột
+      return (dx === 0 || dy === 0) && checkClearPath(board, pos, kingPos);
+    case "Q":
+      // Hậu di chuyển theo đường chéo, hàng và cột
+      return (
+        (dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy)) &&
+        checkClearPath(board, pos, kingPos)
+      );
+    case "K":
+      // Vua di chuyển 1 ô theo mọi hướng
+      return Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
+    default:
+      return false;
+  }
+}
+
+// Kiểm tra xem đường đi có bị chặn không
+function checkClearPath(
+  board: ChessBoard,
+  from: Position,
+  to: Position
+): boolean {
+  const dx = to.x > from.x ? 1 : to.x < from.x ? -1 : 0;
+  const dy = to.y > from.y ? 1 : to.y < from.y ? -1 : 0;
+
+  let x = from.x + dx;
+  let y = from.y + dy;
+
+  while (x !== to.x || y !== to.y) {
+    if (board[y][x] !== null) {
+      return false; // Có quân chặn đường
+    }
+    x += dx;
+    y += dy;
+  }
+
+  return true; // Đường đi thông thoáng
 }
 
 // Tìm các nước khả thi cho mỗi quân
@@ -903,8 +1087,15 @@ function getPawnMoves(
     { x: pos.x - 1, y: pos.y + dir },
     { x: pos.x + 1, y: pos.y + dir },
   ].forEach((to) => {
-    if (isValidPosition(to) && board[to.y][to.x]?.startsWith(opponentPrefix)) {
-      addMove(to);
+    if (isValidPosition(to)) {
+      const targetPiece = board[to.y][to.x];
+      if (
+        targetPiece &&
+        (targetPiece.startsWith(opponentPrefix) ||
+          targetPiece === opponentPrefix + "K")
+      ) {
+        addMove(to);
+      }
     }
   });
 
@@ -940,7 +1131,11 @@ function getSlidingMoves(
       if (targetPiece === null) {
         moves.push({ from: pos, to: { ...currentPos } });
       } else {
-        if (targetPiece.startsWith(opponentPrefix)) {
+        // Allow capturing opponent's king
+        if (
+          targetPiece.startsWith(opponentPrefix) ||
+          targetPiece === opponentPrefix + "K"
+        ) {
           moves.push({ from: pos, to: { ...currentPos } });
         }
         break; // Blocked by a piece
@@ -963,7 +1158,12 @@ function getKnightMoves(
     const to = { x: pos.x + offset.x, y: pos.y + offset.y };
     if (isValidPosition(to)) {
       const targetPiece = board[to.y][to.x];
-      if (targetPiece === null || targetPiece.startsWith(opponentPrefix)) {
+      // Allow capturing opponent's king
+      if (
+        targetPiece === null ||
+        targetPiece.startsWith(opponentPrefix) ||
+        targetPiece === opponentPrefix + "K"
+      ) {
         moves.push({ from: pos, to });
       }
     }
