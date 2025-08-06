@@ -71,8 +71,8 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
   const possibleMoves = getAllPossibleMoves(gameState);
   if (possibleMoves.length === 0) return null;
 
-  // Depth: 3 ply để tăng tốc độ, đủ mạnh cho trò chơi thông thường
-  const SEARCH_DEPTH = 3;
+  // Depth: 4 ply để tăng khả năng nhìn trước, với alpha-beta pruning hiệu quả
+  const SEARCH_DEPTH = 4;
   let bestScore = -Infinity;
   let bestMoves: ChessMove[] = [];
 
@@ -103,6 +103,11 @@ import {
   boardToFEN,
 } from "./chess-ai-helpers.js";
 
+// Killer moves - lưu trữ các nước tốt ở mỗi độ sâu
+const killerMoves: ChessMove[][] = Array(10)
+  .fill(null)
+  .map(() => []);
+
 // Minimax với alpha-beta pruning và quiescence search
 function minimax(
   gameState: GameState,
@@ -117,17 +122,32 @@ function minimax(
     return quiescenceSearch(gameState, 2, maximizing, alpha, beta);
   }
 
-  const moves = getAllPossibleMoves(gameState);
+  let moves = getAllPossibleMoves(gameState);
   if (moves.length === 0) return evaluateBoard(gameState); // Stalemate/Checkmate
+
+  // Tối ưu: Sắp xếp lại nước đi để cải thiện hiệu quả alpha-beta
+  // 1. Killer moves trước
+  // 2. Nước ăn quân trước
+  // 3. Nước thường sau
+  moves = orderMoves(moves, gameState, depth, killerMoves[depth]);
 
   if (maximizing) {
     let maxEval = -Infinity;
     for (const move of moves) {
       const nextState = makeMove(gameState, move);
       const evalScore = minimax(nextState, depth - 1, false, alpha, beta);
-      maxEval = Math.max(maxEval, evalScore);
+
+      if (evalScore > maxEval) {
+        maxEval = evalScore;
+
+        // Cập nhật killer move nếu không phải nước ăn quân
+        if (!isCaptureMove(gameState.board, move) && evalScore >= beta) {
+          updateKillerMoves(move, depth);
+        }
+      }
+
       alpha = Math.max(alpha, evalScore);
-      if (beta <= alpha) break;
+      if (beta <= alpha) break; // Alpha-beta cutoff
     }
     return maxEval;
   } else {
@@ -136,15 +156,118 @@ function minimax(
     const opponentColor: "WHITE" | "BLACK" =
       gameState.aiColor === "WHITE" ? "BLACK" : "WHITE";
     const opponentState: GameState = { ...gameState, aiColor: opponentColor };
-    for (const move of getAllPossibleMoves(opponentState)) {
+
+    const opponentMoves = orderMoves(
+      getAllPossibleMoves(opponentState),
+      opponentState,
+      depth,
+      killerMoves[depth]
+    );
+
+    for (const move of opponentMoves) {
       const nextState = makeMove(opponentState, move);
       const evalScore = minimax(nextState, depth - 1, true, alpha, beta);
-      minEval = Math.min(minEval, evalScore);
+
+      if (evalScore < minEval) {
+        minEval = evalScore;
+
+        // Cập nhật killer move nếu không phải nước ăn quân
+        if (!isCaptureMove(opponentState.board, move) && evalScore <= alpha) {
+          updateKillerMoves(move, depth);
+        }
+      }
+
       beta = Math.min(beta, evalScore);
-      if (beta <= alpha) break;
+      if (beta <= alpha) break; // Alpha-beta cutoff
     }
     return minEval;
   }
+}
+
+// Kiểm tra nếu nước đi là ăn quân
+function isCaptureMove(board: ChessBoard, move: ChessMove): boolean {
+  return board[move.to.y][move.to.x] !== null;
+}
+
+// Cập nhật killer moves
+function updateKillerMoves(move: ChessMove, depth: number): void {
+  // Không thêm nếu đã có trong danh sách
+  if (
+    !killerMoves[depth].some(
+      (m) =>
+        m.from.x === move.from.x &&
+        m.from.y === move.from.y &&
+        m.to.x === move.to.x &&
+        m.to.y === move.to.y
+    )
+  ) {
+    // Giới hạn số lượng killer moves ở mỗi độ sâu
+    if (killerMoves[depth].length >= 2) {
+      killerMoves[depth].pop(); // Loại bỏ nước cũ nhất
+    }
+
+    killerMoves[depth].unshift(move); // Thêm vào đầu danh sách
+  }
+}
+
+// Sắp xếp các nước đi để cải thiện alpha-beta pruning
+function orderMoves(
+  moves: ChessMove[],
+  gameState: GameState,
+  depth: number,
+  killers: ChessMove[]
+): ChessMove[] {
+  const { board, aiColor } = gameState;
+  const scoreMap = new Map<ChessMove, number>();
+
+  for (const move of moves) {
+    let score = 0;
+
+    // 1. Ưu tiên các killer moves
+    const isKiller = killers.some(
+      (m) =>
+        m.from.x === move.from.x &&
+        m.from.y === move.from.y &&
+        m.to.x === move.to.x &&
+        m.to.y === move.to.y
+    );
+
+    if (isKiller) {
+      score += 10000; // Điểm rất cao cho killer moves
+    }
+
+    // 2. Ưu tiên các nước ăn quân
+    const movingPiece = board[move.from.y][move.from.x];
+    const targetPiece = board[move.to.y][move.to.x];
+
+    if (targetPiece) {
+      // MVV-LVA (Most Valuable Victim - Least Valuable Aggressor)
+      // Ưu tiên ăn quân có giá trị cao bằng quân có giá trị thấp
+      const victimValue = PIECE_VALUES[targetPiece[1]];
+      const aggressorValue = movingPiece ? PIECE_VALUES[movingPiece[1]] : 0;
+
+      score += victimValue * 100 - aggressorValue;
+    }
+
+    // 3. Ưu tiên các nước thăng cấp tốt
+    if (move.promotion) {
+      score += PIECE_VALUES[move.promotion] - PIECE_VALUES["P"];
+    }
+
+    // 4. Ưu tiên các nước kiểm soát trung tâm
+    if (move.to.x >= 2 && move.to.x <= 5 && move.to.y >= 2 && move.to.y <= 5) {
+      score += 10;
+    }
+
+    scoreMap.set(move, score);
+  }
+
+  // Sắp xếp theo điểm giảm dần
+  return [...moves].sort((a, b) => {
+    const scoreA = scoreMap.get(a) || 0;
+    const scoreB = scoreMap.get(b) || 0;
+    return scoreB - scoreA;
+  });
 }
 
 // Hàm đánh giá bàn cờ nâng cao
@@ -155,35 +278,119 @@ export function evaluateBoard(gameState: GameState): number {
   let oppKingPos: Position | null = null;
   const myPrefix = aiColor === "WHITE" ? "w" : "b";
   const oppPrefix = aiColor === "WHITE" ? "b" : "w";
+
+  // Bảng giá trị vị trí cho các quân - khuyến khích các vị trí tốt
+  const piecePositionBonus = {
+    P: [
+      [0, 0, 0, 0, 0, 0, 0, 0],
+      [50, 50, 50, 50, 50, 50, 50, 50],
+      [10, 10, 20, 30, 30, 20, 10, 10],
+      [5, 5, 10, 25, 25, 10, 5, 5],
+      [0, 0, 0, 20, 20, 0, 0, 0],
+      [5, -5, -10, 0, 0, -10, -5, 5],
+      [5, 10, 10, -20, -20, 10, 10, 5],
+      [0, 0, 0, 0, 0, 0, 0, 0],
+    ],
+    N: [
+      [-50, -40, -30, -30, -30, -30, -40, -50],
+      [-40, -20, 0, 0, 0, 0, -20, -40],
+      [-30, 0, 10, 15, 15, 10, 0, -30],
+      [-30, 5, 15, 20, 20, 15, 5, -30],
+      [-30, 0, 15, 20, 20, 15, 0, -30],
+      [-30, 5, 10, 15, 15, 10, 5, -30],
+      [-40, -20, 0, 5, 5, 0, -20, -40],
+      [-50, -40, -30, -30, -30, -30, -40, -50],
+    ],
+    B: [
+      [-20, -10, -10, -10, -10, -10, -10, -20],
+      [-10, 0, 0, 0, 0, 0, 0, -10],
+      [-10, 0, 10, 10, 10, 10, 0, -10],
+      [-10, 5, 5, 10, 10, 5, 5, -10],
+      [-10, 0, 5, 10, 10, 5, 0, -10],
+      [-10, 10, 10, 10, 10, 10, 10, -10],
+      [-10, 5, 0, 0, 0, 0, 5, -10],
+      [-20, -10, -10, -10, -10, -10, -10, -20],
+    ],
+    R: [
+      [0, 0, 0, 0, 0, 0, 0, 0],
+      [5, 10, 10, 10, 10, 10, 10, 5],
+      [-5, 0, 0, 0, 0, 0, 0, -5],
+      [-5, 0, 0, 0, 0, 0, 0, -5],
+      [-5, 0, 0, 0, 0, 0, 0, -5],
+      [-5, 0, 0, 0, 0, 0, 0, -5],
+      [-5, 0, 0, 0, 0, 0, 0, -5],
+      [0, 0, 0, 5, 5, 0, 0, 0],
+    ],
+    Q: [
+      [-20, -10, -10, -5, -5, -10, -10, -20],
+      [-10, 0, 0, 0, 0, 0, 0, -10],
+      [-10, 0, 5, 5, 5, 5, 0, -10],
+      [-5, 0, 5, 5, 5, 5, 0, -5],
+      [0, 0, 5, 5, 5, 5, 0, -5],
+      [-10, 5, 5, 5, 5, 5, 0, -10],
+      [-10, 0, 5, 0, 0, 0, 0, -10],
+      [-20, -10, -10, -5, -5, -10, -10, -20],
+    ],
+    K: [
+      [-30, -40, -40, -50, -50, -40, -40, -30],
+      [-30, -40, -40, -50, -50, -40, -40, -30],
+      [-30, -40, -40, -50, -50, -40, -40, -30],
+      [-30, -40, -40, -50, -50, -40, -40, -30],
+      [-20, -30, -30, -40, -40, -30, -30, -20],
+      [-10, -20, -20, -20, -20, -20, -20, -10],
+      [20, 20, 0, 0, 0, 0, 20, 20],
+      [20, 30, 10, 0, 0, 10, 30, 20],
+    ],
+  };
   // 1. Đánh giá vị trí và quân
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const piece = board[y][x];
       if (!piece) continue;
-      const value = PIECE_VALUES[piece[1]];
+
+      const pieceType = piece[1];
+      const value = PIECE_VALUES[pieceType];
+
+      // Thêm giá trị vị trí từ bảng đánh giá
+      const positionBonus =
+        pieceType === "P" ||
+        pieceType === "N" ||
+        pieceType === "B" ||
+        pieceType === "R" ||
+        pieceType === "Q" ||
+        pieceType === "K"
+          ? piecePositionBonus[pieceType][piece.startsWith("w") ? y : 7 - y][x]
+          : 0;
+
+      // Thưởng cho kiểm soát trung tâm
       const centerBonus = x >= 2 && x <= 5 && y >= 2 && y <= 5 ? 10 : 0;
+
+      // Thưởng cho tốt ở hàng 3-4
       const pawnBonus =
-        piece[1] === "P"
+        pieceType === "P"
           ? aiColor === "WHITE"
-            ? y === 3
+            ? y === 3 || y === 4
               ? 15
               : 0
-            : y === 4
+            : y === 3 || y === 4
             ? 15
             : 0
           : 0;
+
+      // Thưởng cho vua ở góc
       const kingBonus =
-        piece[1] === "K"
+        pieceType === "K"
           ? (x === 0 || x === 7) && (y === 0 || y === 7)
             ? 20
             : 0
           : 0;
+
       if (piece.startsWith(myPrefix)) {
-        score += value + centerBonus + pawnBonus + kingBonus;
-        if (piece[1] === "K") myKingPos = { x, y };
+        score += value + positionBonus + centerBonus + pawnBonus + kingBonus;
+        if (pieceType === "K") myKingPos = { x, y };
       } else {
-        score -= value + centerBonus + pawnBonus + kingBonus;
-        if (piece[1] === "K") oppKingPos = { x, y };
+        score -= value + positionBonus + centerBonus + pawnBonus + kingBonus;
+        if (pieceType === "K") oppKingPos = { x, y };
       }
     }
   }
@@ -204,44 +411,81 @@ export function evaluateBoard(gameState: GameState): number {
     const myMoves = getAllPossibleMoves(gameState);
     if (myMoves.length === 0) score -= 1000; // Thua tuyệt đối
   }
-  // 4. Bảo vệ quân lớn: thưởng nếu quân lớn được bảo vệ, trừ điểm nếu quân lớn bị đe dọa
+  // 4. Bảo vệ quân lớn: Đánh giá tất cả các quân
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const piece = board[y][x];
       if (!piece) continue;
-      // Quân treo (hanging piece): quân lớn không được bảo vệ và bị tấn công
-      if (
-        piece.startsWith(myPrefix) &&
-        ["Q", "R", "B", "N"].includes(piece[1])
-      ) {
-        const attacked = isSquareAttacked(board, { x, y }, oppPrefix);
-        const defended = isSquareAttacked(board, { x, y }, myPrefix);
-        if (attacked && !defended) score -= 40; // Quân treo
-        if (attacked && defended) score -= 10; // Đang bị tranh chấp
-        if (!attacked && defended) score += 20; // Được bảo vệ tốt
+
+      const pieceType = piece[1];
+      const pieceValue = PIECE_VALUES[pieceType];
+
+      // Xử lý quân của AI
+      if (piece.startsWith(myPrefix)) {
+        const isDefended = isSquareDefendedBy(board, x, y, myPrefix);
+        const isAttacked = isSquareAttackedBy(board, x, y, oppPrefix);
+
+        // Đánh giá phần thưởng/phạt dựa trên loại quân
+        const pieceImportance =
+          pieceType === "Q"
+            ? 1.0 // Hậu: quan trọng nhất
+            : pieceType === "R"
+            ? 0.8 // Xe: quan trọng thứ 2
+            : pieceType === "B" || pieceType === "N"
+            ? 0.6 // Tượng/Mã: quan trọng thứ 3
+            : pieceType === "P"
+            ? 0.3
+            : 0.1; // Tốt: ít quan trọng nhất
+
+        // Quân bị tấn công
+        if (isAttacked) {
+          if (isDefended) {
+            // Quân bị tấn công nhưng được bảo vệ - phạt nhẹ vì có thể bị trao đổi
+            score -= pieceValue * 0.2 * pieceImportance;
+          } else {
+            // Quân không được bảo vệ và bị tấn công - phạt rất nặng
+            // Hậu không được bảo vệ và bị tấn công: phạt rất nặng
+            score -= pieceValue * 0.9 * pieceImportance;
+          }
+        }
+        // Quân không bị tấn công
+        else {
+          if (isDefended) {
+            // Quân không bị tấn công và được bảo vệ tốt - thưởng
+            score += pieceValue * 0.1 * pieceImportance;
+          } else if (pieceValue > PIECE_VALUES["P"]) {
+            // Quân giá trị cao không được bảo vệ - phạt nhẹ
+            score -= pieceValue * 0.15 * pieceImportance;
+          }
+        }
+
+        // Quân đang bị ghim (pinned) vào vua - phạt nặng
+        if (isPiecePinned(board, { x, y }, myPrefix)) {
+          score -= pieceValue * 0.3;
+        }
       }
-      if (!piece) continue;
-      // Quân treo (hanging piece): quân lớn không được bảo vệ và bị tấn công
-      if (
-        piece.startsWith(myPrefix) &&
-        ["Q", "R", "B", "N"].includes(piece[1])
-      ) {
-        const attacked = isSquareAttacked(board, { x, y }, oppPrefix);
-        const defended = isSquareAttacked(board, { x, y }, myPrefix);
-        if (attacked && !defended) score -= 40; // Quân treo
-        if (attacked && defended) score -= 10; // Đang bị tranh chấp
-        if (!attacked && defended) score += 20; // Được bảo vệ tốt
+      // Xử lý quân của đối thủ
+      else if (piece.startsWith(oppPrefix)) {
+        const isDefended = isSquareDefendedBy(board, x, y, oppPrefix);
+        const isAttacked = isSquareAttackedBy(board, x, y, myPrefix);
+
+        // Thưởng khi tấn công quân của đối phương
+        if (isAttacked) {
+          if (!isDefended) {
+            // Quân đối phương không được bảo vệ và bị tấn công - thưởng lớn
+            score += pieceValue * 0.6;
+          } else {
+            // Quân đối phương được bảo vệ nhưng bị tấn công - thưởng nhẹ
+            score += pieceValue * 0.2;
+          }
+        }
+
+        // Quân đối thủ đang bị ghim - thưởng
+        if (isPiecePinned(board, { x, y }, oppPrefix)) {
+          score += pieceValue * 0.3;
+        }
       }
-      // Quân lớn đối thủ treo
-      if (
-        piece.startsWith(oppPrefix) &&
-        ["Q", "R", "B", "N"].includes(piece[1])
-      ) {
-        const attacked = isSquareAttacked(board, { x, y }, myPrefix);
-        const defended = isSquareAttacked(board, { x, y }, oppPrefix);
-        if (attacked && !defended) score += 40;
-        if (attacked && defended) score += 10;
-      }
+
       // Chiến thuật ép buộc: nếu có nước đi duy nhất cho đối thủ, thưởng
       if (piece.startsWith(myPrefix) && oppKingPos) {
         const oppMoves = getAllPossibleMoves({
@@ -250,8 +494,9 @@ export function evaluateBoard(gameState: GameState): number {
         });
         if (oppMoves.length === 1) score += 30; // Ép buộc đối thủ
       }
-      // Phòng thủ đa lớp: nếu vua mình có nhiều quân bảo vệ xung quanh
-      if (piece.startsWith(myPrefix) && piece[1] === "K") {
+
+      // Phòng thủ đa lớp cho vua
+      if (piece.startsWith(myPrefix) && pieceType === "K") {
         let defenders = 0;
         for (const offset of DIRECTIONS.KING) {
           const to = { x: x + offset.x, y: y + offset.y };
@@ -260,7 +505,7 @@ export function evaluateBoard(gameState: GameState): number {
             if (p && p.startsWith(myPrefix)) defenders++;
           }
         }
-        score += defenders * 5;
+        score += defenders * 8; // Tăng phần thưởng cho vua được bảo vệ
       }
     }
   }
@@ -336,6 +581,26 @@ function isSquareAttacked(
     }
   }
   return false;
+}
+
+// Kiểm tra một ô có được bảo vệ bởi màu nào đó không (đồng nghĩa với việc bị tấn công)
+function isSquareDefendedBy(
+  board: ChessBoard,
+  x: number,
+  y: number,
+  defenderPrefix: "w" | "b"
+): boolean {
+  return isSquareAttacked(board, { x, y }, defenderPrefix);
+}
+
+// Kiểm tra một ô có bị tấn công bởi màu nào đó không (wrapper cho isSquareAttacked)
+function isSquareAttackedBy(
+  board: ChessBoard,
+  x: number,
+  y: number,
+  attackerPrefix: "w" | "b"
+): boolean {
+  return isSquareAttacked(board, { x, y }, attackerPrefix);
 }
 
 // Tạo trạng thái mới sau khi đi một nước
@@ -430,6 +695,83 @@ function getMovesForPiece(
     default:
       return [];
   }
+}
+
+// Kiểm tra một quân có bị ghim (pinned) vào vua không
+function isPiecePinned(
+  board: ChessBoard,
+  pos: Position,
+  colorPrefix: "w" | "b"
+): boolean {
+  // Tìm vị trí vua
+  let kingPos: Position | null = null;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = board[y][x];
+      if (piece && piece.startsWith(colorPrefix) && piece[1] === "K") {
+        kingPos = { x, y };
+        break;
+      }
+    }
+    if (kingPos) break;
+  }
+
+  if (!kingPos) return false;
+
+  // Chỉ các quân có thể di chuyển theo đường thẳng mới có thể ghim: Hậu, Xe, Tượng
+  const opponentPrefix = colorPrefix === "w" ? "b" : "w";
+  const slidingPieces = ["Q", "R", "B"];
+
+  // Kiểm tra các hướng từ vua đến quân cần kiểm tra
+  // Nếu quân nằm trên một đường thẳng từ vua và có quân đối phương
+  // có thể tấn công theo đường thẳng đó thì quân đó bị ghim
+
+  // Xác định hướng từ vua đến quân
+  const dx = pos.x - kingPos.x;
+  const dy = pos.y - kingPos.y;
+
+  // Nếu không nằm trên một đường thẳng, không thể bị ghim
+  if (dx !== 0 && dy !== 0 && Math.abs(dx) !== Math.abs(dy)) {
+    return false;
+  }
+
+  // Chuẩn hóa hướng (-1, 0, 1)
+  const dirX = dx === 0 ? 0 : dx > 0 ? 1 : -1;
+  const dirY = dy === 0 ? 0 : dy > 0 ? 1 : -1;
+
+  // Kiểm tra từ vua đến quân, nếu có quân khác chặn thì không bị ghim
+  let checkPos = { x: kingPos.x + dirX, y: kingPos.y + dirY };
+  while (checkPos.x !== pos.x || checkPos.y !== pos.y) {
+    if (board[checkPos.y][checkPos.x] !== null) {
+      return false; // Có quân khác chặn
+    }
+    checkPos.x += dirX;
+    checkPos.y += dirY;
+  }
+
+  // Tiếp tục theo hướng đó để kiểm tra nếu có quân tấn công
+  checkPos = { x: pos.x + dirX, y: pos.y + dirY };
+  while (isValidPosition(checkPos)) {
+    const piece = board[checkPos.y][checkPos.x];
+    if (piece) {
+      // Nếu tìm thấy quân địch có thể tấn công theo đường thẳng
+      if (piece.startsWith(opponentPrefix)) {
+        const pieceType = piece[1];
+        if (
+          pieceType === "Q" ||
+          (pieceType === "R" && (dirX === 0 || dirY === 0)) ||
+          (pieceType === "B" && dirX !== 0 && dirY !== 0)
+        ) {
+          return true; // Quân bị ghim
+        }
+      }
+      break; // Nếu có quân khác chặn, kết thúc
+    }
+    checkPos.x += dirX;
+    checkPos.y += dirY;
+  }
+
+  return false;
 }
 
 // --- UTILITY FUNCTIONS ---
