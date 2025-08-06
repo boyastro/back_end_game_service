@@ -88,8 +88,26 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
     ];
   }
 
-  // Giảm độ sâu tìm kiếm xuống 3 để tăng tốc AI
-  const SEARCH_DEPTH = 3;
+  // Kiểm tra nếu đang bị chiếu, ưu tiên tìm nước thoát chiếu
+  const myPrefix = gameState.aiColor === "WHITE" ? "w" : "b";
+  const oppPrefix = gameState.aiColor === "WHITE" ? "b" : "w";
+  let myKingPos: Position | null = null;
+
+  // Tìm vị trí vua
+  kingSearch: for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = gameState.board[y][x];
+      if (piece && piece.startsWith(myPrefix) && piece[1] === "K") {
+        myKingPos = { x, y };
+        break kingSearch;
+      }
+    }
+  }
+
+  // Nếu vua đang bị chiếu, dùng độ sâu tìm kiếm cao hơn để tìm nước thoát chiếu tốt nhất
+  const isInCheck =
+    myKingPos && isSquareAttacked(gameState.board, myKingPos, oppPrefix);
+  const SEARCH_DEPTH = isInCheck ? 4 : 3; // Tăng độ sâu khi bị chiếu
   let bestScore = -Infinity;
   let bestMoves: ChessMove[] = [];
 
@@ -97,41 +115,85 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
   const START_TIME = Date.now();
   const MAX_THINK_TIME = 2000; // Tối đa 2 giây suy nghĩ
 
+  // Đặt biến để theo dõi thời gian còn lại
+  let timeRemaining = MAX_THINK_TIME;
+
   // Tối ưu: Nếu có nhiều nước, giới hạn số nước xem xét
   // Ưu tiên các nước tốt nhất dựa trên đánh giá cơ bản
   const movesToConsider =
-    possibleMoves.length > 15
-      ? orderMoves(possibleMoves, gameState, 0, []).slice(0, 15)
-      : possibleMoves;
+    possibleMoves.length > 20
+      ? orderMoves(possibleMoves, gameState, 0, []).slice(0, 20) // Tăng số lượng nước xem xét
+      : orderMoves(possibleMoves, gameState, 0, []); // Vẫn sắp xếp cho cả trường hợp ít nước
 
-  for (const move of movesToConsider) {
-    // Kiểm tra timeout - nếu quá thời gian suy nghĩ thì dừng và trả về nước tốt nhất hiện tại
-    if (Date.now() - START_TIME > MAX_THINK_TIME && bestMoves.length > 0) {
+  // Triển khai iterative deepening - tăng dần độ sâu tìm kiếm
+  let currentDepth = 1;
+  const maxDepth = isInCheck ? 5 : 4; // Tăng độ sâu tối đa
+
+  // Mỗi lần tăng độ sâu, ta sẽ lưu lại kết quả tốt nhất
+  while (currentDepth <= maxDepth) {
+    // Nếu đã sử dụng 70% thời gian, dừng lại với kết quả hiện tại
+    if (
+      Date.now() - START_TIME > MAX_THINK_TIME * 0.7 &&
+      bestMoves.length > 0
+    ) {
       break;
     }
 
-    const nextState = makeMove(gameState, move);
-    const score = minimax(
-      nextState,
-      SEARCH_DEPTH - 1,
-      false,
-      -Infinity,
-      Infinity,
-      START_TIME,
-      MAX_THINK_TIME
-    );
-    if (score > bestScore) {
-      bestScore = score;
-      bestMoves = [move];
-    } else if (score === bestScore) {
-      bestMoves.push(move);
+    let currentBestScore = -Infinity;
+    let currentBestMoves: ChessMove[] = [];
+
+    // Sử dụng các nước đã được sắp xếp
+    for (const move of movesToConsider) {
+      // Kiểm tra timeout - nếu quá thời gian suy nghĩ thì dừng và sử dụng kết quả tốt nhất hiện tại
+      if (Date.now() - START_TIME > MAX_THINK_TIME * 0.9) {
+        break;
+      }
+
+      const nextState = makeMove(gameState, move);
+      const score = minimax(
+        nextState,
+        currentDepth - 1,
+        false,
+        -Infinity,
+        Infinity,
+        START_TIME,
+        MAX_THINK_TIME
+      );
+      if (score > currentBestScore) {
+        currentBestScore = score;
+        currentBestMoves = [move];
+      } else if (score === currentBestScore) {
+        currentBestMoves.push(move);
+      }
     }
+
+    // Cập nhật kết quả tốt nhất tổng thể từ độ sâu hiện tại
+    if (currentBestMoves.length > 0) {
+      bestScore = currentBestScore;
+      bestMoves = currentBestMoves;
+
+      // Sắp xếp lại nước đi để ưu tiên cho lần tìm kiếm tiếp theo
+      // Đây là kỹ thuật "move ordering" - sắp xếp các nước đi tốt nhất lên đầu
+      movesToConsider.sort((a, b) => {
+        if (currentBestMoves.includes(a) && !currentBestMoves.includes(b))
+          return -1;
+        if (!currentBestMoves.includes(a) && currentBestMoves.includes(b))
+          return 1;
+        return 0;
+      });
+    }
+
+    // Tăng độ sâu tìm kiếm
+    currentDepth++;
   }
 
   // Nếu không tìm được nước nào (do timeout) thì chọn nước đầu tiên
   if (bestMoves.length === 0 && possibleMoves.length > 0) {
     return possibleMoves[0];
   }
+
+  // Làm sạch bảng transposition nếu cần
+  cleanTranspositionTable();
 
   // Chọn ngẫu nhiên trong các nước tốt nhất
   return bestMoves[Math.floor(Math.random() * bestMoves.length)];
@@ -143,6 +205,12 @@ import {
   evaluatePawnStructure,
   boardToFEN,
 } from "./chess-ai-helpers.js";
+
+// Transposition table - lưu trữ đánh giá của các vị trí đã tính
+const transpositionTable = new Map<
+  string,
+  { score: number; depth: number; flag: string }
+>();
 
 // Killer moves - lưu trữ các nước tốt ở mỗi độ sâu
 const killerMoves: ChessMove[][] = Array(10)
@@ -160,8 +228,28 @@ function minimax(
   maxTime: number
 ): number {
   // Kiểm tra timeout - tránh suy nghĩ quá lâu
-  if (Date.now() - startTime > maxTime) {
+  if (Date.now() - startTime > maxTime * 0.95) {
     return evaluateBoard(gameState); // Trả về đánh giá hiện tại nếu hết thời gian
+  }
+
+  // Tạo khóa cho bảng transposition
+  const fen = boardToFEN(gameState.board, gameState.aiColor);
+  const ttKey = `${fen}:${depth}:${maximizing}`;
+
+  // Kiểm tra nếu vị trí đã được tính toán trước đó
+  const ttEntry = transpositionTable.get(ttKey);
+  if (ttEntry && ttEntry.depth >= depth) {
+    if (ttEntry.flag === "exact") {
+      return ttEntry.score;
+    } else if (ttEntry.flag === "lower" && ttEntry.score > alpha) {
+      alpha = ttEntry.score;
+    } else if (ttEntry.flag === "upper" && ttEntry.score < beta) {
+      beta = ttEntry.score;
+    }
+
+    if (alpha >= beta) {
+      return ttEntry.score;
+    }
   }
 
   // Kiểm tra trước nếu có nước đi ăn vua của đối phương, trả về giá trị cực lớn
@@ -201,7 +289,33 @@ function minimax(
   }
 
   let moves = getAllPossibleMoves(gameState);
-  if (moves.length === 0) return evaluateBoard(gameState); // Stalemate/Checkmate
+
+  // Kiểm tra checkmate và stalemate
+  if (moves.length === 0) {
+    // Kiểm tra nếu vua đang bị chiếu
+    const myColor = gameState.aiColor;
+    const myPrefix = myColor === "WHITE" ? "w" : "b";
+    const oppPrefix = myColor === "WHITE" ? "b" : "w";
+
+    let kingPos: Position | null = null;
+    kingSearch: for (let y = 0; y < 8; y++) {
+      for (let x = 0; x < 8; x++) {
+        const piece = gameState.board[y][x];
+        if (piece && piece.startsWith(myPrefix) && piece[1] === "K") {
+          kingPos = { x, y };
+          break kingSearch;
+        }
+      }
+    }
+
+    if (kingPos && isSquareAttacked(gameState.board, kingPos, oppPrefix)) {
+      // Checkmate - trả về giá trị cực lớn/nhỏ tùy theo bên
+      return maximizing ? -9999999 : 9999999;
+    } else {
+      // Stalemate - hòa cờ
+      return 0;
+    }
+  }
 
   // Tối ưu: Sắp xếp lại nước đi để cải thiện hiệu quả alpha-beta
   // 1. Killer moves trước
@@ -235,6 +349,16 @@ function minimax(
       alpha = Math.max(alpha, evalScore);
       if (beta <= alpha) break; // Alpha-beta cutoff
     }
+
+    // Lưu kết quả vào bảng transposition
+    let flag = "exact";
+    if (maxEval <= alpha) {
+      flag = "upper";
+    } else if (maxEval >= beta) {
+      flag = "lower";
+    }
+    transpositionTable.set(ttKey, { score: maxEval, depth, flag });
+
     return maxEval;
   } else {
     let minEval = Infinity;
@@ -274,7 +398,29 @@ function minimax(
       beta = Math.min(beta, evalScore);
       if (beta <= alpha) break; // Alpha-beta cutoff
     }
+
+    // Lưu kết quả vào bảng transposition
+    let flag = "exact";
+    if (minEval <= alpha) {
+      flag = "upper";
+    } else if (minEval >= beta) {
+      flag = "lower";
+    }
+    transpositionTable.set(ttKey, { score: minEval, depth, flag });
+
     return minEval;
+  }
+}
+
+// Làm sạch bảng transposition khi quá lớn
+function cleanTranspositionTable() {
+  if (transpositionTable.size > 1000000) {
+    // Giới hạn kích thước bảng
+    // Xóa 50% entries cũ nhất
+    const keys = Array.from(transpositionTable.keys());
+    for (let i = 0; i < keys.length / 2; i++) {
+      transpositionTable.delete(keys[i]);
+    }
   }
 }
 
