@@ -288,6 +288,40 @@ function minimax(
     return quiescenceSearch(gameState, 1, maximizing, alpha, beta);
   }
 
+  let extensionDepth = 0;
+
+  // Mở rộng tìm kiếm cho các tình huống đặc biệt
+
+  // 1. Tìm kiếm mở rộng cho chiếu vua (check extension)
+  const myPrefix = gameState.aiColor === "WHITE" ? "w" : "b";
+  const oppPrefix = gameState.aiColor === "WHITE" ? "b" : "w";
+
+  // Tìm vị trí vua (AI hoặc đối thủ, tùy vào lượt đi)
+  let kingPos: Position | null = null;
+  const kingPrefix = maximizing ? myPrefix : oppPrefix;
+
+  kingSearch: for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = gameState.board[y][x];
+      if (piece && piece.startsWith(kingPrefix) && piece[1] === "K") {
+        kingPos = { x, y };
+        break kingSearch;
+      }
+    }
+  }
+
+  // Nếu vua đang bị chiếu, mở rộng tìm kiếm thêm 1 độ sâu
+  if (
+    kingPos &&
+    isSquareAttacked(
+      gameState.board,
+      kingPos,
+      maximizing ? oppPrefix : myPrefix
+    )
+  ) {
+    extensionDepth = 1;
+  }
+
   let moves = getAllPossibleMoves(gameState);
 
   // Kiểm tra checkmate và stalemate
@@ -329,7 +363,7 @@ function minimax(
       const nextState = makeMove(gameState, move);
       const evalScore = minimax(
         nextState,
-        depth - 1,
+        depth - 1 + extensionDepth,
         false,
         alpha,
         beta,
@@ -378,7 +412,7 @@ function minimax(
       const nextState = makeMove(opponentState, move);
       const evalScore = minimax(
         nextState,
-        depth - 1,
+        depth - 1 + extensionDepth,
         true,
         alpha,
         beta,
@@ -487,7 +521,10 @@ function orderMoves(
       score += exchangeValue * 120; // Tăng hệ số từ 100 lên 120
 
       // Cải tiến: Ưu tiên cao hơn cho việc ăn các quân có giá trị cao
-      if (targetPiece[1] === "Q") {
+      if (targetPiece[1] === "K") {
+        // Ưu tiên tuyệt đối cho việc ăn vua (chiếu hết)
+        score += 9999999;
+      } else if (targetPiece[1] === "Q") {
         score += victimValue * 30; // Tăng rất cao cho việc ăn hậu
       } else if (targetPiece[1] === "R") {
         score += victimValue * 20; // Tăng cao cho việc ăn xe
@@ -501,10 +538,31 @@ function orderMoves(
           board,
           move.to.x,
           move.to.y,
-          targetPiece[0] as "w" | "b"
+          aiColor === "WHITE" ? "b" : "w"
         )
       ) {
-        score += victimValue * 25; // Thưởng lớn cho việc ăn quân không được bảo vệ
+        score += victimValue * 10; // Thưởng lớn cho việc ăn quân không được bảo vệ
+      } else {
+        // Đánh giá chi tiết trao đổi quân
+        const attackers = getAttackers(
+          board,
+          move.to,
+          aiColor === "WHITE" ? "w" : "b"
+        );
+        const defenders = getDefenders(
+          board,
+          move.to,
+          aiColor === "WHITE" ? "b" : "w"
+        );
+
+        // Tính toán giá trị trao đổi quân - xét đến cả số lượng và giá trị quân
+        if (
+          attackers.length > defenders.length ||
+          getMinPieceValue(attackers) < getMinPieceValue(defenders)
+        ) {
+          // Trao đổi có lợi
+          score += victimValue * 5;
+        }
       }
 
       // Cải tiến: Ưu tiên ăn quân bằng quân có giá trị thấp hơn
@@ -752,6 +810,38 @@ export function evaluateBoard(gameState: GameState): number {
   const myPrefix = aiColor === "WHITE" ? "w" : "b";
   const oppPrefix = aiColor === "WHITE" ? "b" : "w";
 
+  // Phân biệt giai đoạn trận đấu (mở đầu, trung cuộc, tàn cuộc)
+  let totalPieces = 0;
+  let myBigPieceCount = 0;
+  let oppBigPieceCount = 0;
+
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = board[y][x];
+      if (!piece) continue;
+
+      // Chỉ đếm quân lớn (không phải tốt)
+      if (piece[1] !== "P" && piece[1] !== "K") {
+        totalPieces++;
+        if (piece.startsWith(myPrefix)) {
+          myBigPieceCount++;
+        } else {
+          oppBigPieceCount++;
+        }
+      }
+    }
+  }
+
+  // Xác định giai đoạn trận đấu
+  const isEndgame = totalPieces <= 6;
+  const isMiddlegame = totalPieces > 6 && totalPieces <= 20;
+  const isOpening = totalPieces > 20;
+
+  // Điều chỉnh các trọng số theo giai đoạn
+  const developmentWeight = isOpening ? 15 : isMiddlegame ? 10 : 5;
+  const kingActivityWeight = isEndgame ? 30 : isMiddlegame ? 10 : 0;
+  const centerControlWeight = isMiddlegame ? 15 : 10;
+
   // Bảng giá trị vị trí cho các quân - khuyến khích các vị trí tốt
   const piecePositionBonus = {
     P: [
@@ -836,7 +926,12 @@ export function evaluateBoard(gameState: GameState): number {
           : 0;
 
       // Thưởng cho kiểm soát trung tâm
-      const centerBonus = x >= 2 && x <= 5 && y >= 2 && y <= 5 ? 10 : 0;
+      const centerBonus =
+        x >= 2 && x <= 5 && y >= 2 && y <= 5
+          ? x >= 3 && x <= 4 && y >= 3 && y <= 4
+            ? centerControlWeight * 2 // Trung tâm chính (d4, d5, e4, e5)
+            : centerControlWeight // Trung tâm mở rộng
+          : 0;
 
       // Thưởng cho tốt ở hàng 3-4
       const pawnBonus =
@@ -850,19 +945,70 @@ export function evaluateBoard(gameState: GameState): number {
             : 0
           : 0;
 
-      // Thưởng cho vua ở góc
-      const kingBonus =
-        pieceType === "K"
-          ? (x === 0 || x === 7) && (y === 0 || y === 7)
-            ? 20
-            : 0
-          : 0;
+      // Thưởng cho phát triển quân trong giai đoạn đầu trận
+      let developmentBonus = 0;
+      if (isOpening || isMiddlegame) {
+        // Khuyến khích phát triển tượng, mã
+        if (
+          (pieceType === "N" || pieceType === "B") &&
+          ((myPrefix === "w" && y > 0) || (myPrefix === "b" && y < 7))
+        ) {
+          developmentBonus += developmentWeight;
+        }
+
+        // Khuyến khích không di chuyển hậu quá sớm
+        if (pieceType === "Q" && isOpening) {
+          developmentBonus -= 10;
+        }
+      }
+
+      // Thưởng cho vua dựa vào giai đoạn trận đấu
+      let kingBonus = 0;
+      if (pieceType === "K") {
+        if (isOpening || isMiddlegame) {
+          // Trong giai đoạn đầu và giữa, vua nên ở góc an toàn
+          if ((x === 0 || x === 7) && (y === 0 || y === 7)) {
+            kingBonus += 30;
+          }
+
+          // Phạt nếu vua ở trung tâm trong giai đoạn đầu/giữa
+          if (x >= 2 && x <= 5 && y >= 2 && y <= 5) {
+            kingBonus -= 50;
+          }
+        } else if (isEndgame) {
+          // Trong tàn cuộc, vua nên tích cực và tiến gần trung tâm
+          const distanceToCenter = Math.abs(3.5 - x) + Math.abs(3.5 - y);
+          kingBonus += (7 - distanceToCenter) * kingActivityWeight;
+
+          // Khuyến khích vua tiếp cận vua đối phương trong tàn cuộc
+          if (oppKingPos) {
+            const distanceToOppKing =
+              Math.abs(oppKingPos.x - x) + Math.abs(oppKingPos.y - y);
+            // Thưởng cho việc đưa vua gần vua đối phương trong tàn cuộc
+            if (myBigPieceCount > oppBigPieceCount) {
+              kingBonus += (14 - distanceToOppKing) * 5;
+            }
+          }
+        }
+      }
 
       if (piece.startsWith(myPrefix)) {
-        score += value + positionBonus + centerBonus + pawnBonus + kingBonus;
+        score +=
+          value +
+          positionBonus +
+          centerBonus +
+          pawnBonus +
+          kingBonus +
+          developmentBonus;
         if (pieceType === "K") myKingPos = { x, y };
       } else {
-        score -= value + positionBonus + centerBonus + pawnBonus + kingBonus;
+        score -=
+          value +
+          positionBonus +
+          centerBonus +
+          pawnBonus +
+          kingBonus +
+          developmentBonus;
         if (pieceType === "K") oppKingPos = { x, y };
       }
     }
@@ -882,7 +1028,8 @@ export function evaluateBoard(gameState: GameState): number {
     const myMoves = getAllPossibleMoves(gameState);
     if (myMoves.length === 0) score -= 2000; // Thua tuyệt đối
   }
-  // 4. Bảo vệ quân lớn: Đánh giá tất cả các quân
+
+  // 5. Bảo vệ quân lớn: Đánh giá tất cả các quân
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const piece = board[y][x];

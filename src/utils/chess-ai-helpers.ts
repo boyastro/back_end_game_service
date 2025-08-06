@@ -33,7 +33,7 @@ export function quiescenceSearch(
 
     // Cải tiến: Delta pruning - ước tính giới hạn cải thiện tối đa có thể
     // Nếu ngay cả khi ăn quân giá trị nhất cũng không cải thiện alpha, thì dừng tìm kiếm
-    const delta = 900; // Giá trị tối đa có thể được cải thiện (giá trị Hậu)
+    const delta = 950; // Tăng giá trị tối đa có thể được cải thiện (cao hơn giá trị Hậu để đảm bảo an toàn)
     if (standPat + delta < alpha) return alpha;
 
     if (alpha < standPat) alpha = standPat;
@@ -44,8 +44,25 @@ export function quiescenceSearch(
     // Xem xét các nước tự vệ quan trọng khi quân đang bị tấn công
     const defensiveMoves = getDefensiveMoves(gameState);
 
+    // Thêm nước check (chiếu) vào quiescence search để đánh giá các tình huống tấn công
+    const checkMoves = getCheckMoves(gameState);
+
     // Kết hợp danh sách nước, ưu tiên các nước quan trọng
     const allMoves = [...captureMoves];
+
+    // Thêm nước check (chiếu) vào để đánh giá các tình huống tấn công
+    allMoves.push(
+      ...checkMoves.filter(
+        (move) =>
+          !captureMoves.some(
+            (capMove) =>
+              capMove.from.x === move.from.x &&
+              capMove.from.y === move.from.y &&
+              capMove.to.x === move.to.x &&
+              capMove.to.y === move.to.y
+          )
+      )
+    );
 
     // Thêm nước phòng thủ vào nếu có các quân quan trọng đang bị đe dọa
     if (hasThreatenedPieces(gameState)) {
@@ -208,6 +225,40 @@ function hasThreatenedPieces(gameState: GameState): boolean {
   }
 
   return false;
+}
+
+// Tìm các nước đi có thể chiếu vua đối phương
+function getCheckMoves(gameState: GameState): ChessMove[] {
+  const { board, aiColor } = gameState;
+  const myPrefix = aiColor === "WHITE" ? "w" : "b";
+  const oppPrefix = aiColor === "WHITE" ? "b" : "w";
+
+  // Tìm vị trí vua đối thủ
+  let oppKingPos: Position | null = null;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = board[y][x];
+      if (piece && piece.startsWith(oppPrefix) && piece[1] === "K") {
+        oppKingPos = { x, y };
+        break;
+      }
+    }
+    if (oppKingPos) break;
+  }
+
+  if (!oppKingPos) return []; // Không tìm thấy vua (không nên xảy ra trong trò chơi bình thường)
+
+  // Tìm tất cả các nước đi hợp lệ
+  const allMoves = getAllPossibleMoves(gameState);
+
+  // Lọc ra các nước có thể chiếu vua
+  return allMoves.filter((move) => {
+    // Mô phỏng nước đi
+    const nextState = makeMove(gameState, move);
+
+    // Kiểm tra xem sau nước đi, vua đối phương có bị chiếu không
+    return isSquareAttackedByColorFast(nextState.board, oppKingPos, myPrefix);
+  });
 }
 
 // Lấy các nước đi phòng thủ (bảo vệ quân đang bị tấn công)
