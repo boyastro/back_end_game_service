@@ -1028,12 +1028,10 @@ export const moveHandler = async (req: any, res: any) => {
       console.log(`[moveHandler] AI bot đang suy nghĩ nước đi tiếp theo...`);
 
       // Đợi một chút để tạo cảm giác AI đang "suy nghĩ"
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Xác định màu của AI (ngược với người chơi hiện tại)
-      const aiColor = game.currentPlayer; // Lúc này currentPlayer đã được chuyển sang đối thủ
-
-      // Tạo nước đi cho AI - truyền một đối tượng GameState như định nghĩa trong chess-ai-bot.ts
+      const aiColor = game.currentPlayer; // Lúc này currentPlayer đã được chuyển sang đối thủ      // Tạo nước đi cho AI - truyền một đối tượng GameState như định nghĩa trong chess-ai-bot.ts
       const aiMove = generateAIMove({
         board: game.board,
         aiColor: aiColor as "WHITE" | "BLACK", // Ép kiểu để phù hợp với định nghĩa GameState

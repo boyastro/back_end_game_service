@@ -1,7 +1,17 @@
 // Utility functions for chess AI evaluation and search
 
-import { Position, ChessBoard, ChessMove, GameState } from "./chess-ai-bot";
-import { evaluateBoard, makeMove, getAllPossibleMoves } from "./chess-ai-bot";
+import type {
+  Position,
+  ChessBoard,
+  ChessMove,
+  GameState,
+  PIECE_VALUES,
+} from "./chess-ai-bot.js";
+import {
+  evaluateBoard,
+  makeMove,
+  getAllPossibleMoves,
+} from "./chess-ai-bot.js";
 
 // Quiescence search để ổn định đánh giá khi có capture moves
 export function quiescenceSearch(
@@ -23,7 +33,12 @@ export function quiescenceSearch(
 
     // Chỉ xem xét các nước capture (ăn quân)
     const captureMoves = getCaptureMoves(gameState);
-    for (const move of captureMoves) {
+
+    // Giới hạn số lượng nước để tăng tốc
+    const movesToExamine =
+      captureMoves.length > 5 ? captureMoves.slice(0, 5) : captureMoves;
+
+    for (const move of movesToExamine) {
       const nextState = makeMove(gameState, move);
       const score = quiescenceSearch(nextState, depth - 1, false, alpha, beta);
       if (score >= beta) return beta;
@@ -41,7 +56,12 @@ export function quiescenceSearch(
 
     // Chỉ xem xét các nước capture (ăn quân)
     const captureMoves = getCaptureMoves(opponentState);
-    for (const move of captureMoves) {
+
+    // Giới hạn số lượng nước để tăng tốc
+    const movesToExamine =
+      captureMoves.length > 5 ? captureMoves.slice(0, 5) : captureMoves;
+
+    for (const move of movesToExamine) {
       const nextState = makeMove(opponentState, move);
       const score = quiescenceSearch(nextState, depth - 1, true, alpha, beta);
       if (score <= alpha) return alpha;

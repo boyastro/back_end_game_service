@@ -71,8 +71,8 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
   const possibleMoves = getAllPossibleMoves(gameState);
   if (possibleMoves.length === 0) return null;
 
-  // Depth: 4-5 ply for stronger play
-  const SEARCH_DEPTH = 4;
+  // Depth: 3 ply để tăng tốc độ, đủ mạnh cho trò chơi thông thường
+  const SEARCH_DEPTH = 3;
   let bestScore = -Infinity;
   let bestMoves: ChessMove[] = [];
 
@@ -96,6 +96,13 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
   return bestMoves[Math.floor(Math.random() * bestMoves.length)];
 }
 
+// Import các hàm từ helpers
+import {
+  quiescenceSearch,
+  evaluatePawnStructure,
+  boardToFEN,
+} from "./chess-ai-helpers.js";
+
 // Minimax với alpha-beta pruning và quiescence search
 function minimax(
   gameState: GameState,
@@ -106,8 +113,8 @@ function minimax(
 ): number {
   // Nếu độ sâu = 0, thực hiện quiescence search để ổn định đánh giá
   if (depth === 0) {
-    const { quiescenceSearch } = require("./chess-ai-helpers");
-    return quiescenceSearch(gameState, 3, maximizing, alpha, beta);
+    // Giảm độ sâu quiescence xuống 2 để tăng tốc
+    return quiescenceSearch(gameState, 2, maximizing, alpha, beta);
   }
 
   const moves = getAllPossibleMoves(gameState);
@@ -259,8 +266,6 @@ export function evaluateBoard(gameState: GameState): number {
   }
   // Kiểm tra chiếu lặp lại (threefold repetition)
   if ((gameState as any).history) {
-    // Import từ file helper
-    const { boardToFEN } = require("./chess-ai-helpers");
     const fen = boardToFEN(board, aiColor);
     const count = (gameState as any).history.filter(
       (h: string) => h === fen
@@ -273,7 +278,6 @@ export function evaluateBoard(gameState: GameState): number {
   score += mobilityScore;
 
   // Đánh giá cấu trúc tốt
-  const { evaluatePawnStructure } = require("./chess-ai-helpers");
   score += evaluatePawnStructure(board, myPrefix, oppPrefix);
 
   return score;
@@ -358,19 +362,34 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
   const moves: ChessMove[] = [];
   const colorPrefix = aiColor === "WHITE" ? "w" : "b";
 
+  // Tối ưu: Duyệt quân cờ mạnh trước để cải thiện alpha-beta pruning
+  const piecesCoordinates: Position[] = [];
+
+  // Thu thập vị trí của tất cả quân cờ
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const piece = board[y][x];
       if (piece && piece.startsWith(colorPrefix)) {
-        const position = { x, y };
-        const pieceMoves = getMovesForPiece(
-          gameState,
-          position,
-          piece,
-          aiColor
-        );
-        moves.push(...pieceMoves);
+        piecesCoordinates.push({ x, y });
       }
+    }
+  }
+
+  // Sắp xếp theo giá trị quân cờ: quân mạnh nhất trước
+  piecesCoordinates.sort((a, b) => {
+    const pieceA = board[a.y][a.x];
+    const pieceB = board[b.y][b.x];
+    const valueA = pieceA ? PIECE_VALUES[pieceA[1]] || 0 : 0;
+    const valueB = pieceB ? PIECE_VALUES[pieceB[1]] || 0 : 0;
+    return valueB - valueA;
+  });
+
+  // Lấy các nước đi theo thứ tự đã sắp xếp
+  for (const position of piecesCoordinates) {
+    const piece = board[position.y][position.x];
+    if (piece) {
+      const pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
+      moves.push(...pieceMoves);
     }
   }
 
@@ -380,9 +399,7 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
   return moves;
 }
 
-/**
- * Get all valid moves for a specific piece
- */
+// Tìm các nước khả thi cho mỗi quân
 function getMovesForPiece(
   gameState: GameState,
   position: Position,
@@ -391,11 +408,12 @@ function getMovesForPiece(
 ): ChessMove[] {
   const pieceType = piece[1]; // e.g., 'P', 'R', etc.
 
+  // Tối ưu: Chỉ xét các nước đi của quân mạnh trước để cải thiện alpha-beta pruning
   switch (pieceType) {
-    case "P":
-      return getPawnMoves(gameState, position, color);
-    case "N":
-      return getKnightMoves(gameState.board, position, color);
+    case "Q":
+      return getQueenMoves(gameState.board, position, color);
+    case "R":
+      return getSlidingMoves(gameState.board, position, color, DIRECTIONS.ROOK);
     case "B":
       return getSlidingMoves(
         gameState.board,
@@ -403,10 +421,10 @@ function getMovesForPiece(
         color,
         DIRECTIONS.BISHOP
       );
-    case "R":
-      return getSlidingMoves(gameState.board, position, color, DIRECTIONS.ROOK);
-    case "Q":
-      return getQueenMoves(gameState.board, position, color);
+    case "N":
+      return getKnightMoves(gameState.board, position, color);
+    case "P":
+      return getPawnMoves(gameState, position, color);
     case "K":
       return getKingMoves(gameState, position, color);
     default:
