@@ -2,10 +2,10 @@
 // This bot makes moves for the opponent when there's only one player in the game
 
 // Types
-type Position = { x: number; y: number };
-type ChessBoard = (string | null)[][];
-type ChessMove = { from: Position; to: Position; promotion?: string };
-type GameState = {
+export type Position = { x: number; y: number };
+export type ChessBoard = (string | null)[][];
+export type ChessMove = { from: Position; to: Position; promotion?: string };
+export type GameState = {
   board: ChessBoard;
   aiColor: "WHITE" | "BLACK";
   // OPTIMIZATION: Add state for castling rights and en passant target
@@ -18,7 +18,7 @@ type GameState = {
 };
 
 // --- CONSTANTS ---
-const PIECE_VALUES: { [key: string]: number } = {
+export const PIECE_VALUES: { [key: string]: number } = {
   P: 100,
   N: 320,
   B: 330,
@@ -27,7 +27,7 @@ const PIECE_VALUES: { [key: string]: number } = {
   K: 20000,
 };
 
-const DIRECTIONS = {
+export const DIRECTIONS = {
   ROOK: [
     { x: 0, y: 1 },
     { x: 0, y: -1 },
@@ -71,8 +71,8 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
   const possibleMoves = getAllPossibleMoves(gameState);
   if (possibleMoves.length === 0) return null;
 
-  // Depth: 3-4 ply for strong play (can increase for more strength)
-  const SEARCH_DEPTH = 3;
+  // Depth: 4-5 ply for stronger play
+  const SEARCH_DEPTH = 4;
   let bestScore = -Infinity;
   let bestMoves: ChessMove[] = [];
 
@@ -96,7 +96,7 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
   return bestMoves[Math.floor(Math.random() * bestMoves.length)];
 }
 
-// Minimax với alpha-beta pruning
+// Minimax với alpha-beta pruning và quiescence search
 function minimax(
   gameState: GameState,
   depth: number,
@@ -104,7 +104,12 @@ function minimax(
   alpha: number,
   beta: number
 ): number {
-  if (depth === 0) return evaluateBoard(gameState);
+  // Nếu độ sâu = 0, thực hiện quiescence search để ổn định đánh giá
+  if (depth === 0) {
+    const { quiescenceSearch } = require("./chess-ai-helpers");
+    return quiescenceSearch(gameState, 3, maximizing, alpha, beta);
+  }
+
   const moves = getAllPossibleMoves(gameState);
   if (moves.length === 0) return evaluateBoard(gameState); // Stalemate/Checkmate
 
@@ -136,7 +141,7 @@ function minimax(
 }
 
 // Hàm đánh giá bàn cờ nâng cao
-function evaluateBoard(gameState: GameState): number {
+export function evaluateBoard(gameState: GameState): number {
   const { board, aiColor } = gameState;
   let score = 0;
   let myKingPos: Position | null = null;
@@ -208,6 +213,18 @@ function evaluateBoard(gameState: GameState): number {
         if (attacked && defended) score -= 10; // Đang bị tranh chấp
         if (!attacked && defended) score += 20; // Được bảo vệ tốt
       }
+      if (!piece) continue;
+      // Quân treo (hanging piece): quân lớn không được bảo vệ và bị tấn công
+      if (
+        piece.startsWith(myPrefix) &&
+        ["Q", "R", "B", "N"].includes(piece[1])
+      ) {
+        const attacked = isSquareAttacked(board, { x, y }, oppPrefix);
+        const defended = isSquareAttacked(board, { x, y }, myPrefix);
+        if (attacked && !defended) score -= 40; // Quân treo
+        if (attacked && defended) score -= 10; // Đang bị tranh chấp
+        if (!attacked && defended) score += 20; // Được bảo vệ tốt
+      }
       // Quân lớn đối thủ treo
       if (
         piece.startsWith(oppPrefix) &&
@@ -240,8 +257,25 @@ function evaluateBoard(gameState: GameState): number {
       }
     }
   }
-  // Kiểm tra chiếu lặp lại (threefold repetition) - đơn giản: nếu trạng thái lặp lại, trừ điểm
-  // (Cần truyền thêm lịch sử trạng thái nếu muốn tối ưu sâu)
+  // Kiểm tra chiếu lặp lại (threefold repetition)
+  if ((gameState as any).history) {
+    // Import từ file helper
+    const { boardToFEN } = require("./chess-ai-helpers");
+    const fen = boardToFEN(board, aiColor);
+    const count = (gameState as any).history.filter(
+      (h: string) => h === fen
+    ).length;
+    if (count >= 3) score -= 500; // Trừ điểm lớn nếu trạng thái lặp lại >= 3 lần
+  }
+
+  // Cải thiện tính di động: khuyến khích kiểm soát trung tâm và di chuyển
+  const mobilityScore = getAllPossibleMoves(gameState).length * 2;
+  score += mobilityScore;
+
+  // Đánh giá cấu trúc tốt
+  const { evaluatePawnStructure } = require("./chess-ai-helpers");
+  score += evaluatePawnStructure(board, myPrefix, oppPrefix);
+
   return score;
 }
 
@@ -301,7 +335,7 @@ function isSquareAttacked(
 }
 
 // Tạo trạng thái mới sau khi đi một nước
-function makeMove(gameState: GameState, move: ChessMove): GameState {
+export function makeMove(gameState: GameState, move: ChessMove): GameState {
   // Deep clone board
   const newBoard: ChessBoard = gameState.board.map((row) => [...row]);
   const piece = newBoard[move.from.y][move.from.x];
@@ -319,7 +353,7 @@ function makeMove(gameState: GameState, move: ChessMove): GameState {
 /**
  * Get all possible moves for the given color
  */
-function getAllPossibleMoves(gameState: GameState): ChessMove[] {
+export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
   const { board, aiColor, castlingRights, enPassantTarget } = gameState;
   const moves: ChessMove[] = [];
   const colorPrefix = aiColor === "WHITE" ? "w" : "b";
