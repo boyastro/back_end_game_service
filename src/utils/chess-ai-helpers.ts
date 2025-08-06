@@ -36,6 +36,7 @@ export function quiescenceSearch(
     const delta = 950; // Tăng giá trị tối đa có thể được cải thiện (cao hơn giá trị Hậu để đảm bảo an toàn)
     if (standPat + delta < alpha) return alpha;
 
+    // Cập nhật alpha với giá trị đứng pat nếu nó tốt hơn
     if (alpha < standPat) alpha = standPat;
 
     // Chỉ xem xét các nước capture (ăn quân) - tối ưu hóa bằng cách sắp xếp trước
@@ -108,6 +109,21 @@ export function quiescenceSearch(
 
     // Kết hợp danh sách nước, ưu tiên các nước quan trọng
     const allMoves = [...captureMoves];
+
+    // Thêm nước chiếu (check) vào danh sách để xem xét
+    const checkMoves = getCheckMoves(opponentState);
+    allMoves.push(
+      ...checkMoves.filter(
+        (move) =>
+          !captureMoves.some(
+            (capMove) =>
+              capMove.from.x === move.from.x &&
+              capMove.from.y === move.from.y &&
+              capMove.to.x === move.to.x &&
+              capMove.to.y === move.to.y
+          )
+      )
+    );
 
     // Thêm nước phòng thủ vào nếu có các quân quan trọng đang bị đe dọa
     if (hasThreatenedPieces(opponentState)) {
