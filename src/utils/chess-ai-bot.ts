@@ -63,43 +63,28 @@ const DIRECTIONS = {
 };
 
 /**
- * Generate a move for the AI based on the current board state
+ * Generate a move for the AI using minimax with alpha-beta pruning and advanced evaluation
  * @param gameState Current game state including board, color, and special move rights
  * @returns A move object containing from and to positions, and optional promotion
  */
 export function generateAIMove(gameState: GameState): ChessMove | null {
-  const { board, aiColor } = gameState;
   const possibleMoves = getAllPossibleMoves(gameState);
+  if (possibleMoves.length === 0) return null;
 
-  if (possibleMoves.length === 0) {
-    return null; // No valid moves (Stalemate or Checkmate)
-  }
-
-  // --- OPTIMIZATION: Smarter Move Selection ---
-  // Evaluate moves instead of just prioritizing any capture.
+  // Depth: 3-4 ply for strong play (can increase for more strength)
+  const SEARCH_DEPTH = 3;
   let bestScore = -Infinity;
   let bestMoves: ChessMove[] = [];
 
   for (const move of possibleMoves) {
-    let score = 0;
-    const targetPiece = board[move.to.y][move.to.x];
-
-    // 1. Score based on captures
-    if (targetPiece) {
-      const movingPieceType = board[move.from.y][move.from.x]![1];
-      const capturedPieceType = targetPiece[1];
-      // A good trade is capturing a high-value piece with a low-value one.
-      score = PIECE_VALUES[capturedPieceType] - PIECE_VALUES[movingPieceType];
-    }
-
-    // 2. Add bonus for promotion
-    if (move.promotion) {
-      score += PIECE_VALUES[move.promotion];
-    }
-
-    // 3. Add small random value to avoid deterministic play
-    score += Math.random() * 10; // e.g., 0-10 points
-
+    const nextState = makeMove(gameState, move);
+    const score = minimax(
+      nextState,
+      SEARCH_DEPTH - 1,
+      false,
+      -Infinity,
+      Infinity
+    );
     if (score > bestScore) {
       bestScore = score;
       bestMoves = [move];
@@ -107,18 +92,228 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
       bestMoves.push(move);
     }
   }
+  // Chọn ngẫu nhiên trong các nước tốt nhất
+  return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+}
 
-  // If no captures or special moves, all moves have a score near 0.
-  // We can fall back to a random move from all possible moves if no move has a positive score.
-  if (bestScore < 10) {
-    // No significantly better move found
-    const randomIndex = Math.floor(Math.random() * possibleMoves.length);
-    return possibleMoves[randomIndex];
+// Minimax với alpha-beta pruning
+function minimax(
+  gameState: GameState,
+  depth: number,
+  maximizing: boolean,
+  alpha: number,
+  beta: number
+): number {
+  if (depth === 0) return evaluateBoard(gameState);
+  const moves = getAllPossibleMoves(gameState);
+  if (moves.length === 0) return evaluateBoard(gameState); // Stalemate/Checkmate
+
+  if (maximizing) {
+    let maxEval = -Infinity;
+    for (const move of moves) {
+      const nextState = makeMove(gameState, move);
+      const evalScore = minimax(nextState, depth - 1, false, alpha, beta);
+      maxEval = Math.max(maxEval, evalScore);
+      alpha = Math.max(alpha, evalScore);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    // Đổi màu cho đối thủ, ép kiểu đúng
+    const opponentColor: "WHITE" | "BLACK" =
+      gameState.aiColor === "WHITE" ? "BLACK" : "WHITE";
+    const opponentState: GameState = { ...gameState, aiColor: opponentColor };
+    for (const move of getAllPossibleMoves(opponentState)) {
+      const nextState = makeMove(opponentState, move);
+      const evalScore = minimax(nextState, depth - 1, true, alpha, beta);
+      minEval = Math.min(minEval, evalScore);
+      beta = Math.min(beta, evalScore);
+      if (beta <= alpha) break;
+    }
+    return minEval;
   }
+}
 
-  // Randomly select one of the best moves
-  const randomIndex = Math.floor(Math.random() * bestMoves.length);
-  return bestMoves[randomIndex];
+// Hàm đánh giá bàn cờ nâng cao
+function evaluateBoard(gameState: GameState): number {
+  const { board, aiColor } = gameState;
+  let score = 0;
+  let myKingPos: Position | null = null;
+  let oppKingPos: Position | null = null;
+  const myPrefix = aiColor === "WHITE" ? "w" : "b";
+  const oppPrefix = aiColor === "WHITE" ? "b" : "w";
+  // 1. Đánh giá vị trí và quân
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = board[y][x];
+      if (!piece) continue;
+      const value = PIECE_VALUES[piece[1]];
+      const centerBonus = x >= 2 && x <= 5 && y >= 2 && y <= 5 ? 10 : 0;
+      const pawnBonus =
+        piece[1] === "P"
+          ? aiColor === "WHITE"
+            ? y === 3
+              ? 15
+              : 0
+            : y === 4
+            ? 15
+            : 0
+          : 0;
+      const kingBonus =
+        piece[1] === "K"
+          ? (x === 0 || x === 7) && (y === 0 || y === 7)
+            ? 20
+            : 0
+          : 0;
+      if (piece.startsWith(myPrefix)) {
+        score += value + centerBonus + pawnBonus + kingBonus;
+        if (piece[1] === "K") myKingPos = { x, y };
+      } else {
+        score -= value + centerBonus + pawnBonus + kingBonus;
+        if (piece[1] === "K") oppKingPos = { x, y };
+      }
+    }
+  }
+  // 2. Kiểm tra chiếu vua đối phương
+  if (oppKingPos && isSquareAttacked(board, oppKingPos, myPrefix)) {
+    score += 50; // thưởng lớn khi chiếu vua đối phương
+    // Nếu chiếu bí (không còn nước đi cho đối thủ)
+    const oppMoves = getAllPossibleMoves({
+      ...gameState,
+      aiColor: aiColor === "WHITE" ? "BLACK" : "WHITE",
+    });
+    if (oppMoves.length === 0) score += 1000; // Chiếu bí, thắng tuyệt đối
+  }
+  // 3. Trừ điểm nếu vua mình bị chiếu
+  if (myKingPos && isSquareAttacked(board, myKingPos, oppPrefix)) {
+    score -= 50;
+    // Nếu bị chiếu bí (không còn nước đi cho mình)
+    const myMoves = getAllPossibleMoves(gameState);
+    if (myMoves.length === 0) score -= 1000; // Thua tuyệt đối
+  }
+  // 4. Bảo vệ quân lớn: thưởng nếu quân lớn được bảo vệ, trừ điểm nếu quân lớn bị đe dọa
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = board[y][x];
+      if (!piece) continue;
+      // Quân treo (hanging piece): quân lớn không được bảo vệ và bị tấn công
+      if (
+        piece.startsWith(myPrefix) &&
+        ["Q", "R", "B", "N"].includes(piece[1])
+      ) {
+        const attacked = isSquareAttacked(board, { x, y }, oppPrefix);
+        const defended = isSquareAttacked(board, { x, y }, myPrefix);
+        if (attacked && !defended) score -= 40; // Quân treo
+        if (attacked && defended) score -= 10; // Đang bị tranh chấp
+        if (!attacked && defended) score += 20; // Được bảo vệ tốt
+      }
+      // Quân lớn đối thủ treo
+      if (
+        piece.startsWith(oppPrefix) &&
+        ["Q", "R", "B", "N"].includes(piece[1])
+      ) {
+        const attacked = isSquareAttacked(board, { x, y }, myPrefix);
+        const defended = isSquareAttacked(board, { x, y }, oppPrefix);
+        if (attacked && !defended) score += 40;
+        if (attacked && defended) score += 10;
+      }
+      // Chiến thuật ép buộc: nếu có nước đi duy nhất cho đối thủ, thưởng
+      if (piece.startsWith(myPrefix) && oppKingPos) {
+        const oppMoves = getAllPossibleMoves({
+          ...gameState,
+          aiColor: aiColor === "WHITE" ? "BLACK" : "WHITE",
+        });
+        if (oppMoves.length === 1) score += 30; // Ép buộc đối thủ
+      }
+      // Phòng thủ đa lớp: nếu vua mình có nhiều quân bảo vệ xung quanh
+      if (piece.startsWith(myPrefix) && piece[1] === "K") {
+        let defenders = 0;
+        for (const offset of DIRECTIONS.KING) {
+          const to = { x: x + offset.x, y: y + offset.y };
+          if (isValidPosition(to)) {
+            const p = board[to.y][to.x];
+            if (p && p.startsWith(myPrefix)) defenders++;
+          }
+        }
+        score += defenders * 5;
+      }
+    }
+  }
+  // Kiểm tra chiếu lặp lại (threefold repetition) - đơn giản: nếu trạng thái lặp lại, trừ điểm
+  // (Cần truyền thêm lịch sử trạng thái nếu muốn tối ưu sâu)
+  return score;
+}
+
+// Kiểm tra một ô có bị tấn công bởi màu nào đó không
+function isSquareAttacked(
+  board: ChessBoard,
+  pos: Position,
+  attackerPrefix: "w" | "b"
+): boolean {
+  // Kiểm tra bởi quân mã
+  for (const offset of DIRECTIONS.KNIGHT) {
+    const to = { x: pos.x + offset.x, y: pos.y + offset.y };
+    if (isValidPosition(to)) {
+      const piece = board[to.y][to.x];
+      if (piece && piece.startsWith(attackerPrefix) && piece[1] === "N")
+        return true;
+    }
+  }
+  // Kiểm tra bởi quân hậu, xe, tượng
+  for (const dir of [...DIRECTIONS.ROOK, ...DIRECTIONS.BISHOP]) {
+    let current = { x: pos.x + dir.x, y: pos.y + dir.y };
+    while (isValidPosition(current)) {
+      const piece = board[current.y][current.x];
+      if (piece) {
+        if (piece.startsWith(attackerPrefix)) {
+          if (
+            ((dir.x === 0 || dir.y === 0) && ["Q", "R"].includes(piece[1])) ||
+            (dir.x !== 0 && dir.y !== 0 && ["Q", "B"].includes(piece[1]))
+          )
+            return true;
+        }
+        break;
+      }
+      current = { x: current.x + dir.x, y: current.y + dir.y };
+    }
+  }
+  // Kiểm tra bởi quân tốt
+  const pawnDir = attackerPrefix === "w" ? -1 : 1;
+  for (const dx of [-1, 1]) {
+    const to = { x: pos.x + dx, y: pos.y + pawnDir };
+    if (isValidPosition(to)) {
+      const piece = board[to.y][to.x];
+      if (piece && piece.startsWith(attackerPrefix) && piece[1] === "P")
+        return true;
+    }
+  }
+  // Kiểm tra bởi vua
+  for (const offset of DIRECTIONS.KING) {
+    const to = { x: pos.x + offset.x, y: pos.y + offset.y };
+    if (isValidPosition(to)) {
+      const piece = board[to.y][to.x];
+      if (piece && piece.startsWith(attackerPrefix) && piece[1] === "K")
+        return true;
+    }
+  }
+  return false;
+}
+
+// Tạo trạng thái mới sau khi đi một nước
+function makeMove(gameState: GameState, move: ChessMove): GameState {
+  // Deep clone board
+  const newBoard: ChessBoard = gameState.board.map((row) => [...row]);
+  const piece = newBoard[move.from.y][move.from.x];
+  newBoard[move.from.y][move.from.x] = null;
+  newBoard[move.to.y][move.to.x] = move.promotion
+    ? piece![0] + move.promotion
+    : piece;
+  // TODO: Cập nhật castlingRights, enPassantTarget nếu cần
+  return {
+    ...gameState,
+    board: newBoard,
+  };
 }
 
 /**
