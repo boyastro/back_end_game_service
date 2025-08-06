@@ -27,11 +27,18 @@ export function quiescenceSearch(
   // Ngừng tìm kiếm nếu đạt độ sâu tối đa
   if (depth === 0) return standPat;
 
+  // Cải tiến: Cắt tỉa sớm hơn để tăng tốc
   if (maximizing) {
-    if (standPat >= beta) return beta;
+    if (standPat >= beta) return beta; // Beta cutoff
+
+    // Cải tiến: Delta pruning - ước tính giới hạn cải thiện tối đa có thể
+    // Nếu ngay cả khi ăn quân giá trị nhất cũng không cải thiện alpha, thì dừng tìm kiếm
+    const delta = 900; // Giá trị tối đa có thể được cải thiện (giá trị Hậu)
+    if (standPat + delta < alpha) return alpha;
+
     if (alpha < standPat) alpha = standPat;
 
-    // Chỉ xem xét các nước capture (ăn quân)
+    // Chỉ xem xét các nước capture (ăn quân) - tối ưu hóa bằng cách sắp xếp trước
     const captureMoves = getCaptureMoves(gameState);
 
     // Xem xét các nước tự vệ quan trọng khi quân đang bị tấn công
@@ -124,20 +131,28 @@ export function getCaptureMoves(gameState: GameState): ChessMove[] {
     return targetPiece !== null; // Chỉ giữ lại nước đi đến ô có quân (ăn quân)
   });
 
-  // Sắp xếp theo giá trị ăn quân: ăn quân có giá trị cao trước
-  return captureMoves.sort((a, b) => {
-    const pieceA = gameState.board[a.to.y][a.to.x];
-    const pieceB = gameState.board[b.to.y][b.to.x];
+  // Sắp xếp theo chỉ số MVV-LVA (Most Valuable Victim - Least Valuable Aggressor)
+  // Ăn quân có giá trị cao bằng quân có giá trị thấp sẽ được ưu tiên cao nhất
+  return captureMoves
+    .sort((a, b) => {
+      const movingPieceA = gameState.board[a.from.y][a.from.x];
+      const targetPieceA = gameState.board[a.to.y][a.to.x];
+      const movingPieceB = gameState.board[b.from.y][b.from.x];
+      const targetPieceB = gameState.board[b.to.y][b.to.x];
 
-    if (!pieceA || !pieceB) return 0;
+      if (!targetPieceA || !targetPieceB || !movingPieceA || !movingPieceB)
+        return 0;
 
-    // Lấy giá trị từ PIECE_VALUES
-    const valueA = pieceA[1] ? getPieceValue(pieceA[1]) : 0;
-    const valueB = pieceB[1] ? getPieceValue(pieceB[1]) : 0;
+      // Tính toán chỉ số MVV-LVA: giá trị mục tiêu - giá trị quân tấn công
+      const valueA =
+        getPieceValue(targetPieceA[1]) - getPieceValue(movingPieceA[1]) / 10;
+      const valueB =
+        getPieceValue(targetPieceB[1]) - getPieceValue(movingPieceB[1]) / 10;
 
-    // Bắt tốt ít giá trị hơn bắt hậu
-    return valueB - valueA;
-  });
+      // Ưu tiên các nước ăn quân quan trọng mà không phải đổi quân có giá trị
+      return valueB - valueA;
+    })
+    .slice(0, 12); // Giới hạn số lượng nước để tránh tràn bộ nhớ
 }
 
 // Kiểm tra xem có quân quan trọng nào đang bị đe dọa hay không
@@ -146,22 +161,47 @@ function hasThreatenedPieces(gameState: GameState): boolean {
   const myPrefix = aiColor === "WHITE" ? "w" : "b";
   const oppPrefix = aiColor === "WHITE" ? "b" : "w";
 
-  // Chỉ xem xét các quân quan trọng: Hậu, Xe, Tượng, Mã
-  const importantPieces = ["Q", "R", "B", "N"];
+  // Chỉ xem xét các quân quan trọng theo thứ tự ưu tiên: Hậu, Xe, Tượng, Mã
+  const piecesByImportance = [
+    { type: "Q", value: 900 },
+    { type: "R", value: 500 },
+    { type: "B", value: 330 },
+    { type: "N", value: 320 },
+  ];
 
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
-      const piece = board[y][x];
-      if (!piece || !piece.startsWith(myPrefix)) continue;
+  // Tìm vị trí của các quân quan trọng
+  for (const { type } of piecesByImportance) {
+    // Tối ưu: chỉ quét các ô có quân của mình
+    for (let y = 0; y < 8; y++) {
+      for (let x = 0; x < 8; x++) {
+        const piece = board[y][x];
+        if (!piece || !piece.startsWith(myPrefix) || piece[1] !== type)
+          continue;
 
-      const pieceType = piece[1];
-      if (importantPieces.includes(pieceType)) {
         // Kiểm tra xem quân này có bị tấn công không
-        const isAttacked = isSquareAttackedByColor(board, { x, y }, oppPrefix);
-        const isDefended = isSquareAttackedByColor(board, { x, y }, myPrefix);
+        if (isSquareAttackedByColorFast(board, { x, y }, oppPrefix)) {
+          // Kiểm tra xem quân này có được bảo vệ không
+          if (!isSquareAttackedByColorFast(board, { x, y }, myPrefix)) {
+            return true; // Quân quan trọng đang bị đe dọa mà không được bảo vệ
+          }
 
-        if (isAttacked && !isDefended) {
-          return true; // Có ít nhất 1 quân quan trọng đang bị đe dọa
+          // Nếu là hậu hoặc xe bị tấn công bởi quân có giá trị thấp hơn, vẫn coi là bị đe dọa
+          if (type === "Q" || type === "R") {
+            const attackers = findAttackingPiecesFast(
+              board,
+              { x, y },
+              oppPrefix
+            );
+            for (const attacker of attackers) {
+              const attackerPiece = board[attacker.y][attacker.x];
+              if (
+                attackerPiece &&
+                getPieceValue(attackerPiece[1]) < getPieceValue(type)
+              ) {
+                return true; // Hậu/Xe bị tấn công bởi quân có giá trị thấp hơn
+              }
+            }
+          }
         }
       }
     }
@@ -176,28 +216,49 @@ function getDefensiveMoves(gameState: GameState): ChessMove[] {
   const myPrefix = aiColor === "WHITE" ? "w" : "b";
   const oppPrefix = aiColor === "WHITE" ? "b" : "w";
 
-  const allMoves = getAllPossibleMoves(gameState);
-  const defensiveMoves: ChessMove[] = [];
+  // Cache tạm thời để lưu kết quả tính toán
+  const cachedAttacks = new Map<string, Position[]>();
 
-  // Tìm các quân đang bị tấn công
-  const threatenedPieces: Position[] = [];
+  // Tìm các quân quan trọng đang bị tấn công
+  const threatenedPieces: { pos: Position; value: number }[] = [];
 
+  // Tìm quân hậu và xe trước để tăng tốc (nếu chúng bị tấn công, ưu tiên xử lý)
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const piece = board[y][x];
       if (!piece || !piece.startsWith(myPrefix)) continue;
 
       const pieceType = piece[1];
-      const pieceValue = getPieceValue(pieceType);
 
-      // Chỉ quan tâm đến quân có giá trị
-      if (pieceValue >= 300) {
-        // Mã trở lên
-        const isAttacked = isSquareAttackedByColor(board, { x, y }, oppPrefix);
-        const isDefended = isSquareAttackedByColor(board, { x, y }, myPrefix);
+      // Chỉ kiểm tra các quân quan trọng
+      if (
+        pieceType === "Q" ||
+        pieceType === "R" ||
+        pieceType === "B" ||
+        pieceType === "N"
+      ) {
+        const pieceValue = getPieceValue(pieceType);
 
-        if (isAttacked && !isDefended) {
-          threatenedPieces.push({ x, y });
+        // Kiểm tra xem quân này có bị tấn công không
+        if (isSquareAttackedByColorFast(board, { x, y }, oppPrefix)) {
+          // Kiểm tra xem quân này có được bảo vệ không
+          const isDefended = isSquareAttackedByColorFast(
+            board,
+            { x, y },
+            myPrefix
+          );
+
+          threatenedPieces.push({
+            pos: { x, y },
+            value: pieceValue + (isDefended ? 0 : 500), // Ưu tiên cao hơn cho quân không được bảo vệ
+          });
+
+          // Lưu cache các quân tấn công
+          const key = `${x},${y}`;
+          cachedAttacks.set(
+            key,
+            findAttackingPiecesFast(board, { x, y }, oppPrefix)
+          );
         }
       }
     }
@@ -206,48 +267,65 @@ function getDefensiveMoves(gameState: GameState): ChessMove[] {
   // Nếu không có quân nào bị đe dọa, trả về mảng rỗng
   if (threatenedPieces.length === 0) return [];
 
-  // Lọc các nước bảo vệ quân đang bị đe dọa
-  for (const move of allMoves) {
-    // Kiểm tra xem nước đi này có bảo vệ quân đang bị đe dọa không
-    for (const threatenedPiece of threatenedPieces) {
-      // 1. Di chuyển quân đang bị đe dọa đi
+  // Sắp xếp theo giá trị quân - ưu tiên bảo vệ quân giá trị cao nhất trước
+  threatenedPieces.sort((a, b) => b.value - a.value);
+
+  // Giới hạn số quân cần bảo vệ để tăng tốc tính toán
+  const criticalPieces = threatenedPieces.slice(0, 2);
+
+  // Lấy tất cả nước đi có thể
+  const allMoves = getAllPossibleMoves(gameState);
+  const defensiveMoves: ChessMove[] = [];
+
+  // Bảo vệ các quân quan trọng nhất
+  for (const { pos } of criticalPieces) {
+    const attackers = cachedAttacks.get(`${pos.x},${pos.y}`) || [];
+
+    // Xem xét các phương án phòng thủ
+    for (const move of allMoves) {
+      // 1. Di chuyển quân đang bị đe dọa ra khỏi vùng nguy hiểm
+      if (move.from.x === pos.x && move.from.y === pos.y) {
+        // Kiểm tra xem vị trí mới có an toàn không
+        const nextBoard = makeSimpleMove(board, move);
+        if (!isSquareAttackedByColorFast(nextBoard, move.to, oppPrefix)) {
+          defensiveMoves.push(move);
+        }
+        continue;
+      }
+
+      // 2. Tấn công quân đang tấn công
+      for (const attacker of attackers) {
+        if (move.to.x === attacker.x && move.to.y === attacker.y) {
+          // Kiểm tra xem nước đi này có an toàn không
+          const movingPiece = board[move.from.y][move.from.x];
+          const targetPiece = board[move.to.y][move.to.x];
+
+          if (movingPiece && targetPiece) {
+            const movingValue = getPieceValue(movingPiece[1]);
+            const targetValue = getPieceValue(targetPiece[1]);
+
+            // Nếu giá trị quân bị tấn công cao hơn hoặc bằng giá trị quân di chuyển, đây là nước đi tốt
+            if (targetValue >= movingValue) {
+              defensiveMoves.push(move);
+              break;
+            }
+          }
+        }
+      }
+
+      // 3. Di chuyển quân khác đến bảo vệ
+      const nextBoard = makeSimpleMove(board, move);
       if (
-        move.from.x === threatenedPiece.x &&
-        move.from.y === threatenedPiece.y
+        isSquareAttackedByColorFast(nextBoard, pos, myPrefix) &&
+        move.from.x !== pos.x &&
+        move.from.y !== pos.y
       ) {
         defensiveMoves.push(move);
-        break;
-      }
-
-      // 2. Di chuyển quân khác đến bảo vệ
-      const nextBoard = makeSimpleMove(board, move);
-      const isNowDefended = isSquareAttackedByColor(
-        nextBoard,
-        threatenedPiece,
-        myPrefix
-      );
-
-      if (isNowDefended) {
-        defensiveMoves.push(move);
-        break;
-      }
-
-      // 3. Tấn công quân đang tấn công
-      const attackingPieces = findAttackingPieces(
-        board,
-        threatenedPiece,
-        oppPrefix
-      );
-      for (const attacker of attackingPieces) {
-        if (move.to.x === attacker.x && move.to.y === attacker.y) {
-          defensiveMoves.push(move);
-          break;
-        }
       }
     }
   }
 
-  // Sắp xếp các nước theo mức độ ưu tiên
+  // Sắp xếp các nước phòng thủ theo giá trị và loại nước đi
   return defensiveMoves;
 }
 
@@ -260,24 +338,225 @@ function makeSimpleMove(board: ChessBoard, move: ChessMove): ChessBoard {
   return newBoard;
 }
 
-// Tìm các quân đang tấn công một vị trí
-function findAttackingPieces(
+// Kiểm tra một ô có bị tấn công bởi màu nào đó không - phiên bản tối ưu hóa
+function isSquareAttackedByColorFast(
   board: ChessBoard,
-  position: Position,
+  pos: Position,
+  attackerPrefix: string
+): boolean {
+  // 1. Kiểm tra tấn công bởi tốt - nhanh nhất nên kiểm tra trước
+  const pawnDir = attackerPrefix === "w" ? -1 : 1;
+  for (const dx of [-1, 1]) {
+    const checkY = pos.y + pawnDir;
+    const checkX = pos.x + dx;
+    if (checkX >= 0 && checkX < 8 && checkY >= 0 && checkY < 8) {
+      const piece = board[checkY][checkX];
+      if (piece === attackerPrefix + "P") return true;
+    }
+  }
+
+  // 2. Kiểm tra tấn công bởi mã - khá nhanh nên kiểm tra tiếp
+  const knightMoves = [
+    { x: 1, y: 2 },
+    { x: 2, y: 1 },
+    { x: 2, y: -1 },
+    { x: 1, y: -2 },
+    { x: -1, y: -2 },
+    { x: -2, y: -1 },
+    { x: -2, y: 1 },
+    { x: -1, y: 2 },
+  ];
+
+  for (const move of knightMoves) {
+    const checkX = pos.x + move.x;
+    const checkY = pos.y + move.y;
+    if (checkX >= 0 && checkX < 8 && checkY >= 0 && checkY < 8) {
+      const piece = board[checkY][checkX];
+      if (piece === attackerPrefix + "N") return true;
+    }
+  }
+
+  // 3. Kiểm tra tấn công bởi vua - nhanh nên kiểm tra tiếp
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const checkX = pos.x + dx;
+      const checkY = pos.y + dy;
+      if (checkX >= 0 && checkX < 8 && checkY >= 0 && checkY < 8) {
+        const piece = board[checkY][checkX];
+        if (piece === attackerPrefix + "K") return true;
+      }
+    }
+  }
+
+  // 4. Kiểm tra tấn công bởi xe và hậu theo hàng và cột
+  const rookDirs = [
+    { x: 0, y: 1 },
+    { x: 1, y: 0 },
+    { x: 0, y: -1 },
+    { x: -1, y: 0 },
+  ];
+
+  for (const dir of rookDirs) {
+    let checkX = pos.x + dir.x;
+    let checkY = pos.y + dir.y;
+    while (checkX >= 0 && checkX < 8 && checkY >= 0 && checkY < 8) {
+      const piece = board[checkY][checkX];
+      if (piece) {
+        if (
+          piece.startsWith(attackerPrefix) &&
+          (piece[1] === "R" || piece[1] === "Q")
+        ) {
+          return true;
+        }
+        break; // Bị chặn bởi quân khác
+      }
+      checkX += dir.x;
+      checkY += dir.y;
+    }
+  }
+
+  // 5. Kiểm tra tấn công bởi tượng và hậu theo đường chéo
+  const bishopDirs = [
+    { x: 1, y: 1 },
+    { x: 1, y: -1 },
+    { x: -1, y: -1 },
+    { x: -1, y: 1 },
+  ];
+
+  for (const dir of bishopDirs) {
+    let checkX = pos.x + dir.x;
+    let checkY = pos.y + dir.y;
+    while (checkX >= 0 && checkX < 8 && checkY >= 0 && checkY < 8) {
+      const piece = board[checkY][checkX];
+      if (piece) {
+        if (
+          piece.startsWith(attackerPrefix) &&
+          (piece[1] === "B" || piece[1] === "Q")
+        ) {
+          return true;
+        }
+        break; // Bị chặn bởi quân khác
+      }
+      checkX += dir.x;
+      checkY += dir.y;
+    }
+  }
+
+  return false;
+}
+
+// Tìm nhanh các quân đang tấn công một vị trí
+function findAttackingPiecesFast(
+  board: ChessBoard,
+  pos: Position,
   attackerPrefix: string
 ): Position[] {
   const attackers: Position[] = [];
 
-  // Kiểm tra tất cả các quân trên bàn cờ
-  for (let y = 0; y < 8; y++) {
-    for (let x = 0; x < 8; x++) {
-      const piece = board[y][x];
-      if (!piece || !piece.startsWith(attackerPrefix)) continue;
-
-      // Kiểm tra xem quân này có tấn công vị trí không
-      if (canPieceAttack(board, { x, y }, position)) {
-        attackers.push({ x, y });
+  // 1. Kiểm tra tấn công bởi tốt
+  const pawnDir = attackerPrefix === "w" ? -1 : 1;
+  for (const dx of [-1, 1]) {
+    const checkY = pos.y + pawnDir;
+    const checkX = pos.x + dx;
+    if (checkX >= 0 && checkX < 8 && checkY >= 0 && checkY < 8) {
+      const piece = board[checkY][checkX];
+      if (piece === attackerPrefix + "P") {
+        attackers.push({ x: checkX, y: checkY });
       }
+    }
+  }
+
+  // 2. Kiểm tra tấn công bởi mã
+  const knightMoves = [
+    { x: 1, y: 2 },
+    { x: 2, y: 1 },
+    { x: 2, y: -1 },
+    { x: 1, y: -2 },
+    { x: -1, y: -2 },
+    { x: -2, y: -1 },
+    { x: -2, y: 1 },
+    { x: -1, y: 2 },
+  ];
+
+  for (const move of knightMoves) {
+    const checkX = pos.x + move.x;
+    const checkY = pos.y + move.y;
+    if (checkX >= 0 && checkX < 8 && checkY >= 0 && checkY < 8) {
+      const piece = board[checkY][checkX];
+      if (piece === attackerPrefix + "N") {
+        attackers.push({ x: checkX, y: checkY });
+      }
+    }
+  }
+
+  // Tiếp tục với các loại quân khác (tương tự isSquareAttackedByColorFast)...
+  // 3. Kiểm tra tấn công bởi vua
+  for (let dx = -1; dx <= 1; dx++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      if (dx === 0 && dy === 0) continue;
+      const checkX = pos.x + dx;
+      const checkY = pos.y + dy;
+      if (checkX >= 0 && checkX < 8 && checkY >= 0 && checkY < 8) {
+        const piece = board[checkY][checkX];
+        if (piece === attackerPrefix + "K") {
+          attackers.push({ x: checkX, y: checkY });
+        }
+      }
+    }
+  }
+
+  // 4. Kiểm tra tấn công bởi xe và hậu theo hàng và cột
+  const rookDirs = [
+    { x: 0, y: 1 },
+    { x: 1, y: 0 },
+    { x: 0, y: -1 },
+    { x: -1, y: 0 },
+  ];
+
+  for (const dir of rookDirs) {
+    let checkX = pos.x + dir.x;
+    let checkY = pos.y + dir.y;
+    while (checkX >= 0 && checkX < 8 && checkY >= 0 && checkY < 8) {
+      const piece = board[checkY][checkX];
+      if (piece) {
+        if (
+          piece.startsWith(attackerPrefix) &&
+          (piece[1] === "R" || piece[1] === "Q")
+        ) {
+          attackers.push({ x: checkX, y: checkY });
+        }
+        break; // Bị chặn bởi quân khác
+      }
+      checkX += dir.x;
+      checkY += dir.y;
+    }
+  }
+
+  // 5. Kiểm tra tấn công bởi tượng và hậu theo đường chéo
+  const bishopDirs = [
+    { x: 1, y: 1 },
+    { x: 1, y: -1 },
+    { x: -1, y: -1 },
+    { x: -1, y: 1 },
+  ];
+
+  for (const dir of bishopDirs) {
+    let checkX = pos.x + dir.x;
+    let checkY = pos.y + dir.y;
+    while (checkX >= 0 && checkX < 8 && checkY >= 0 && checkY < 8) {
+      const piece = board[checkY][checkX];
+      if (piece) {
+        if (
+          piece.startsWith(attackerPrefix) &&
+          (piece[1] === "B" || piece[1] === "Q")
+        ) {
+          attackers.push({ x: checkX, y: checkY });
+        }
+        break; // Bị chặn bởi quân khác
+      }
+      checkX += dir.x;
+      checkY += dir.y;
     }
   }
 
@@ -397,33 +676,108 @@ export function evaluatePawnStructure(
   oppPrefix: string
 ): number {
   let score = 0;
+  const direction = myPrefix === "w" ? -1 : 1;
+  const oppDirection = oppPrefix === "w" ? -1 : 1;
 
-  // Tối ưu hóa: Giảm số lượng tính toán để tăng tốc
-  // Chỉ kiểm tra tốt đôi (doubled pawns) - không tốt
-  for (let x = 0; x < 8; x += 2) {
-    // Chỉ kiểm tra 1/2 số cột để tăng tốc
-    let myPawnCount = 0;
-    let oppPawnCount = 0;
+  // Mảng lưu số lượng tốt trên mỗi cột
+  const myPawnsInFile = [0, 0, 0, 0, 0, 0, 0, 0];
+  const oppPawnsInFile = [0, 0, 0, 0, 0, 0, 0, 0];
 
-    for (let y = 0; y < 8; y++) {
+  // Vị trí tốt của mình và đối phương
+  const myPawns: Position[] = [];
+  const oppPawns: Position[] = [];
+
+  // 1. Đếm số tốt trên mỗi cột và thu thập vị trí
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
       const piece = board[y][x];
-      if (piece === myPrefix + "P") myPawnCount++;
-      else if (piece === oppPrefix + "P") oppPawnCount++;
+      if (piece === myPrefix + "P") {
+        myPawnsInFile[x]++;
+        myPawns.push({ x, y });
+      } else if (piece === oppPrefix + "P") {
+        oppPawnsInFile[x]++;
+        oppPawns.push({ x, y });
+      }
     }
-
-    // Phạt tốt đôi
-    if (myPawnCount > 1) score -= 15 * (myPawnCount - 1);
-    if (oppPawnCount > 1) score += 15 * (oppPawnCount - 1);
   }
 
-  // Bỏ qua đánh giá tốt cô lập để tăng tốc
+  // 2. Đánh giá tốt đôi (doubled pawns) - Quét một lần duy nhất
+  for (let file = 0; file < 8; file++) {
+    if (myPawnsInFile[file] > 1) {
+      score -= 15 * (myPawnsInFile[file] - 1); // Phạt tốt đôi
+    }
+    if (oppPawnsInFile[file] > 1) {
+      score += 15 * (oppPawnsInFile[file] - 1); // Thưởng nếu đối thủ có tốt đôi
+    }
+  }
 
-  // Đánh giá tốt thông qua (passed pawns) - tốt
-  const myPassedPawns = getPassedPawns(board, myPrefix);
-  const oppPassedPawns = getPassedPawns(board, oppPrefix);
+  // 3. Đánh giá tốt thông (passed pawns) - Tối ưu hóa cách kiểm tra
+  for (const pawn of myPawns) {
+    let isPassed = true;
 
-  score += myPassedPawns * 20;
-  score -= oppPassedPawns * 20;
+    // Kiểm tra xem có tốt đối phương nào có thể chặn hoặc bắt không
+    for (const oppPawn of oppPawns) {
+      // Chỉ kiểm tra tốt đối phương ở phía trước (theo hướng đi của tốt)
+      if (
+        (myPrefix === "w" && oppPawn.y <= pawn.y) ||
+        (myPrefix === "b" && oppPawn.y >= pawn.y)
+      ) {
+        // Kiểm tra xem tốt đối phương có thể chặn hoặc bắt tốt của mình
+        if (Math.abs(oppPawn.x - pawn.x) <= 1) {
+          isPassed = false;
+          break;
+        }
+      }
+    }
+
+    if (isPassed) {
+      // Tốt thông - giá trị tăng khi gần hàng thăng cấp
+      const rank = myPrefix === "w" ? 7 - pawn.y : pawn.y;
+      score += 20 + rank * 5; // Giá trị cao hơn cho tốt gần hàng thăng cấp
+
+      // Thêm điểm cho tốt thông được bảo vệ
+      if (isSquareAttackedByColorFast(board, pawn, myPrefix)) {
+        score += 5;
+      }
+    }
+  }
+
+  // Tương tự cho tốt đối phương
+  for (const pawn of oppPawns) {
+    let isPassed = true;
+    for (const myPawn of myPawns) {
+      if (
+        (oppPrefix === "w" && myPawn.y <= pawn.y) ||
+        (oppPrefix === "b" && myPawn.y >= pawn.y)
+      ) {
+        if (Math.abs(myPawn.x - pawn.x) <= 1) {
+          isPassed = false;
+          break;
+        }
+      }
+    }
+
+    if (isPassed) {
+      const rank = oppPrefix === "w" ? 7 - pawn.y : pawn.y;
+      score -= 20 + rank * 5;
+
+      if (isSquareAttackedByColorFast(board, pawn, oppPrefix)) {
+        score -= 5;
+      }
+    }
+  }
+
+  // 4. Đánh giá chuỗi tốt (pawn chains) - tăng cường phòng thủ
+  for (const pawn of myPawns) {
+    // Kiểm tra xem tốt có được bảo vệ bởi tốt khác không
+    const protectors = myPawns.filter(
+      (p) => p.y === pawn.y + direction && Math.abs(p.x - pawn.x) === 1
+    );
+
+    if (protectors.length > 0) {
+      score += 5 * protectors.length; // Thưởng cho chuỗi tốt
+    }
+  }
 
   return score;
 }
