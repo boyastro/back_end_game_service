@@ -27,6 +27,11 @@ export const PIECE_VALUES: { [key: string]: number } = {
   K: 20000,
 };
 
+// Helper function to clone a chess board
+function cloneBoard(board: ChessBoard): ChessBoard {
+  return board.map((row) => [...row]) as ChessBoard;
+}
+
 export const DIRECTIONS = {
   ROOK: [
     { x: 0, y: 1 },
@@ -64,6 +69,19 @@ export const DIRECTIONS = {
 
 // Biến toàn cục để theo dõi trạng thái tổng thể
 let totalPieces = 32; // Ban đầu có 32 quân trên bàn cờ
+
+// Helper function to count pieces on the board
+function countPiecesOnBoard(board: ChessBoard): number {
+  let count = 0;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      if (board[y][x] !== null) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
 
 /**
  * Generate a move for the AI using minimax with alpha-beta pruning and advanced evaluation
@@ -532,9 +550,25 @@ function orderMoves(
       score += 10000;
     }
 
-    // 2. Ưu tiên các nước ăn quân
+    // Check if this is a king move
     const movingPiece = board[move.from.y][move.from.x];
     const targetPiece = board[move.to.y][move.to.x];
+
+    // Use our countPiecesOnBoard function
+    const currentPieceCount = countPiecesOnBoard(board);
+
+    // Penalize king moves in opening and middlegame
+    if (movingPiece && movingPiece[1] === "K" && currentPieceCount > 10) {
+      // Heavily penalize king moves in opening/middlegame unless it's castling
+      const isCastling = Math.abs(move.to.x - move.from.x) > 1;
+      if (!isCastling) {
+        score -= 5000; // Strong penalty for non-castling king moves
+      } else {
+        score += 2000; // Encourage castling
+      }
+    }
+
+    // 2. Ưu tiên các nước ăn quân
     if (targetPiece) {
       const victimValue = PIECE_VALUES[targetPiece[1]];
       const aggressorValue = movingPiece ? PIECE_VALUES[movingPiece[1]] : 0;
@@ -556,7 +590,8 @@ function orderMoves(
       }
 
       // Phân tích tình huống tàn cuộc
-      if (totalPieces <= 8) {
+      const pieceCount = countPiecesOnBoard(board);
+      if (pieceCount <= 16) {
         // Trong tàn cuộc
         // Ưu tiên cao hơn cho việc ăn quân để giảm vật chất đối thủ
         score += victimValue * 8;
@@ -644,7 +679,8 @@ function orderMoves(
     }
 
     // Khuyến khích phát triển quân trong giai đoạn đầu
-    if (totalPieces > 28) {
+    const currentBoardPieceCount = countPiecesOnBoard(board);
+    if (currentBoardPieceCount > 28) {
       // Đầu trận
       // Khuyến khích di chuyển quân ra khỏi vị trí ban đầu
       const movingPieceType = movingPiece ? movingPiece[1] : null;
@@ -998,8 +1034,8 @@ export function evaluateBoard(gameState: GameState): number {
       [-30, -40, -40, -50, -50, -40, -40, -30],
       [-20, -30, -30, -40, -40, -30, -30, -20],
       [-10, -20, -20, -20, -20, -20, -20, -10],
-      [20, 20, 0, 0, 0, 0, 20, 20],
-      [20, 30, 10, 0, 0, 10, 30, 20],
+      [20, 20, -5, -10, -10, -5, 20, 20],
+      [30, 40, 0, -10, -10, 0, 40, 30],
     ],
   };
   // 1. Đánh giá vị trí và quân
@@ -1064,13 +1100,37 @@ export function evaluateBoard(gameState: GameState): number {
       if (pieceType === "K") {
         if (isOpening || isMiddlegame) {
           // Trong giai đoạn đầu và giữa, vua nên ở góc an toàn
-          if ((x === 0 || x === 7) && (y === 0 || y === 7)) {
-            kingBonus += 30;
+          // Vua trắng (w) nên ở góc phải (g1, h1, h2)
+          // Vua đen (b) nên ở góc phải (g8, h8, h7)
+          if (piece.startsWith("w")) {
+            // Khuyến khích vua trắng ở vị trí g1, h1, h2
+            if ((x === 6 && y === 7) || (x === 7 && (y === 7 || y === 6))) {
+              kingBonus += 50;
+            } else if (x >= 4 && y >= 6) {
+              // Vua ở gần vị trí mong muốn
+              kingBonus += 20;
+            }
+          } else {
+            // Khuyến khích vua đen ở vị trí g8, h8, h7
+            if ((x === 6 && y === 0) || (x === 7 && (y === 0 || y === 1))) {
+              kingBonus += 50;
+            } else if (x >= 4 && y <= 1) {
+              // Vua ở gần vị trí mong muốn
+              kingBonus += 20;
+            }
           }
 
-          // Phạt nếu vua ở trung tâm trong giai đoạn đầu/giữa
+          // Phạt nặng nếu vua ở trung tâm trong giai đoạn đầu/giữa
           if (x >= 2 && x <= 5 && y >= 2 && y <= 5) {
-            kingBonus -= 50;
+            kingBonus -= 80;
+          }
+
+          // Phạt nếu vua di chuyển khỏi hàng cuối/đầu quá sớm
+          if (
+            (piece.startsWith("w") && y < 6) ||
+            (piece.startsWith("b") && y > 1)
+          ) {
+            kingBonus -= 70;
           }
         } else if (isEndgame) {
           // Trong tàn cuộc, vua nên tích cực và tiến gần trung tâm
@@ -2010,7 +2070,53 @@ function getKingMoves(
   const opponentPrefix = getOpponentPrefix(color);
   const prefix = color === "WHITE" ? "w" : "b";
 
-  // Standard moves
+  // Count pieces to determine game phase
+  const pieceCount = countPiecesOnBoard(board);
+
+  const isOpeningOrMiddlegame = pieceCount > 12;
+
+  // If in opening or middlegame, check if the king is in its initial position
+  // Only allow king to move if in check or for castling
+  if (isOpeningOrMiddlegame) {
+    const initialRank = color === "WHITE" ? 7 : 0;
+    const isInInitialPosition = pos.y === initialRank && pos.x === 4;
+
+    // If king is in initial position, only add castling moves or moves to escape check
+    if (isInInitialPosition) {
+      // Check if king is in check
+      const inCheck = isSquareAttacked(board, pos, opponentPrefix);
+
+      // If in check, add all possible moves to escape
+      if (inCheck) {
+        for (const offset of DIRECTIONS.KING) {
+          const to = { x: pos.x + offset.x, y: pos.y + offset.y };
+          if (isValidPosition(to)) {
+            const targetPiece = board[to.y][to.x];
+            if (
+              targetPiece === null ||
+              targetPiece.startsWith(opponentPrefix)
+            ) {
+              // Make sure this move actually escapes check
+              const tempBoard = cloneBoard(board);
+              tempBoard[to.y][to.x] = tempBoard[pos.y][pos.x];
+              tempBoard[pos.y][pos.x] = null;
+
+              if (!isSquareAttacked(tempBoard, to, opponentPrefix)) {
+                moves.push({ from: pos, to });
+              }
+            }
+          }
+        }
+      }
+
+      // Add castling moves (this logic stays the same)
+      addCastlingMoves(gameState, pos, color, moves);
+
+      return moves;
+    }
+  }
+
+  // Standard moves for endgame or when king has already moved
   for (const offset of DIRECTIONS.KING) {
     const to = { x: pos.x + offset.x, y: pos.y + offset.y };
     if (isValidPosition(to)) {
@@ -2021,14 +2127,33 @@ function getKingMoves(
     }
   }
 
-  // Castling
-  const canCastle = color === "WHITE" ? castlingRights.w : castlingRights.b;
+  // Add castling if not already added
+  if (moves.length === 0 || !isOpeningOrMiddlegame) {
+    addCastlingMoves(gameState, pos, color, moves);
+  }
+
+  return moves;
+}
+
+// Helper function to add castling moves
+function addCastlingMoves(
+  gameState: GameState,
+  pos: Position,
+  color: "WHITE" | "BLACK",
+  moves: ChessMove[]
+): void {
+  const { board, castlingRights } = gameState;
+  const opponentPrefix = getOpponentPrefix(color);
+  const prefix = color === "WHITE" ? "w" : "b";
   const rank = color === "WHITE" ? 7 : 0;
 
-  // Kiểm tra xem vua có đang bị chiếu không
+  // Don't add castling if king is in check
   if (isSquareAttacked(board, pos, opponentPrefix)) {
-    return moves; // Không thể nhập thành khi đang bị chiếu
+    return;
   }
+
+  // Castling rights
+  const canCastle = color === "WHITE" ? castlingRights.w : castlingRights.b;
 
   // Kingside castling (O-O)
   if (
@@ -2091,6 +2216,4 @@ function getKingMoves(
       moves.push({ from: pos, to: { x: 2, y: rank } });
     }
   }
-
-  return moves;
 }
