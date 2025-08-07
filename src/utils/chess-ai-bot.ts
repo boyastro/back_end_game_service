@@ -1509,14 +1509,92 @@ export function makeMove(gameState: GameState, move: ChessMove): GameState {
   // Deep clone board
   const newBoard: ChessBoard = gameState.board.map((row) => [...row]);
   const piece = newBoard[move.from.y][move.from.x];
+
+  // Xử lý nhập thành (castling)
+  if (piece && piece[1] === "K") {
+    // Kingside castling (O-O)
+    if (move.from.x === 4 && move.to.x === 6) {
+      // Move the rook too
+      const rookX = 7;
+      const rookY = move.from.y;
+      if (newBoard[rookY][rookX] && newBoard[rookY][rookX]![1] === "R") {
+        // Move the rook to the correct position
+        newBoard[rookY][5] = newBoard[rookY][rookX];
+        newBoard[rookY][rookX] = null;
+      }
+    }
+    // Queenside castling (O-O-O)
+    else if (move.from.x === 4 && move.to.x === 2) {
+      // Move the rook too
+      const rookX = 0;
+      const rookY = move.from.y;
+      if (newBoard[rookY][rookX] && newBoard[rookY][rookX]![1] === "R") {
+        // Move the rook to the correct position
+        newBoard[rookY][3] = newBoard[rookY][rookX];
+        newBoard[rookY][rookX] = null;
+      }
+    }
+  }
+
+  // Thực hiện nước đi thông thường
   newBoard[move.from.y][move.from.x] = null;
   newBoard[move.to.y][move.to.x] = move.promotion
     ? piece![0] + move.promotion
     : piece;
-  // TODO: Cập nhật castlingRights, enPassantTarget nếu cần
+
+  // Cập nhật castling rights
+  const newCastlingRights = { ...gameState.castlingRights };
+
+  // Nếu vua di chuyển, loại bỏ quyền nhập thành cho màu đó
+  if (piece && piece[1] === "K") {
+    if (piece.startsWith("w")) {
+      newCastlingRights.w = { k: false, q: false };
+    } else {
+      newCastlingRights.b = { k: false, q: false };
+    }
+  }
+
+  // Nếu xe di chuyển hoặc bị bắt, loại bỏ quyền nhập thành tương ứng
+  if (piece && piece[1] === "R") {
+    if (piece.startsWith("w")) {
+      if (move.from.x === 0 && move.from.y === 7) newCastlingRights.w.q = false;
+      if (move.from.x === 7 && move.from.y === 7) newCastlingRights.w.k = false;
+    } else {
+      if (move.from.x === 0 && move.from.y === 0) newCastlingRights.b.q = false;
+      if (move.from.x === 7 && move.from.y === 0) newCastlingRights.b.k = false;
+    }
+  }
+
+  // Nếu xe bị bắt
+  const targetPiece = gameState.board[move.to.y][move.to.x];
+  if (targetPiece && targetPiece[1] === "R") {
+    if (targetPiece.startsWith("w")) {
+      if (move.to.x === 0 && move.to.y === 7) newCastlingRights.w.q = false;
+      if (move.to.x === 7 && move.to.y === 7) newCastlingRights.w.k = false;
+    } else {
+      if (move.to.x === 0 && move.to.y === 0) newCastlingRights.b.q = false;
+      if (move.to.x === 7 && move.to.y === 0) newCastlingRights.b.k = false;
+    }
+  }
+
+  // Cập nhật en passant target
+  let newEnPassantTarget: Position | null = null;
+
+  // Nếu tốt di chuyển 2 ô, lưu vị trí cho en passant
+  if (piece && piece[1] === "P") {
+    if (Math.abs(move.from.y - move.to.y) === 2) {
+      newEnPassantTarget = {
+        x: move.from.x,
+        y: (move.from.y + move.to.y) / 2,
+      };
+    }
+  }
+
   return {
     ...gameState,
     board: newBoard,
+    castlingRights: newCastlingRights,
+    enPassantTarget: newEnPassantTarget,
   };
 }
 
@@ -1930,6 +2008,7 @@ function getKingMoves(
   const { board, castlingRights } = gameState;
   const moves: ChessMove[] = [];
   const opponentPrefix = getOpponentPrefix(color);
+  const prefix = color === "WHITE" ? "w" : "b";
 
   // Standard moves
   for (const offset of DIRECTIONS.KING) {
@@ -1943,25 +2022,74 @@ function getKingMoves(
   }
 
   // Castling
-  // Note: A full implementation needs `isSquareAttacked` function.
-  // This is a simplified version assuming path is not attacked.
   const canCastle = color === "WHITE" ? castlingRights.w : castlingRights.b;
   const rank = color === "WHITE" ? 7 : 0;
 
-  // Kingside
-  if (canCastle.k && board[rank][5] === null && board[rank][6] === null) {
-    // Assuming squares are not attacked for simplicity
-    moves.push({ from: pos, to: { x: 6, y: rank } });
+  // Kiểm tra xem vua có đang bị chiếu không
+  if (isSquareAttacked(board, pos, opponentPrefix)) {
+    return moves; // Không thể nhập thành khi đang bị chiếu
   }
-  // Queenside
+
+  // Kingside castling (O-O)
+  if (
+    canCastle.k &&
+    board[rank][5] === null &&
+    board[rank][6] === null &&
+    board[rank][7] !== null &&
+    board[rank][7]?.startsWith(prefix) &&
+    board[rank][7]?.[1] === "R"
+  ) {
+    // Kiểm tra xem các ô vua đi qua có bị tấn công không
+    const passingSquareAttacked = isSquareAttacked(
+      board,
+      { x: 5, y: rank },
+      opponentPrefix
+    );
+    const targetSquareAttacked = isSquareAttacked(
+      board,
+      { x: 6, y: rank },
+      opponentPrefix
+    );
+
+    if (!passingSquareAttacked && !targetSquareAttacked) {
+      moves.push({ from: pos, to: { x: 6, y: rank } });
+    }
+  }
+
+  // Queenside castling (O-O-O)
   if (
     canCastle.q &&
     board[rank][1] === null &&
     board[rank][2] === null &&
-    board[rank][3] === null
+    board[rank][3] === null &&
+    board[rank][0] !== null &&
+    board[rank][0]?.startsWith(prefix) &&
+    board[rank][0]?.[1] === "R"
   ) {
-    // Assuming squares are not attacked for simplicity
-    moves.push({ from: pos, to: { x: 2, y: rank } });
+    // Kiểm tra xem các ô vua đi qua có bị tấn công không
+    const passingSquare1Attacked = isSquareAttacked(
+      board,
+      { x: 3, y: rank },
+      opponentPrefix
+    );
+    const passingSquare2Attacked = isSquareAttacked(
+      board,
+      { x: 2, y: rank },
+      opponentPrefix
+    );
+    const passingSquare3Attacked = isSquareAttacked(
+      board,
+      { x: 1, y: rank },
+      opponentPrefix
+    );
+
+    if (
+      !passingSquare1Attacked &&
+      !passingSquare2Attacked &&
+      !passingSquare3Attacked
+    ) {
+      moves.push({ from: pos, to: { x: 2, y: rank } });
+    }
   }
 
   return moves;
