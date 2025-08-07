@@ -6,9 +6,20 @@ import {
   generateAIMove,
   evaluateBoard,
 } from "../utils/chess-ai-bot";
-import { saveGame, savePositionEvaluation } from "./dataset";
-import { FEN, PositionData } from "./types";
+import { FEN } from "./types";
 import { cloneGameState, boardToFEN } from "./utils";
+
+// Temporary placeholders until we integrate with the dataset
+// These will be replaced by actual implementation
+const savePositionEvaluation = async (data: any) => {
+  console.log("Position saved:", data.fen);
+  return true;
+};
+
+const saveGame = async (data: any) => {
+  console.log("Game saved, result:", data.result);
+  return "game_" + Date.now();
+};
 
 /**
  * Options for self-play game generation
