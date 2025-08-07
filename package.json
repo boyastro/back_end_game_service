@@ -8,10 +8,10 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "jest",
-    "train:quick": "ts-node-dev src/ai-train/train.ts quick",
-    "train:extended": "ts-node-dev src/ai-train/train.ts extended",
-    "train:custom": "ts-node-dev src/ai-train/train.ts custom",
-    "train:stats": "ts-node-dev src/ai-train/train.ts stats"
+    "train:quick": "ts-node-dev --esm src/ai-train/train.ts quick",
+    "train:extended": "ts-node-dev --esm src/ai-train/train.ts extended",
+    "train:custom": "ts-node-dev --esm src/ai-train/train.ts custom",
+    "train:stats": "ts-node-dev --esm src/ai-train/train.ts stats"
   },
   "keywords": [],
   "author": "",

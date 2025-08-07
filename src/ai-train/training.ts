@@ -1,12 +1,12 @@
 // Chess AI Training Coordinator
 
 // Placeholder imports - these will need actual implementations
-// import { generateSelfPlayGames } from "./self-play";
-// import { evaluatePositions } from "./evaluator";
-// import { tuneParameters } from "./parameter-tuner";
-// import { getOpeningPositions, getEndgamePositions } from "./utils";
-// import { TrainingConfig, EvaluationMetrics } from "./types";
-import { GameState, evaluateBoard } from "../utils/chess-ai-bot";
+// import { generateSelfPlayGames } from "./self-play.js";
+// import { evaluatePositions } from "./evaluator.js";
+// import { tuneParameters } from "./parameter-tuner.js";
+// import { getOpeningPositions, getEndgamePositions } from "./utils.js";
+// import { TrainingConfig, EvaluationMetrics } from "./types.js";
+import { GameState, evaluateBoard } from "../utils/chess-ai-bot.js";
 
 // Type definitions (to avoid external dependencies)
 interface TrainingConfig {

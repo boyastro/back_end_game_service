@@ -2,8 +2,8 @@
 
 // Chess AI Training CLI Tool
 
-import { ChessAITraining } from "./index";
-import { TrainingConfig } from "./types";
+import { ChessAITraining } from "./index.js";
+import { TrainingConfig } from "./types.js";
 
 // Parse command line arguments
 const args = process.argv.slice(2);

@@ -1,9 +1,9 @@
 // Chess AI Training Main Entry Point
 
-import { runTrainingCycle, quickTrain, extendedTrain } from "./training";
-import { getDatasetStats } from "./dataset";
-import { optimizeEvaluationWeights } from "./parameter-tuner";
-import { getOpeningPositions, getEndgamePositions } from "./utils";
+import { runTrainingCycle, quickTrain, extendedTrain } from "./training.js";
+import { getDatasetStats } from "./dataset.js";
+import { optimizeEvaluationWeights } from "./parameter-tuner.js";
+import { getOpeningPositions, getEndgamePositions } from "./utils.js";
 
 /**
  * Main entry point for the chess AI training system
@@ -46,10 +46,10 @@ export const ChessAITraining = {
 };
 
 // Export individual components for direct access
-export * from "./utils";
-export * from "./types";
-export * from "./dataset";
-export * from "./evaluator";
-export * from "./parameter-tuner";
-export * from "./training";
-export * from "./self-play";
+export * from "./utils.js";
+export * from "./types.js";
+export * from "./dataset.js";
+export * from "./evaluator.js";
+export * from "./parameter-tuner.js";
+export * from "./training.js";
+export * from "./self-play.js";
