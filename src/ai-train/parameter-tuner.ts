@@ -256,6 +256,8 @@ export async function tuneParameters(
   console.log("Best weights:", bestWeights);
 
   // Save best weights to file
+  // Fix __dirname for ES modules
+  const __dirname = path.dirname(new URL(import.meta.url).pathname);
   const weightsPath = path.resolve(__dirname, "../../best-weights.json");
   try {
     fs.writeFileSync(
