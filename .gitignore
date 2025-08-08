@@ -36,3 +36,4 @@ coverage
 ./data
 data/games.json
 data/positions.json
+best-weights.json
