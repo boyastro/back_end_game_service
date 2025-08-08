@@ -296,36 +296,6 @@ function minimax(
     }
   }
 
-  // Kiểm tra trước nếu có nước đi ăn vua của đối phương, trả về giá trị cực lớn
-  if (maximizing) {
-    const moves = getAllPossibleMoves(gameState);
-    for (const move of moves) {
-      const targetPiece = gameState.board[move.to.y][move.to.x];
-      if (targetPiece) {
-        const oppColor = gameState.aiColor === "WHITE" ? "BLACK" : "WHITE";
-        const oppKingPrefix = oppColor === "WHITE" ? "w" : "b";
-        if (targetPiece.startsWith(oppKingPrefix) && targetPiece[1] === "K") {
-          return 10000000; // Giá trị cực lớn cho nước ăn vua
-        }
-      }
-    }
-  } else {
-    // Nếu đối thủ có nước ăn vua của AI, trả về giá trị cực nhỏ
-    const opponentColor: "WHITE" | "BLACK" =
-      gameState.aiColor === "WHITE" ? "BLACK" : "WHITE";
-    const opponentState: GameState = { ...gameState, aiColor: opponentColor };
-    const moves = getAllPossibleMoves(opponentState);
-    for (const move of moves) {
-      const targetPiece = opponentState.board[move.to.y][move.to.x];
-      if (targetPiece) {
-        const aiKingPrefix = gameState.aiColor === "WHITE" ? "w" : "b";
-        if (targetPiece.startsWith(aiKingPrefix) && targetPiece[1] === "K") {
-          return -10000000; // Giá trị cực nhỏ nếu đối thủ có thể ăn vua của AI
-        }
-      }
-    }
-  }
-
   // Nếu độ sâu = 0, thực hiện quiescence search để ổn định đánh giá
   if (depth === 0) {
     // Giảm độ sâu quiescence xuống 1 để tăng tốc đáng kể
@@ -550,7 +520,7 @@ function orderMoves(
         m.to.y === move.to.y
     );
     if (isKiller) {
-      score += 10000;
+      score += 0;
     }
 
     // Check if this is a king move
@@ -578,18 +548,18 @@ function orderMoves(
 
       // Cải tiến: Phân tích hệ số trao đổi quân
       const exchangeValue = victimValue - aggressorValue / 2;
-      score += exchangeValue * 120; // Tăng hệ số từ 100 lên 120
+      score += exchangeValue; // Tăng hệ số từ 100 lên 120
 
       // Cải tiến: Ưu tiên cao hơn cho việc ăn các quân có giá trị cao
       if (targetPiece[1] === "K") {
         // Ưu tiên tuyệt đối cho việc ăn vua (chiếu hết)
         score += 9999999;
       } else if (targetPiece[1] === "Q") {
-        score += victimValue * 30; // Tăng rất cao cho việc ăn hậu
+        score += victimValue; // Tăng rất cao cho việc ăn hậu
       } else if (targetPiece[1] === "R") {
-        score += victimValue * 20; // Tăng cao cho việc ăn xe
+        score += victimValue; // Tăng cao cho việc ăn xe
       } else if (["B", "N"].includes(targetPiece[1])) {
-        score += victimValue * 15; // Tăng cho việc ăn tượng và mã
+        score += victimValue; // Tăng cho việc ăn tượng và mã
       }
 
       // Phân tích tình huống tàn cuộc
@@ -619,7 +589,7 @@ function orderMoves(
           aiColor === "WHITE" ? "b" : "w"
         )
       ) {
-        score += victimValue * 10; // Thưởng lớn cho việc ăn quân không được bảo vệ
+        score += victimValue; // Thưởng lớn cho việc ăn quân không được bảo vệ
       } else {
         // Đánh giá chi tiết trao đổi quân
         const attackers = getAttackers(
@@ -639,13 +609,13 @@ function orderMoves(
           getMinPieceValue(attackers) < getMinPieceValue(defenders)
         ) {
           // Trao đổi có lợi
-          score += victimValue * 5;
+          score += victimValue;
         }
       }
 
       // Cải tiến: Ưu tiên ăn quân bằng quân có giá trị thấp hơn
       if (aggressorValue < victimValue) {
-        score += (victimValue - aggressorValue) * 10;
+        score += victimValue - aggressorValue;
       }
 
       // Ưu tiên đặc biệt nếu nước đi này ăn vua đối phương
@@ -729,7 +699,7 @@ function orderMoves(
                 aiColor === "WHITE" ? "b" : "w"
               )
             ) {
-              score += PIECE_VALUES[nearbyPiece[1]] * 0.3;
+              score += PIECE_VALUES[nearbyPiece[1]];
             }
           }
         }

@@ -134,7 +134,7 @@ export async function quickTrain(): Promise<EvaluationMetrics> {
  */
 export async function extendedTrain(): Promise<EvaluationMetrics> {
   return runTrainingCycle({
-    selfPlayGames: 20,
+    selfPlayGames: 200,
     positionsPerGame: 5000,
     maxDepth: 6,
     iterations: 20,
