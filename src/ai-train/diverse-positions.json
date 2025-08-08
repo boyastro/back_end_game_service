@@ -15,41 +15,6 @@
     "desc": "King vs King (draw)"
   },
   {
-    "fen": "8/8/8/8/8/8/8/K7k w - - 0 1",
-    "type": "endgame",
-    "desc": "King vs King (draw)"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/K7k w - - 0 1",
-    "type": "endgame",
-    "desc": "King vs King (draw)"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/K7k w - - 0 1",
-    "type": "endgame",
-    "desc": "King vs King (draw)"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/K7k w - - 0 1",
-    "type": "endgame",
-    "desc": "King vs King (draw)"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/K7k w - - 0 1",
-    "type": "endgame",
-    "desc": "King vs King (draw)"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/K7k w - - 0 1",
-    "type": "endgame",
-    "desc": "King vs King (draw)"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/K7k w - - 0 1",
-    "type": "endgame",
-    "desc": "King vs King (draw)"
-  },
-  {
     "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
     "type": "opening",
     "desc": "Standard opening"
@@ -70,68 +35,168 @@
     "desc": "Empty board (draw)"
   },
   {
-    "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-    "type": "opening",
-    "desc": "Standard opening"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/8 w - - 0 1",
-    "type": "draw",
-    "desc": "Empty board (draw)"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/8 b - - 0 1",
-    "type": "draw",
-    "desc": "Empty board (draw)"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/8 w - - 0 1",
-    "type": "draw",
-    "desc": "Empty board (draw)"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/8 b - - 0 1",
-    "type": "draw",
-    "desc": "Empty board (draw)"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/8 w - - 0 1",
-    "type": "draw",
-    "desc": "Empty board (draw)"
-  },
-  {
-    "fen": "8/8/8/8/8/8/8/Kk6 w - - 0 1",
-    "type": "endgame",
-    "desc": "King vs King (draw)"
-  },
-  {
-    "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-    "type": "opening",
-    "desc": "Standard opening"
-  },
-  {
     "fen": "6k1/5ppp/8/8/8/8/5PPP/6K1 w - - 0 1",
     "type": "endgame",
     "desc": "King and pawns endgame (balanced)"
   },
   {
-    "fen": "8/8/8/8/8/8/8/7k w - - 0 1",
+    "fen": "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+    "type": "castling",
+    "desc": "Position with castling rights"
+  },
+  {
+    "fen": "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+    "type": "opening",
+    "desc": "King's pawn opening (e4 e5)"
+  },
+  {
+    "fen": "rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2",
+    "type": "opening",
+    "desc": "Bishop's Opening"
+  },
+  {
+    "fen": "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq - 0 2",
+    "type": "opening",
+    "desc": "Queen's Gambit"
+  },
+  {
+    "fen": "rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2",
+    "type": "opening",
+    "desc": "Alekhine's Defense"
+  },
+  {
+    "fen": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2",
+    "type": "opening",
+    "desc": "Sicilian Defense"
+  },
+  {
+    "fen": "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2",
+    "type": "opening",
+    "desc": "Scandinavian Defense"
+  },
+  {
+    "fen": "rnbqkbnr/pppppp1p/6p1/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+    "type": "opening",
+    "desc": "Modern Defense"
+  },
+  {
+    "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3",
+    "type": "opening",
+    "desc": "Ruy Lopez preparation"
+  },
+  {
+    "fen": "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3",
+    "type": "opening",
+    "desc": "Italian Game"
+  },
+  {
+    "fen": "rnb1kbnr/ppppqppp/8/4p3/4P3/8/PPPPQPPP/RNB1KBNR w KQkq - 2 3",
+    "type": "opening",
+    "desc": "Unusual Queen early development"
+  },
+  {
+    "fen": "4k3/8/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ - 0 1",
+    "type": "material",
+    "desc": "Material advantage for white"
+  },
+  {
+    "fen": "rnbqkbnr/pppppppp/8/8/8/8/8/4K3 b kq - 0 1",
+    "type": "material",
+    "desc": "Material advantage for black"
+  },
+  {
+    "fen": "8/8/8/3pP3/8/8/8/8 w - d6 0 1",
+    "type": "pawn",
+    "desc": "En passant opportunity"
+  },
+  {
+    "fen": "8/P7/8/8/8/8/8/k6K w - - 0 1",
+    "type": "promotion",
+    "desc": "Pawn promotion opportunity"
+  },
+  {
+    "fen": "k7/8/8/8/8/8/7p/7K b - - 0 1",
+    "type": "promotion",
+    "desc": "Pawn promotion opportunity (black)"
+  },
+  {
+    "fen": "k7/8/8/8/8/N7/8/K7 w - - 0 1",
     "type": "checkmate",
-    "desc": "Checkmate position (white wins)"
+    "desc": "Knight checkmate pattern"
   },
   {
-    "fen": "8/8/8/8/8/8/8/8 w - - 0 1",
+    "fen": "k7/8/8/8/8/1Q6/8/K7 w - - 0 1",
+    "type": "checkmate",
+    "desc": "Queen checkmate pattern"
+  },
+  {
+    "fen": "k7/8/8/8/8/R7/8/K7 w - - 0 1",
+    "type": "checkmate",
+    "desc": "Rook checkmate pattern"
+  },
+  {
+    "fen": "k7/8/8/8/8/2B5/8/K7 w - - 0 1",
+    "type": "checkmate",
+    "desc": "Bishop checkmate pattern"
+  },
+  {
+    "fen": "5k2/5P2/5K2/8/8/8/8/8 w - - 0 1",
+    "type": "endgame",
+    "desc": "King and pawn vs king endgame"
+  },
+  {
+    "fen": "8/8/8/8/8/k7/p7/K7 w - - 0 1",
+    "type": "endgame",
+    "desc": "King and pawn vs king endgame (black advantage)"
+  },
+  {
+    "fen": "8/8/8/8/8/8/R7/R3K2k w Q - 0 1",
+    "type": "endgame",
+    "desc": "Rook endgame with castling option"
+  },
+  {
+    "fen": "8/8/8/8/8/8/4kp2/5K2 b - - 0 1",
     "type": "stalemate",
-    "desc": "Stalemate position (white to move)"
+    "desc": "Potential stalemate position"
   },
   {
-    "fen": "rnbqkbnr/pppp1ppp/8/4p3/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 2",
-    "type": "opening",
-    "desc": "King's pawn opening (e5)"
+    "fen": "k7/8/K7/8/8/8/8/8 w - - 0 1",
+    "type": "stalemate",
+    "desc": "King vs king stalemate potential"
   },
   {
-    "fen": "rnbqkbnr/pppppppp/8/8/2B5/8/PPPPPPPP/RNBQK1NR b KQkq - 0 1",
-    "type": "opening",
-    "desc": "Bishop development (white)"
+    "fen": "2Q2bnr/4pkpp/5p2/8/8/8/PPP2PPP/RNB1K2R w KQ - 0 10",
+    "type": "middlegame",
+    "desc": "Complex middlegame position"
+  },
+  {
+    "fen": "r4rk1/pp1n1ppp/2p1p3/3pP3/3P4/P1P5/2P2PPP/R2QK2R w KQ - 0 13",
+    "type": "middlegame",
+    "desc": "Closed middlegame position"
+  },
+  {
+    "fen": "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/2P2N2/PP1P1PPP/RNBQ1RK1 b kq - 1 5",
+    "type": "development",
+    "desc": "Well-developed position with castling"
+  },
+  {
+    "fen": "r1b1k1nr/pppp1ppp/2n5/2b1p1q1/2B1P3/2P2N2/PP1P1PPP/RNBQK2R w KQkq - 4 5",
+    "type": "attack",
+    "desc": "Early queen attack position"
+  },
+  {
+    "fen": "r3k2r/ppp2ppp/2n1b3/3pP3/3P2b1/2P2N2/PP3PPP/RNBQ1RK1 b kq - 0 8",
+    "type": "tactics",
+    "desc": "Position with tactical opportunities"
+  },
+  {
+    "fen": "6k1/pp3pp1/2p5/8/2BP4/2P2P2/PP4PP/6K1 w - - 0 22",
+    "type": "endgame",
+    "desc": "Bishop vs pawn endgame"
+  },
+  {
+    "fen": "8/8/5kp1/6p1/6P1/5K2/8/8 b - - 0 50",
+    "type": "endgame",
+    "desc": "King and pawn endgame (drawn position)"
   }
 ]
