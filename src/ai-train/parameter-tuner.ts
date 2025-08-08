@@ -2,7 +2,7 @@
 
 import { evaluateBoard } from "../utils/chess-ai-bot.js";
 import { loadPositions } from "./dataset.js";
-import { fenToGameState } from "./utils";
+import { fenToGameState } from "./utils.js";
 import fs from "fs";
 import path from "path";
 import { PositionData, EvaluationMetrics } from "./types.js";
