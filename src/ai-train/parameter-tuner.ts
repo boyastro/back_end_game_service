@@ -81,9 +81,11 @@ export async function tuneParameters(
         const evalScore = evaluateBoard(gameState, candidateWeights);
         totalScore += evalScore;
         // Xác định thắng/hòa/thua dựa trên ngưỡng điểm số
-        if (evalScore > 9000) winCount++;
-        else if (Math.abs(evalScore) < 1e-3) drawCount++;
-        // Nếu muốn tính thua: if (evalScore < -9000) loseCount++;
+        if (evalScore > 5000) winCount++;
+        else if (evalScore < -5000) {
+          // Nếu muốn tính thua tuyệt đối, có thể thêm biến loseCount++;
+        }
+        else if (Math.abs(evalScore) < 10) drawCount++;
       }
       let score = totalScore / positions.length;
       let winRate = winCount / positions.length;
