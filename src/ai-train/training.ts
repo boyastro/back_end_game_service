@@ -47,15 +47,26 @@ export async function runTrainingCycle(
   console.log("Loading positions for evaluation...");
   const positions = await loadPositions(fullConfig.positionsPerGame);
 
+  // Đọc dữ liệu đa dạng từ file
+  let diversePositions: any[] = [];
+  try {
+    diversePositions = JSON.parse(
+      require("fs").readFileSync("src/ai-train/diverse-positions.json", "utf-8")
+    );
+    console.log(
+      `Loaded ${diversePositions.length} diverse positions from diverse-positions.json`
+    );
+  } catch (err) {
+    console.warn("Could not load diverse-positions.json:", err);
+  }
+
   // Add some opening positions to ensure good coverage
   const openingPositions = getOpeningPositions();
   console.log(`Adding ${openingPositions.length} opening positions`);
-
-  // Save these positions for future training
   for (const fen of openingPositions) {
     await savePositionEvaluation({
       fen,
-      evaluation: 0, // Neutral starting evaluation
+      evaluation: 0,
       bestMove: "",
     });
   }
@@ -63,20 +74,21 @@ export async function runTrainingCycle(
   // Add some endgame positions
   const endgamePositions = getEndgamePositions();
   console.log(`Adding ${endgamePositions.length} endgame positions`);
-
-  // Save these positions for future training
   for (const fen of endgamePositions) {
     await savePositionEvaluation({
       fen,
-      evaluation: 0, // Will be evaluated properly in next step
+      evaluation: 0,
       bestMove: "",
     });
   }
 
+  // Trộn tất cả các vị trí
+  const allPositions = [...diversePositions, ...positions];
+
   // Step 3: Evaluate positions
   console.log("Evaluating positions...");
   const evaluatedPositions = await evaluatePositions(
-    positions,
+    allPositions,
     fullConfig.maxDepth
   );
   console.log(`Evaluated ${evaluatedPositions.length} positions`);
