@@ -95,6 +95,7 @@ export async function runTrainingCycle(
     {
       learningRate: fullConfig.learningRate,
       iterations: fullConfig.iterations,
+      method: "genetic",
     }
   );
 
