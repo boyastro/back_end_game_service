@@ -1,58 +1,11 @@
 // Chess AI Training Coordinator
 
 import { generateSelfPlayGames } from "./self-play.js";
-// import { evaluatePositions } from "./evaluator.js";
-// import { tuneParameters } from "./parameter-tuner.js";
-// import { getOpeningPositions, getEndgamePositions } from "./utils.js";
-// import { TrainingConfig, EvaluationMetrics } from "./types.js";
+import { evaluatePositions } from "./evaluator.js";
+import { tuneParameters } from "./parameter-tuner.js";
+import { getOpeningPositions, getEndgamePositions } from "./utils.js";
+import { TrainingConfig, EvaluationMetrics } from "./types.js";
 import { GameState, evaluateBoard } from "../utils/chess-ai-bot.js";
-
-// Type definitions (to avoid external dependencies)
-interface TrainingConfig {
-  iterations: number;
-  selfPlayGames: number;
-  positionsPerGame: number;
-  maxDepth: number;
-  learningRate: number;
-}
-
-interface EvaluationMetrics {
-  score: number;
-  winRate: number;
-  drawRate: number;
-  avgPositionalAdvantage?: number;
-}
-
-const evaluatePositions = async (
-  positions: any[],
-  depth: number
-): Promise<any[]> => {
-  console.log(`Evaluating ${positions.length} positions at depth ${depth}...`);
-  return positions;
-};
-
-const tuneParameters = async (
-  positions: any[],
-  options: any
-): Promise<EvaluationMetrics> => {
-  console.log(`Tuning parameters with ${positions.length} positions...`);
-  return {
-    score: 0.65,
-    winRate: 0.55,
-    drawRate: 0.2,
-  };
-};
-
-const getOpeningPositions = (): string[] => {
-  return [
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
-  ];
-};
-
-const getEndgamePositions = (): string[] => {
-  return ["4k3/8/8/8/8/8/4P3/4K3 w - - 0 1", "4k3/8/8/8/8/8/8/R3K3 w - - 0 1"];
-};
 
 // Dataset management placeholder functions
 const loadPositions = async (limit: number = 1000): Promise<any[]> => {
@@ -83,7 +36,7 @@ const DEFAULT_CONFIG: TrainingConfig = {
  */
 export async function runTrainingCycle(
   config: Partial<TrainingConfig> = {}
-): Promise<void> {
+): Promise<EvaluationMetrics> {
   // Merge with default config
   const fullConfig: TrainingConfig = { ...DEFAULT_CONFIG, ...config };
 
@@ -137,10 +90,13 @@ export async function runTrainingCycle(
 
   // Step 4: Tune parameters
   console.log("Tuning evaluation parameters...");
-  const tuningResult = await tuneParameters(evaluatedPositions, {
-    learningRate: fullConfig.learningRate,
-    iterations: fullConfig.iterations,
-  });
+  const tuningResult: EvaluationMetrics = await tuneParameters(
+    evaluatedPositions,
+    {
+      learningRate: fullConfig.learningRate,
+      iterations: fullConfig.iterations,
+    }
+  );
 
   // Log training results
   console.log("Training cycle completed!");
@@ -152,12 +108,13 @@ export async function runTrainingCycle(
   // Log optimized parameters
   console.log("Training statistics:");
   console.log(JSON.stringify(tuningResult, null, 2));
+  return tuningResult;
 }
 
 /**
  * Train the AI system with quick defaults for development
  */
-export async function quickTrain(): Promise<void> {
+export async function quickTrain(): Promise<EvaluationMetrics> {
   return runTrainingCycle({
     selfPlayGames: 5,
     positionsPerGame: 100,
@@ -170,7 +127,7 @@ export async function quickTrain(): Promise<void> {
 /**
  * Run an extended training session for production quality
  */
-export async function extendedTrain(): Promise<void> {
+export async function extendedTrain(): Promise<EvaluationMetrics> {
   return runTrainingCycle({
     selfPlayGames: 200,
     positionsPerGame: 5000,
