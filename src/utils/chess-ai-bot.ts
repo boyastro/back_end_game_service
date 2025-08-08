@@ -924,8 +924,8 @@ export function evaluateBoard(
     development?: number;
   }
 ): number {
-  // Nếu không truyền weights thì dùng AI_WEIGHTS nếu có
-  const useWeights = weights || AI_WEIGHTS;
+  // Ưu tiên dùng AI_WEIGHTS do mô hình sinh ra, chỉ fallback sang weights truyền vào nếu AI_WEIGHTS chưa có
+  const useWeights = AI_WEIGHTS ?? weights;
   const { board, aiColor } = gameState;
   let score = 0;
   let myKingPos: Position | null = null;
