@@ -84,8 +84,7 @@ export async function tuneParameters(
         if (evalScore > 5000) winCount++;
         else if (evalScore < -5000) {
           // Nếu muốn tính thua tuyệt đối, có thể thêm biến loseCount++;
-        }
-        else if (Math.abs(evalScore) < 10) drawCount++;
+        } else if (Math.abs(evalScore) < 10) drawCount++;
       }
       let score = totalScore / positions.length;
       let winRate = winCount / positions.length;
@@ -134,8 +133,10 @@ export async function tuneParameters(
           const evalScore = evaluateBoard(gameState, weights);
           totalScore += evalScore;
           // Xác định thắng/hòa/thua dựa trên ngưỡng điểm số
-          if (evalScore > 9000) winCount++;
-          else if (Math.abs(evalScore) < 1e-3) drawCount++;
+          if (evalScore > 5000) winCount++;
+          else if (evalScore < -5000) {
+            // Nếu muốn tính thua tuyệt đối, có thể thêm biến loseCount++;
+          } else if (Math.abs(evalScore) < 10) drawCount++;
         }
         fitness.push(totalScore / positions.length);
         winRates.push(winCount / positions.length);
@@ -264,8 +265,10 @@ export async function tuneParameters(
           const evalScore = evaluateBoard(gameState, weights);
           totalScore += evalScore;
           // Xác định thắng/hòa/thua dựa trên ngưỡng điểm số
-          if (evalScore > 9000) winCount++;
-          else if (Math.abs(evalScore) < 1e-3) drawCount++;
+          if (evalScore > 5000) winCount++;
+          else if (evalScore < -5000) {
+            // Nếu muốn tính thua tuyệt đối, có thể thêm biến loseCount++;
+          } else if (Math.abs(evalScore) < 10) drawCount++;
         }
         fitness.push(totalScore / positions.length);
         winRates.push(winCount / positions.length);
