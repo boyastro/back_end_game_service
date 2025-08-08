@@ -1,4 +1,4 @@
-import { loadBestWeights } from "./load-weights";
+import { loadBestWeights } from "./load-weights.js";
 // Tự động nạp trọng số tối ưu nếu có
 let AI_WEIGHTS = loadBestWeights() || undefined;
 // Chess AI Bot implementation - Optimized Version
