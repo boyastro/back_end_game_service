@@ -44,19 +44,31 @@ export async function evaluatePositions(
 ): Promise<PositionData[]> {
   const evaluatedPositions: PositionData[] = [];
 
-  console.log(`Evaluating ${positions.length} positions at depth ${depth}...`);
+  console.log(
+    `[LOG] evaluatePositions: Input positions count = ${positions.length}`
+  );
+  if (positions.length === 0) {
+    console.warn("[LOG] evaluatePositions: No positions to evaluate!");
+  }
 
   for (let i = 0; i < positions.length; i++) {
     if (i % 10 === 0) {
-      console.log(`Progress: ${i}/${positions.length} positions evaluated`);
+      console.log(
+        `[LOG] Progress: ${i}/${positions.length} positions evaluated`
+      );
     }
 
     const position = positions[i];
     const evaluated = await evaluatePosition(position.fen, depth);
     evaluatedPositions.push(evaluated);
+    if (i < 3) {
+      console.log(`[LOG] Evaluated position sample:`, evaluated);
+    }
   }
 
-  console.log(`Completed evaluation of ${evaluatedPositions.length} positions`);
+  console.log(
+    `[LOG] Completed evaluation of ${evaluatedPositions.length} positions`
+  );
 
   return evaluatedPositions;
 }

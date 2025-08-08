@@ -27,6 +27,18 @@ export async function tuneParameters(
   positions: PositionData[],
   options: TuningOptions
 ): Promise<EvaluationMetrics> {
+  // Kiểm tra đầu vào, tránh lỗi khi không có vị trí
+  if (!positions || positions.length === 0) {
+    console.error("No positions to tune. Please check your dataset.");
+    // Trả về giá trị mặc định cho các biến kết quả
+    return {
+      winRate: 0,
+      drawRate: 0,
+      score: 0,
+      avgPositionalAdvantage: 0,
+      avgMaterial: 0,
+    };
+  }
   console.log(
     `Starting parameter tuning with ${positions.length} positions...`
   );
@@ -47,8 +59,8 @@ export async function tuneParameters(
     development: 20,
   };
   let bestScore = 0;
-  let bestWinRate = 0;
-  let bestDrawRate = 0;
+  let bestWinRate: number = 0;
+  let bestDrawRate: number = 0;
 
   // Chọn phương pháp tối ưu
   const method = options.method || "random";
