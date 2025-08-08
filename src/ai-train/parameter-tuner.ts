@@ -3,6 +3,8 @@
 import { evaluateBoard } from "../utils/chess-ai-bot";
 import { loadPositions } from "./dataset.js";
 import { fenToGameState } from "./utils";
+import fs from "fs";
+import path from "path";
 import { PositionData, EvaluationMetrics } from "./types.js";
 
 /**
@@ -94,6 +96,19 @@ export async function tuneParameters(
 
   console.log("Parameter tuning completed!");
   console.log("Best weights:", bestWeights);
+
+  // Save best weights to file
+  const weightsPath = path.resolve(__dirname, "../../best-weights.json");
+  try {
+    fs.writeFileSync(
+      weightsPath,
+      JSON.stringify(bestWeights, null, 2),
+      "utf-8"
+    );
+    console.log(`Best weights saved to ${weightsPath}`);
+  } catch (err) {
+    console.error("Failed to save best weights:", err);
+  }
 
   // Return final metrics
   return {

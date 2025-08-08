@@ -1,3 +1,6 @@
+import { loadBestWeights } from "./load-weights";
+// Tự động nạp trọng số tối ưu nếu có
+let AI_WEIGHTS = loadBestWeights() || undefined;
 // Chess AI Bot implementation - Optimized Version
 // This bot makes moves for the opponent when there's only one player in the game
 
@@ -921,6 +924,8 @@ export function evaluateBoard(
     development?: number;
   }
 ): number {
+  // Nếu không truyền weights thì dùng AI_WEIGHTS nếu có
+  const useWeights = weights || AI_WEIGHTS;
   const { board, aiColor } = gameState;
   let score = 0;
   let myKingPos: Position | null = null;
@@ -941,19 +946,19 @@ export function evaluateBoard(
       if (!piece) continue;
 
       // Cập nhật tổng giá trị vật chất
-      const pieceValue = weights
+      const pieceValue = useWeights
         ? piece[1] === "P"
-          ? weights.pawn
+          ? useWeights.pawn
           : piece[1] === "N"
-          ? weights.knight
+          ? useWeights.knight
           : piece[1] === "B"
-          ? weights.bishop
+          ? useWeights.bishop
           : piece[1] === "R"
-          ? weights.rook
+          ? useWeights.rook
           : piece[1] === "Q"
-          ? weights.queen
+          ? useWeights.queen
           : piece[1] === "K"
-          ? weights.king
+          ? useWeights.king
           : PIECE_VALUES[piece[1]]
         : PIECE_VALUES[piece[1]];
       if (piece.startsWith(myPrefix)) {
