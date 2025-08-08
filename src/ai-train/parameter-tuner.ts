@@ -31,32 +31,51 @@ export async function tuneParameters(
     `Learning rate: ${options.learningRate}, Iterations: ${options.iterations}`
   );
 
-  // In a real implementation, we would:
-  // 1. Extract parameters from the evaluation function
-  // 2. Adjust them incrementally based on error gradient
-  // 3. Test against known good positions
-  // 4. Repeat until convergence or iteration limit
+  // Ví dụ: tối ưu hóa giá trị quân bằng random search và hill climbing
+  // Khởi tạo trọng số quân cờ (piece values)
+  let bestWeights = {
+    pawn: 100,
+    knight: 320,
+    bishop: 330,
+    rook: 500,
+    queen: 900,
+    king: 20000,
+  };
+  let bestScore = 0;
+  let bestWinRate = 0;
+  let bestDrawRate = 0;
 
-  // For this example, we'll simulate the tuning process
-  let winRate = 0.5; // Starting metrics
-  let drawRate = 0.3;
-  let score = 0.6;
-
-  // Simulate improvement over iterations
   for (let i = 0; i < options.iterations; i++) {
+    // Random search: thử thay đổi trọng số một chút
+    let candidateWeights = { ...bestWeights };
+    for (const key of Object.keys(candidateWeights) as Array<
+      keyof typeof candidateWeights
+    >) {
+      candidateWeights[key] += Math.floor(Math.random() * 21 - 10); // +/-10
+    }
+
+    // Đánh giá hiệu suất (giả lập, bạn có thể thay bằng hàm thực tế)
+    // Ví dụ: càng queen cao thì score càng cao
+    let score =
+      0.6 + (candidateWeights.queen - 900) / 2000 + Math.random() * 0.05;
+    let winRate =
+      0.5 + (candidateWeights.pawn - 100) / 1000 + Math.random() * 0.05;
+    let drawRate =
+      0.3 -
+      Math.abs(candidateWeights.knight - 320) / 2000 +
+      Math.random() * 0.02;
+
+    // Nếu score tốt hơn thì cập nhật
+    if (score > bestScore) {
+      bestScore = score;
+      bestWinRate = winRate;
+      bestDrawRate = drawRate;
+      bestWeights = candidateWeights;
+    }
+
+    // Log quá trình
     console.log(`Iteration ${i + 1}/${options.iterations}...`);
-
-    // Simulated improvement per iteration (would be based on actual results in real implementation)
-    winRate += Math.random() * 0.05 - 0.01; // Slight random improvement
-    drawRate -= Math.random() * 0.02; // Slight decrease in draws
-    score += Math.random() * 0.03 - 0.005; // Slight score improvement
-
-    // Keep values in valid range
-    winRate = Math.min(Math.max(winRate, 0), 1);
-    drawRate = Math.min(Math.max(drawRate, 0), 1);
-    score = Math.min(Math.max(score, 0), 1);
-
-    // Log progress
+    console.log("Candidate weights:", candidateWeights);
     console.log(
       `Current metrics - Win rate: ${winRate.toFixed(
         3
@@ -65,13 +84,20 @@ export async function tuneParameters(
   }
 
   console.log("Parameter tuning completed!");
+  console.log("Best weights:", bestWeights);
 
   // Return final metrics
   return {
-    winRate,
-    drawRate,
-    score,
-    avgPositionalAdvantage: 120, // Simulated average positional advantage
+    winRate: bestWinRate,
+    drawRate: bestDrawRate,
+    score: bestScore,
+    avgPositionalAdvantage: 120,
+    avgMaterial:
+      bestWeights.pawn +
+      bestWeights.knight +
+      bestWeights.bishop +
+      bestWeights.rook +
+      bestWeights.queen,
   };
 }
 
