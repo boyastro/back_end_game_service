@@ -6,17 +6,10 @@ import { tuneParameters } from "./parameter-tuner.js";
 import { getOpeningPositions, getEndgamePositions } from "./utils.js";
 import { TrainingConfig, EvaluationMetrics } from "./types.js";
 import { GameState, evaluateBoard } from "../utils/chess-ai-bot.js";
+import { loadPositions, savePositionEvaluation } from "./dataset.js";
 
 // Dataset management placeholder functions
-const loadPositions = async (limit: number = 10000): Promise<any[]> => {
-  console.log(`Loading ${limit} positions...`);
-  return [];
-};
-
-const savePositionEvaluation = async (data: any): Promise<boolean> => {
-  console.log("Position saved:", data.fen);
-  return true;
-};
+// Đã import loadPositions từ dataset.js
 
 /**
  * Default training configuration
