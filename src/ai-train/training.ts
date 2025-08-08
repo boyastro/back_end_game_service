@@ -8,7 +8,7 @@ import { TrainingConfig, EvaluationMetrics } from "./types.js";
 import { GameState, evaluateBoard } from "../utils/chess-ai-bot.js";
 
 // Dataset management placeholder functions
-const loadPositions = async (limit: number = 1000): Promise<any[]> => {
+const loadPositions = async (limit: number = 10000): Promise<any[]> => {
   console.log(`Loading ${limit} positions...`);
   return [];
 };
