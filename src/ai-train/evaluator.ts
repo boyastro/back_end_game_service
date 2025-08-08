@@ -1,9 +1,9 @@
 // Chess AI evaluation module
 
-import { GameState, evaluateBoard } from "../utils/chess-ai-bot";
+import { GameState, evaluateBoard } from "../utils/chess-ai-bot.js";
 import { loadPositions } from "./dataset";
-import { FEN, PositionData, EvaluationMetrics } from "./types";
-import { fenToGameState } from "./utils";
+import { FEN, PositionData, EvaluationMetrics } from "./types.js";
+import { fenToGameState } from "./utils.js";
 
 /**
  * Evaluate a single chess position

@@ -2,7 +2,7 @@
 
 import fs from "fs";
 import path from "path";
-import { FEN, PositionData } from "./types";
+import { FEN, PositionData } from "./types.js";
 
 // Default path for storing dataset files
 const DEFAULT_DATA_DIR = path.join(process.cwd(), "data");

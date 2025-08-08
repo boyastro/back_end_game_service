@@ -5,9 +5,9 @@ import {
   ChessMove,
   generateAIMove,
   evaluateBoard,
-} from "../utils/chess-ai-bot";
-import { FEN } from "./types";
-import { cloneGameState, boardToFEN } from "./utils";
+} from "../utils/chess-ai-bot.js";
+import { FEN } from "./types.js";
+import { cloneGameState, boardToFEN } from "./utils.js";
 
 // Temporary placeholders until we integrate with the dataset
 // These will be replaced by actual implementation

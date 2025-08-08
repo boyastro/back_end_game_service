@@ -7,7 +7,7 @@ import {
   GameState,
   generateAIMove,
   evaluateBoard,
-} from "../utils/chess-ai-bot";
+} from "../utils/chess-ai-bot.js";
 
 // Định nghĩa FEN (Forsyth-Edwards Notation) cho vị trí cờ
 type FEN = string;

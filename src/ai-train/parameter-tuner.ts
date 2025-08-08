@@ -1,9 +1,9 @@
 // Parameter tuning for chess AI evaluation
 
 import { evaluateBoard } from "../utils/chess-ai-bot";
-import { loadPositions } from "./dataset";
+import { loadPositions } from "./dataset.js";
 import { fenToGameState } from "./utils";
-import { PositionData, EvaluationMetrics } from "./types";
+import { PositionData, EvaluationMetrics } from "./types.js";
 
 /**
  * Options for parameter tuning

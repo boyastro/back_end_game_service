@@ -1,6 +1,6 @@
 // Chess AI Training Utilities
-import { GameState } from "../utils/chess-ai-bot";
-import { FEN } from "./types";
+import { GameState } from "../utils/chess-ai-bot.js";
+import { FEN } from "./types.js";
 
 /**
  * Convert a GameState board to FEN notation
