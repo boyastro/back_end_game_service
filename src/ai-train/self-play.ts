@@ -1,3 +1,11 @@
+/**
+ * Trả về tất cả nước đi hợp lệ cho trạng thái hiện tại
+ */
+import { getAllPossibleMoves } from "../utils/chess-ai-bot.js";
+
+export function generateAllAIMoves(gameState: GameState): ChessMove[] {
+  return getAllPossibleMoves(gameState);
+}
 // Self-play module for chess AI training
 
 import {
@@ -79,27 +87,46 @@ async function generateSelfPlayGame(
       isGameOver = true;
       break;
     }
-
-    // Add position to repetition tracker
     positions.add(fen);
 
-    // Generate move for current player
-    const move = await generateAIMove(gameState);
-
-    // If no valid moves, the game is over
-    if (!move) {
+    const possibleMoves: ChessMove[] = generateAllAIMoves(gameState);
+    if (possibleMoves.length === 0) {
       console.log("No valid moves, game over");
       isGameOver = true;
       break;
     }
 
+    // Đánh giá từng nước đi, chọn nước đi tốt nhất hoặc ngẫu nhiên trong top N
+    let evaluatedMoves = possibleMoves.map((move) => {
+      // Clone state, apply move
+      const nextState = cloneGameState(gameState);
+      const piece = nextState.board[move.from.y][move.from.x];
+      nextState.board[move.from.y][move.from.x] = null;
+      nextState.board[move.to.y][move.to.x] = piece;
+      // Đánh giá
+      const score = evaluateBoard(nextState);
+      return { move, score };
+    });
+    // Sắp xếp theo score (tối ưu cho màu hiện tại)
+    evaluatedMoves.sort((a, b) =>
+      currentColor === "w" ? b.score - a.score : a.score - b.score
+    );
+    // Chọn nước đi tốt nhất hoặc ngẫu nhiên trong top 3 nếu randomize
+    let chosenMove;
+    if (randomize && evaluatedMoves.length > 2) {
+      const topN = evaluatedMoves.slice(0, 3);
+      chosenMove = topN[Math.floor(Math.random() * topN.length)].move;
+    } else {
+      chosenMove = evaluatedMoves[0].move;
+    }
+
     // Evaluate position after move
-    const evaluation = evaluateBoard(gameState);
+    const evaluation = evaluatedMoves[0].score;
 
     // Save move and position information
     moves.push({
       fen,
-      move,
+      move: chosenMove,
       evaluation,
     });
 
@@ -108,33 +135,38 @@ async function generateSelfPlayGame(
       await savePositionEvaluation({
         fen,
         evaluation,
-        bestMove: `${move.from.x},${move.from.y}-${move.to.x},${move.to.y}`,
+        bestMove: `${chosenMove.from.x},${chosenMove.from.y}-${chosenMove.to.x},${chosenMove.to.y}`,
       });
     }
 
     // Apply move to game state
     const nextGameState = cloneGameState(gameState);
-
-    // Move the piece
-    const piece = nextGameState.board[move.from.y][move.from.x];
-    nextGameState.board[move.from.y][move.from.x] = null;
-    nextGameState.board[move.to.y][move.to.x] = piece;
-
-    // Handle special moves (castling, promotion, etc.) - simplified for example
+    const piece = nextGameState.board[chosenMove.from.y][chosenMove.from.x];
+    nextGameState.board[chosenMove.from.y][chosenMove.from.x] = null;
+    nextGameState.board[chosenMove.to.y][chosenMove.to.x] = piece;
 
     // Switch sides
     nextGameState.aiColor =
       nextGameState.aiColor === "WHITE" ? "BLACK" : "WHITE";
-
-    // Update game state
     gameState = nextGameState;
-
-    // Increment move counter
     moveCount++;
 
-    // Check for game end conditions (checkmate, stalemate)
-    // This would require implementing chess rules for game end detection
-    // Simplified for this example
+    // Kiểm tra kết thúc đơn giản: nếu không còn nước đi cho đối thủ => checkmate hoặc pat
+    const opponentMoves: ChessMove[] = generateAllAIMoves(gameState);
+    if (opponentMoves.length === 0) {
+      // Nếu đang bị chiếu => checkmate, ngược lại => pat
+      // (giả lập đơn giản: nếu evaluation > 500 hoặc < -500)
+      if (
+        (currentColor === "w" && evaluation > 500) ||
+        (currentColor === "b" && evaluation < -500)
+      ) {
+        console.log("Checkmate detected");
+      } else {
+        console.log("Stalemate detected");
+      }
+      isGameOver = true;
+      break;
+    }
     if (moveCount >= maxMoves) {
       console.log("Game reached maximum move limit");
       isGameOver = true;
