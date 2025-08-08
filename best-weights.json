@@ -1,11 +1,11 @@
 {
-  "pawn": 88,
-  "knight": 325,
-  "bishop": 330,
-  "rook": 497,
-  "queen": 909,
+  "pawn": 102,
+  "knight": 324,
+  "bishop": 320,
+  "rook": 495,
+  "queen": 894,
   "king": 19998,
-  "centerControl": 40,
-  "kingSafety": 55,
-  "development": 16
+  "centerControl": 37,
+  "kingSafety": 48,
+  "development": 20
 }
