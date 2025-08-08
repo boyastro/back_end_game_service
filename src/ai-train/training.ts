@@ -1,7 +1,6 @@
 // Chess AI Training Coordinator
 
-// Placeholder imports - these will need actual implementations
-// import { generateSelfPlayGames } from "./self-play.js";
+import { generateSelfPlayGames } from "./self-play.js";
 // import { evaluatePositions } from "./evaluator.js";
 // import { tuneParameters } from "./parameter-tuner.js";
 // import { getOpeningPositions, getEndgamePositions } from "./utils.js";
@@ -23,17 +22,6 @@ interface EvaluationMetrics {
   drawRate: number;
   avgPositionalAdvantage?: number;
 }
-
-// Temporary placeholder functions
-const generateSelfPlayGames = async (
-  num: number,
-  options: any
-): Promise<string[]> => {
-  console.log(`Generating ${num} self-play games...`);
-  return Array(num)
-    .fill(0)
-    .map((_, i) => `game_${i}`);
-};
 
 const evaluatePositions = async (
   positions: any[],
