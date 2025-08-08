@@ -8,8 +8,7 @@ import { TrainingConfig, EvaluationMetrics } from "./types.js";
 import { GameState, evaluateBoard } from "../utils/chess-ai-bot.js";
 import { loadPositions, savePositionEvaluation } from "./dataset.js";
 
-// Dataset management placeholder functions
-// Đã import loadPositions từ dataset.js
+import fs from "fs";
 
 /**
  * Default training configuration
@@ -51,7 +50,7 @@ export async function runTrainingCycle(
   let diversePositions: any[] = [];
   try {
     diversePositions = JSON.parse(
-      require("fs").readFileSync("src/ai-train/diverse-positions.json", "utf-8")
+      fs.readFileSync("src/ai-train/diverse-positions.json", "utf-8")
     );
     console.log(
       `Loaded ${diversePositions.length} diverse positions from diverse-positions.json`
@@ -122,7 +121,7 @@ export async function runTrainingCycle(
  */
 export async function quickTrain(): Promise<EvaluationMetrics> {
   return runTrainingCycle({
-    selfPlayGames: 2,
+    selfPlayGames: 1,
     positionsPerGame: 100,
     maxDepth: 3,
     iterations: 5,
