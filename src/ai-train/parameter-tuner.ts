@@ -54,16 +54,22 @@ export async function tuneParameters(
       candidateWeights[key] += Math.floor(Math.random() * 21 - 10); // +/-10
     }
 
-    // Đánh giá hiệu suất (giả lập, bạn có thể thay bằng hàm thực tế)
-    // Ví dụ: càng queen cao thì score càng cao
-    let score =
-      0.6 + (candidateWeights.queen - 900) / 2000 + Math.random() * 0.05;
-    let winRate =
-      0.5 + (candidateWeights.pawn - 100) / 1000 + Math.random() * 0.05;
-    let drawRate =
-      0.3 -
-      Math.abs(candidateWeights.knight - 320) / 2000 +
-      Math.random() * 0.02;
+    // Đánh giá hiệu suất thực tế trên toàn bộ dữ liệu self-play
+    let totalScore = 0;
+    let winCount = 0;
+    let drawCount = 0;
+    for (const pos of positions) {
+      const gameState = fenToGameState(pos.fen);
+      // Đánh giá vị trí với candidateWeights
+      // Hàm evaluateBoard cần hỗ trợ truyền weights
+      const evalScore = evaluateBoard(gameState, candidateWeights);
+      totalScore += evalScore;
+      if (evalScore > 0.5) winCount++;
+      else if (evalScore === 0) drawCount++;
+    }
+    let score = totalScore / positions.length;
+    let winRate = winCount / positions.length;
+    let drawRate = drawCount / positions.length;
 
     // Nếu score tốt hơn thì cập nhật
     if (score > bestScore) {

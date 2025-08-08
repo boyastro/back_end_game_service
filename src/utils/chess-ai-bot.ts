@@ -907,7 +907,17 @@ function orderMoves(
 }
 
 // Hàm đánh giá bàn cờ nâng cao
-export function evaluateBoard(gameState: GameState): number {
+export function evaluateBoard(
+  gameState: GameState,
+  weights?: {
+    pawn: number;
+    knight: number;
+    bishop: number;
+    rook: number;
+    queen: number;
+    king: number;
+  }
+): number {
   const { board, aiColor } = gameState;
   let score = 0;
   let myKingPos: Position | null = null;
@@ -928,7 +938,21 @@ export function evaluateBoard(gameState: GameState): number {
       if (!piece) continue;
 
       // Cập nhật tổng giá trị vật chất
-      const pieceValue = PIECE_VALUES[piece[1]];
+      const pieceValue = weights
+        ? piece[1] === "P"
+          ? weights.pawn
+          : piece[1] === "N"
+          ? weights.knight
+          : piece[1] === "B"
+          ? weights.bishop
+          : piece[1] === "R"
+          ? weights.rook
+          : piece[1] === "Q"
+          ? weights.queen
+          : piece[1] === "K"
+          ? weights.king
+          : PIECE_VALUES[piece[1]]
+        : PIECE_VALUES[piece[1]];
       if (piece.startsWith(myPrefix)) {
         myMaterial += pieceValue;
       } else {

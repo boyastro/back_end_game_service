@@ -58,7 +58,7 @@ export function boardToFEN(board: (string | null)[][], turn: "w" | "b"): FEN {
  * @param fen FEN string
  * @returns Partial GameState with board and active color
  */
-export function fenToGameState(fen: FEN): Partial<GameState> {
+export function fenToGameState(fen: FEN): GameState {
   const parts = fen.split(" ");
   const boardPart = parts[0];
   const turnPart = parts[1];
