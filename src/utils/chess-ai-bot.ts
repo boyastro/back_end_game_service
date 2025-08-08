@@ -916,6 +916,9 @@ export function evaluateBoard(
     rook: number;
     queen: number;
     king: number;
+    centerControl?: number;
+    kingSafety?: number;
+    development?: number;
   }
 ): number {
   const { board, aiColor } = gameState;
@@ -976,13 +979,16 @@ export function evaluateBoard(
   const isMiddlegame = totalPieces > 6 && totalPieces <= 20;
   const isOpening = totalPieces > 20;
 
-  // Điều chỉnh các trọng số theo giai đoạn
-  const developmentWeight = isOpening ? 15 : isMiddlegame ? 10 : 5;
-  const kingActivityWeight = isEndgame ? 30 : isMiddlegame ? 10 : 0;
-  const centerControlWeight = isMiddlegame ? 15 : 10;
-  const mobilityWeight = isEndgame ? 10 : isMiddlegame ? 8 : 5; // Tính điểm cho tính linh động
-  const kingTempoWeight = isEndgame ? 15 : 0; // Giá trị của thời gian trong tàn cuộc
-  const materialAdvantageWeight = isEndgame ? 1.3 : isMiddlegame ? 1.1 : 1.0; // Tăng giá trị vật chất trong tàn cuộc
+  // Điều chỉnh các trọng số theo giai đoạn, ưu tiên dùng weights nếu có
+  const developmentWeight =
+    weights?.development ?? (isOpening ? 15 : isMiddlegame ? 10 : 5);
+  const kingActivityWeight =
+    weights?.kingSafety ?? (isEndgame ? 30 : isMiddlegame ? 10 : 0);
+  const centerControlWeight =
+    weights?.centerControl ?? (isMiddlegame ? 15 : 10);
+  const mobilityWeight = isEndgame ? 10 : isMiddlegame ? 8 : 5;
+  const kingTempoWeight = isEndgame ? 15 : 0;
+  const materialAdvantageWeight = isEndgame ? 1.3 : isMiddlegame ? 1.1 : 1.0;
 
   // Cập nhật điểm dựa trên chênh lệch vật chất
   let materialScore = 0;

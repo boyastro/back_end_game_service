@@ -40,6 +40,9 @@ export async function tuneParameters(
     rook: 500,
     queen: 900,
     king: 20000,
+    centerControl: 30,
+    kingSafety: 50,
+    development: 20,
   };
   let bestScore = 0;
   let bestWinRate = 0;
