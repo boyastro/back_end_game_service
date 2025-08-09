@@ -21,6 +21,22 @@ export type GameState = {
 };
 
 // --- CONSTANTS ---
+// Helper: Lấy giá trị quân cờ theo AI_WEIGHTS nếu có
+function getPieceValue(type: string): number {
+  if (AI_WEIGHTS) {
+    const map: { [key: string]: keyof typeof AI_WEIGHTS } = {
+      P: "pawn",
+      N: "knight",
+      B: "bishop",
+      R: "rook",
+      Q: "queen",
+      K: "king",
+    };
+    const key = map[type.toUpperCase()];
+    if (key && typeof AI_WEIGHTS[key] === "number") return AI_WEIGHTS[key];
+  }
+  return PIECE_VALUES[type.toUpperCase()];
+}
 export const PIECE_VALUES: { [key: string]: number } = {
   P: 100,
   N: 320,
@@ -573,8 +589,8 @@ function orderMoves(
 
     // 2. Ưu tiên các nước ăn quân
     if (targetPiece) {
-      const victimValue = PIECE_VALUES[targetPiece[1]];
-      const aggressorValue = movingPiece ? PIECE_VALUES[movingPiece[1]] : 0;
+      const victimValue = getPieceValue(targetPiece[1]);
+      const aggressorValue = movingPiece ? getPieceValue(movingPiece[1]) : 0;
 
       // Cải tiến: Phân tích hệ số trao đổi quân
       const exchangeValue = victimValue - aggressorValue / 2;
@@ -606,7 +622,7 @@ function orderMoves(
           ((movingPiece.startsWith("w") && move.to.y === 0) ||
             (movingPiece.startsWith("b") && move.to.y === 7))
         ) {
-          score += 900; // Gần bằng giá trị của hậu
+          score += getPieceValue("Q"); // Gần bằng giá trị của hậu
         }
       }
 
@@ -946,21 +962,7 @@ export function evaluateBoard(
       if (!piece) continue;
 
       // Cập nhật tổng giá trị vật chất
-      const pieceValue = useWeights
-        ? piece[1] === "P"
-          ? useWeights.pawn
-          : piece[1] === "N"
-          ? useWeights.knight
-          : piece[1] === "B"
-          ? useWeights.bishop
-          : piece[1] === "R"
-          ? useWeights.rook
-          : piece[1] === "Q"
-          ? useWeights.queen
-          : piece[1] === "K"
-          ? useWeights.king
-          : PIECE_VALUES[piece[1]]
-        : PIECE_VALUES[piece[1]];
+      const pieceValue = getPieceValue(piece[1]);
       if (piece.startsWith(myPrefix)) {
         myMaterial += pieceValue;
       } else {
