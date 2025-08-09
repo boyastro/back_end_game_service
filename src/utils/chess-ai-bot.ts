@@ -541,101 +541,12 @@ function orderMoves(
   depth: number,
   killers: ChessMove[]
 ): ChessMove[] {
-  const { board, aiColor } = gameState;
-  const scoreMap = new Map<ChessMove, number>();
-
-  for (const move of moves) {
-    let score = 0;
-
-    // 1. Ưu tiên các killer moves (vẫn giữ phần này vì nó giúp tối ưu hóa alpha-beta pruning)
-    const isKiller = killers.some(
-      (m) =>
-        m.from.x === move.from.x &&
-        m.from.y === move.from.y &&
-        m.to.x === move.to.x &&
-        m.to.y === move.to.y
-    );
-    if (isKiller) {
-      score += 10000;
-    }
-
-    // 2. Tạo trạng thái mới sau khi thực hiện nước đi
-    const nextState = makeMove(gameState, move);
-
-    // 3. Sử dụng evaluateBoard để đánh giá trạng thái mới
-    // Vì evaluateBoard luôn trả về giá trị dương nếu AI có lợi thế
-    const evaluationScore = evaluateBoard(nextState);
-    score += evaluationScore;
-
-    // 4. Xử lý một số trường hợp đặc biệt mà không cần đánh giá lại toàn bộ trạng thái
-
-    // 4.1 Ưu tiên đặc biệt cho việc ăn vua (chiếu hết)
-    const movingPiece = board[move.from.y][move.from.x];
-    const targetPiece = board[move.to.y][move.to.x];
-    if (targetPiece && targetPiece[1] === "K") {
-      score += 9999999; // Điểm cực lớn cho nước ăn vua
-    }
-
-    // 4.2 Ưu tiên cao cho nhập thành
-    if (movingPiece && movingPiece[1] === "K") {
-      const isCastling = Math.abs(move.to.x - move.from.x) > 1;
-      if (isCastling) {
-        score += 1000; // Khuyến khích nhập thành
-      }
-    }
-
-    // 4.3 Ưu tiên thăng cấp tốt thành hậu
-    if (move.promotion && move.promotion === "Q") {
-      score += 800;
-    }
-
-    // 4.4 Ưu tiên thoát chiếu
-    const myPrefix = aiColor === "WHITE" ? "w" : "b";
-    const myKingPos = (() => {
-      for (let y = 0; y < 8; y++) {
-        for (let x = 0; x < 8; x++) {
-          const p = board[y][x];
-          if (p && p.startsWith(myPrefix) && p[1] === "K") {
-            return { x, y };
-          }
-        }
-      }
-      return null;
-    })();
-
-    if (
-      myKingPos &&
-      isSquareAttacked(board, myKingPos, aiColor === "WHITE" ? "b" : "w")
-    ) {
-      // Kiểm tra xem nước đi có giúp thoát chiếu không
-      const kingMoving = movingPiece && movingPiece[1] === "K";
-      const kingPosAfterMove = kingMoving ? move.to : myKingPos;
-
-      if (
-        !isSquareAttacked(
-          nextState.board,
-          kingPosAfterMove,
-          aiColor === "WHITE" ? "b" : "w"
-        )
-      ) {
-        score += 1500; // Ưu tiên rất cao cho việc thoát chiếu
-      }
-    }
-
-    scoreMap.set(move, score);
-  }
-
-  // Sắp xếp theo điểm giảm dần và chỉ lấy 60% số nước tốt nhất để tăng tốc
-  const sortedMoves = [...moves].sort((a, b) => {
-    const scoreA = scoreMap.get(a) || 0;
-    const scoreB = scoreMap.get(b) || 0;
+  // Sắp xếp các nước đi dựa trên đánh giá của evaluateBoard
+  return [...moves].sort((a, b) => {
+    const scoreA = evaluateBoard(makeMove(gameState, a));
+    const scoreB = evaluateBoard(makeMove(gameState, b));
     return scoreB - scoreA;
   });
-  const limitedMoves =
-    moves.length > 8
-      ? sortedMoves.slice(0, Math.max(5, Math.floor(moves.length * 0.6)))
-      : sortedMoves;
-  return limitedMoves;
 }
 
 // Hàm đánh giá bàn cờ nâng cao
