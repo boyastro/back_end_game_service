@@ -509,6 +509,7 @@ function orderMoves(
 }
 
 // Hàm đánh giá bàn cờ nâng cao
+
 export function evaluateBoard(gameState: GameState): number {
   // Sử dụng trọng số từ AI_WEIGHTS
   const useWeights = AI_WEIGHTS;
@@ -960,69 +961,6 @@ export function evaluateBoard(gameState: GameState): number {
     score -= useWeights.bishopPair;
   }
 
-  // Bảng giá trị vị trí cho các quân - khuyến khích các vị trí tốt
-  const piecePositionBonus = {
-    P: [
-      [0, 0, 0, 0, 0, 0, 0, 0],
-      [50, 50, 50, 50, 50, 50, 50, 50],
-      [10, 10, 20, 30, 30, 20, 10, 10],
-      [5, 5, 10, 25, 25, 10, 5, 5],
-      [0, 0, 0, 20, 20, 0, 0, 0],
-      [5, -5, -10, 0, 0, -10, -5, 5],
-      [5, 10, 10, -20, -20, 10, 10, 5],
-      [0, 0, 0, 0, 0, 0, 0, 0],
-    ],
-    N: [
-      [-50, -40, -30, -30, -30, -30, -40, -50],
-      [-40, -20, 0, 0, 0, 0, -20, -40],
-      [-30, 0, 10, 15, 15, 10, 0, -30],
-      [-30, 5, 15, 20, 20, 15, 5, -30],
-      [-30, 0, 15, 20, 20, 15, 0, -30],
-      [-30, 5, 10, 15, 15, 10, 5, -30],
-      [-40, -20, 0, 5, 5, 0, -20, -40],
-      [-50, -40, -30, -30, -30, -30, -40, -50],
-    ],
-    B: [
-      [-20, -10, -10, -10, -10, -10, -10, -20],
-      [-10, 0, 0, 0, 0, 0, 0, -10],
-      [-10, 0, 10, 10, 10, 10, 0, -10],
-      [-10, 5, 5, 10, 10, 5, 5, -10],
-      [-10, 0, 5, 10, 10, 5, 0, -10],
-      [-10, 10, 10, 10, 10, 10, 10, -10],
-      [-10, 5, 0, 0, 0, 0, 5, -10],
-      [-20, -10, -10, -10, -10, -10, -10, -20],
-    ],
-    R: [
-      [0, 0, 0, 0, 0, 0, 0, 0],
-      [5, 10, 10, 10, 10, 10, 10, 5],
-      [-5, 0, 0, 0, 0, 0, 0, -5],
-      [-5, 0, 0, 0, 0, 0, 0, -5],
-      [-5, 0, 0, 0, 0, 0, 0, -5],
-      [-5, 0, 0, 0, 0, 0, 0, -5],
-      [-5, 0, 0, 0, 0, 0, 0, -5],
-      [0, 0, 0, 5, 5, 0, 0, 0],
-    ],
-    Q: [
-      [-20, -10, -10, -5, -5, -10, -10, -20],
-      [-10, 0, 0, 0, 0, 0, 0, -10],
-      [-10, 0, 5, 5, 5, 5, 0, -10],
-      [-5, 0, 5, 5, 5, 5, 0, -5],
-      [0, 0, 5, 5, 5, 5, 0, -5],
-      [-10, 5, 5, 5, 5, 5, 0, -10],
-      [-10, 0, 5, 0, 0, 0, 0, -10],
-      [-20, -10, -10, -5, -5, -10, -10, -20],
-    ],
-    K: [
-      [-30, -40, -40, -50, -50, -40, -40, -30],
-      [-30, -40, -40, -50, -50, -40, -40, -30],
-      [-30, -40, -40, -50, -50, -40, -40, -30],
-      [-30, -40, -40, -50, -50, -40, -40, -30],
-      [-20, -30, -30, -40, -40, -30, -30, -20],
-      [-10, -20, -20, -20, -20, -20, -20, -10],
-      [20, 20, -5, -10, -10, -5, 20, 20],
-      [30, 40, 0, -10, -10, 0, 40, 30],
-    ],
-  };
   // 1. Đánh giá vị trí và quân
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
@@ -1032,16 +970,114 @@ export function evaluateBoard(gameState: GameState): number {
       const pieceType = piece[1];
       const value = PIECE_VALUES[pieceType];
 
-      // Thêm giá trị vị trí từ bảng đánh giá
-      const positionBonus =
-        pieceType === "P" ||
-        pieceType === "N" ||
-        pieceType === "B" ||
-        pieceType === "R" ||
-        pieceType === "Q" ||
-        pieceType === "K"
-          ? piecePositionBonus[pieceType][piece.startsWith("w") ? y : 7 - y][x]
-          : 0;
+      // Tính toán điểm vị trí dựa trên các nguyên tắc cơ bản thay vì bảng cố định
+      let positionBonus = 0;
+      const isWhite = piece.startsWith("w");
+
+      // 1. Ưu tiên kiểm soát trung tâm
+      const distanceToCenter = Math.abs(3.5 - x) + Math.abs(3.5 - y);
+      const positionCenterBonus = 4 - distanceToCenter; // Giá trị cao hơn cho vị trí gần trung tâm
+
+      // 2. Đánh giá vị trí cho từng loại quân
+      if (pieceType === "P") {
+        // Tốt
+        // Thưởng cho tốt tiến lên (giá trị tăng khi tốt gần phía đối phương)
+        const rankProgress = isWhite ? 7 - y : y;
+        const progressBonus = rankProgress * 5;
+
+        // Phạt tốt ở cột biên a/h
+        const fileEdgePenalty = x === 0 || x === 7 ? -5 : 0;
+
+        // Ưu tiên tốt ở trung tâm
+        const centerPawnBonus = x >= 2 && x <= 5 ? 5 : 0;
+
+        // Thưởng đặc biệt cho tốt đã tiến xa (hàng 5-6 với trắng, hàng 1-2 với đen)
+        const advancedPawnBonus =
+          (isWhite && y <= 2) || (!isWhite && y >= 5) ? 20 : 0;
+
+        positionBonus =
+          (progressBonus +
+            fileEdgePenalty +
+            centerPawnBonus +
+            advancedPawnBonus) *
+          (useWeights.pawnSquare / 10);
+      } else if (pieceType === "N") {
+        // Mã
+        // Mã rất mạnh ở trung tâm, yếu ở góc
+        const knightCenterBonus = positionCenterBonus * 8;
+
+        // Phạt nặng cho mã ở góc bàn cờ
+        const isCorner = (x <= 1 || x >= 6) && (y <= 1 || y >= 6);
+        const cornerPenalty = isCorner ? -15 : 0;
+        positionBonus =
+          (knightCenterBonus + cornerPenalty) * (useWeights.knightSquare / 10);
+      } else if (pieceType === "B") {
+        // Tượng
+        // Tượng mạnh khi kiểm soát đường chéo dài
+        const diagonalLength = Math.min(x, y) + Math.min(7 - x, 7 - y);
+        const diagonalBonus = diagonalLength * 3;
+
+        // Phạt tượng bị chặn bởi tốt ở đường chéo chính
+        const blockedByPawn =
+          (isWhite && y > 0 && x > 0 && board[y - 1][x - 1] === "wP") ||
+          (isWhite && y > 0 && x < 7 && board[y - 1][x + 1] === "wP") ||
+          (!isWhite && y < 7 && x > 0 && board[y + 1][x - 1] === "bP") ||
+          (!isWhite && y < 7 && x < 7 && board[y + 1][x + 1] === "bP");
+        const blockedPenalty = blockedByPawn ? -10 : 0;
+
+        positionBonus =
+          (positionCenterBonus * 3 + diagonalBonus + blockedPenalty) *
+          (useWeights.bishopSquare / 10);
+      } else if (pieceType === "R") {
+        // Xe
+        // Xe mạnh ở cột mở (cột không có tốt) - nhưng cái này được xử lý riêng trong phân tích cấu trúc tốt
+
+        // Xe mạnh ở hàng 7 (hoặc hàng 2 cho đen)
+        const seventhRankBonus =
+          (isWhite && y === 1) || (!isWhite && y === 6) ? 20 : 0;
+
+        // Xe nên ở vị trí gần trung tâm
+        positionBonus =
+          (positionCenterBonus * 2 + seventhRankBonus) *
+          (useWeights.rookSquare / 10);
+      } else if (pieceType === "Q") {
+        // Hậu
+        // Hậu nên tránh ra sớm trong giai đoạn đầu
+        const earlyDevelopmentPenalty =
+          isOpening && ((isWhite && y < 6) || (!isWhite && y > 1)) ? -10 : 0;
+
+        // Hậu mạnh ở trung tâm hoặc phía quân đối phương
+        const queenActivityBonus = positionCenterBonus * 5;
+
+        positionBonus =
+          (queenActivityBonus + earlyDevelopmentPenalty) *
+          (useWeights.queenSquare / 10);
+      } else if (pieceType === "K") {
+        // Vua
+        if (isEndgame) {
+          // Trong tàn cuộc, vua nên tích cực và ở gần trung tâm
+          positionBonus =
+            positionCenterBonus * 10 * (useWeights.kingSquareEnd / 10);
+        } else {
+          // Trong giai đoạn đầu/giữa, vua nên tránh xa trung tâm và ưu tiên nhập thành
+          const castlingPosition =
+            (isWhite && y === 7 && (x === 6 || x === 7)) ||
+            (!isWhite && y === 0 && (x === 6 || x === 7));
+          const castlingBonus = castlingPosition ? 30 : 0;
+
+          // Phạt vua ở trung tâm trong giai đoạn đầu/giữa
+          const centralKingPenalty =
+            positionCenterBonus > 0 ? -positionCenterBonus * 15 : 0;
+
+          // Phạt khi vua đi ra khỏi hàng cuối cùng quá sớm
+          const earlyKingMovePenalty =
+            (isWhite && y < 6) || (!isWhite && y > 1) ? -20 : 0;
+
+          positionBonus =
+            (castlingBonus + centralKingPenalty + earlyKingMovePenalty) *
+            (useWeights.kingSquareMiddle / 10);
+        }
+      }
 
       // Thưởng cho kiểm soát trung tâm
       const centerBonus =
@@ -1051,15 +1087,15 @@ export function evaluateBoard(gameState: GameState): number {
             : centerControlWeight // Trung tâm mở rộng
           : 0;
 
-      // Thưởng cho tốt ở hàng 3-4
+      // Thưởng cho tốt ở hàng 3-4 (khuyến khích kiểm soát trung tâm)
       const pawnBonus =
         pieceType === "P"
           ? aiColor === "WHITE"
             ? y === 3 || y === 4
-              ? 15
+              ? useWeights.centerControl / 2
               : 0
             : y === 3 || y === 4
-            ? 15
+            ? useWeights.centerControl / 2
             : 0
           : 0;
 
@@ -1076,7 +1112,7 @@ export function evaluateBoard(gameState: GameState): number {
 
         // Khuyến khích không di chuyển hậu quá sớm
         if (pieceType === "Q" && isOpening) {
-          developmentBonus -= 10;
+          developmentBonus -= useWeights.development / 2;
         }
       }
 
@@ -1090,24 +1126,24 @@ export function evaluateBoard(gameState: GameState): number {
           if (piece.startsWith("w")) {
             // Khuyến khích vua trắng ở vị trí g1, h1, h2
             if ((x === 6 && y === 7) || (x === 7 && (y === 7 || y === 6))) {
-              kingBonus += 50;
+              kingBonus += useWeights.kingSafety / 2;
             } else if (x >= 4 && y >= 6) {
               // Vua ở gần vị trí mong muốn
-              kingBonus += 20;
+              kingBonus += useWeights.kingSafety / 5;
             }
           } else {
             // Khuyến khích vua đen ở vị trí g8, h8, h7
             if ((x === 6 && y === 0) || (x === 7 && (y === 0 || y === 1))) {
-              kingBonus += 50;
+              kingBonus += useWeights.kingSafety / 2;
             } else if (x >= 4 && y <= 1) {
               // Vua ở gần vị trí mong muốn
-              kingBonus += 20;
+              kingBonus += useWeights.kingSafety / 5;
             }
           }
 
           // Phạt nặng nếu vua ở trung tâm trong giai đoạn đầu/giữa
           if (x >= 2 && x <= 5 && y >= 2 && y <= 5) {
-            kingBonus -= 80;
+            kingBonus -= useWeights.kingSafety * 1.5;
           }
 
           // Phạt nếu vua di chuyển khỏi hàng cuối/đầu quá sớm
@@ -1115,7 +1151,7 @@ export function evaluateBoard(gameState: GameState): number {
             (piece.startsWith("w") && y < 6) ||
             (piece.startsWith("b") && y > 1)
           ) {
-            kingBonus -= 70;
+            kingBonus -= useWeights.kingSafety * 1.2;
           }
         } else if (isEndgame) {
           // Trong tàn cuộc, vua nên tích cực và tiến gần trung tâm
@@ -1157,18 +1193,19 @@ export function evaluateBoard(gameState: GameState): number {
   }
   // 2. Kiểm tra chiếu vua đối phương
   if (oppKingPos && isSquareAttacked(board, oppKingPos, myPrefix)) {
-    score += 200;
+    score += useWeights.checkBonus * 2;
     const oppMoves = getAllPossibleMoves({
       ...gameState,
       aiColor: aiColor === "WHITE" ? "BLACK" : "WHITE",
     });
-    if (oppMoves.length === 0) score += 2000;
+    if (oppMoves.length === 0) score += useWeights.checkBonus * 100;
   }
+
   // 3. Trừ điểm nếu vua mình bị chiếu
   if (myKingPos && isSquareAttacked(board, myKingPos, oppPrefix)) {
-    score -= 200;
+    score -= useWeights.checkBonus * 2;
     const myMoves = getAllPossibleMoves(gameState);
-    if (myMoves.length === 0) score -= 2000; // Thua tuyệt đối
+    if (myMoves.length === 0) score -= useWeights.checkBonus * 100; // Thua tuyệt đối
   }
 
   // 4. Đánh giá linh động (mobility) - số nước đi có thể thực hiện
@@ -1428,7 +1465,9 @@ export function evaluateBoard(gameState: GameState): number {
   // Trong tàn cuộc, đánh giá cao tempo (ai đi trước) nếu có nhiều nước đi hơn
   if (isEndgame && myMoves.length > oppMoves.length) {
     score += kingTempoWeight;
-  } // 5. Bảo vệ quân lớn: Đánh giá tất cả các quân
+  }
+
+  // 5. Bảo vệ quân lớn: Đánh giá tất cả các quân
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const piece = board[y][x];
@@ -1527,14 +1566,16 @@ export function evaluateBoard(gameState: GameState): number {
           }
         }
 
-        // Quân đối thủ đang bị ghim - thưởng
+        // Thưởng đặc biệt khi ép buộc đối thủ
         if (isPiecePinned(board, { x, y }, oppPrefix)) {
-          score += pieceValue * 0.3;
+          score += pieceValue * 0.4; // Thưởng cho việc ghim quân đối phương
+          // Thưởng thêm nếu quân đó là hậu hoặc xe
+          if (pieceType === "Q" || pieceType === "R") {
+            score += pieceValue * 0.2;
+          }
         }
-      }
 
-      // Chiến thuật ép buộc: nếu có nước đi duy nhất cho đối thủ, thưởng
-      if (piece.startsWith(myPrefix) && oppKingPos) {
+        // Phân tích các nước đi khả thi của đối thủ để tìm kiếm các nước xấu
         const oppMoves = getAllPossibleMoves({
           ...gameState,
           aiColor: aiColor === "WHITE" ? "BLACK" : "WHITE",
@@ -1562,7 +1603,7 @@ export function evaluateBoard(gameState: GameState): number {
     const count = (gameState as any).history.filter(
       (h: string) => h === fen
     ).length;
-    if (count >= 3) score -= 500; // Trừ điểm lớn nếu trạng thái lặp lại >= 3 lần
+    if (count >= 3) score -= useWeights.tempo * 50; // Trừ điểm lớn nếu trạng thái lặp lại >= 3 lần
   }
 
   // Cải thiện tính di động: khuyến khích kiểm soát trung tâm và di chuyển
@@ -1601,12 +1642,12 @@ export function evaluateBoard(gameState: GameState): number {
 
   // Phạt nghiêm khắc cho việc lặp lại vị trí (tránh hòa do lặp 3 lần)
   if (repetitionCount >= 1) {
-    score -= 50 * repetitionCount; // Phạt càng nặng khi càng lặp lại nhiều
+    score -= useWeights.tempo * 5 * repetitionCount; // Phạt càng nặng khi càng lặp lại nhiều
   }
 
   // Phạt các nước lặp lại
   if (repetitionCount >= 2) {
-    score -= 200; // Phạt nặng khi vị trí lặp lại 3 lần (sắp hòa)
+    score -= useWeights.tempo * 20; // Phạt nặng khi vị trí lặp lại 3 lần (sắp hòa)
   }
 
   // Chuẩn hóa: Luôn trả về điểm số theo hướng AI (dương là tốt cho AI)
