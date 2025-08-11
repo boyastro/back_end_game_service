@@ -54,7 +54,43 @@ export async function tuneParameters(
     rook: 500,
     queen: 900,
     king: 20000,
+
+    pawnSquare: 10,
+    knightSquare: 30,
+    bishopSquare: 30,
+    rookSquare: 20,
+    queenSquare: 10,
+    kingSquareMiddle: -20,
+    kingSquareEnd: 40,
+
+    doubledPawn: -20,
+    isolatedPawn: -15,
+    passedPawn: 30,
+    backwardPawn: -10,
+    connectedPawn: 15,
+    pawnShield: 20,
+
     centerControl: 30,
+    mobility: 5,
+    attackKing: 40,
+    defendKing: 20,
+    bishopPair: 30,
+    spaceAdvantage: 10,
+    pieceCoordination: 15,
+
+    rookOpenFile: 25,
+    rook7thRank: 20,
+    rookConnected: 15,
+    promotionThreat: 80,
+    kingActivityEndgame: 40,
+    tempo: 5,
+
+    threatMinorPiece: 15,
+    threatMajorPiece: 25,
+    checkBonus: 10,
+    pinBonus: 8,
+    forkBonus: 12,
+
     kingSafety: 50,
     development: 20,
   };
@@ -66,43 +102,7 @@ export async function tuneParameters(
   const method = options.method || "random";
 
   if (method === "random") {
-    for (let i = 0; i < options.iterations; i++) {
-      let candidateWeights = { ...bestWeights };
-      for (const key of Object.keys(candidateWeights) as Array<
-        keyof typeof candidateWeights
-      >) {
-        candidateWeights[key] += Math.floor(Math.random() * 21 - 10); // +/-10
-      }
-      let totalScore = 0;
-      let winCount = 0;
-      let drawCount = 0;
-      for (const pos of positions) {
-        const gameState = fenToGameState(pos.fen);
-        const evalScore = evaluateBoard(gameState, candidateWeights);
-        totalScore += evalScore;
-        // Xác định thắng/hòa/thua dựa trên ngưỡng điểm số
-        if (evalScore > 5000) winCount++;
-        else if (evalScore < -5000) {
-          // Nếu muốn tính thua tuyệt đối, có thể thêm biến loseCount++;
-        } else if (Math.abs(evalScore) < 10) drawCount++;
-      }
-      let score = totalScore / positions.length;
-      let winRate = winCount / positions.length;
-      let drawRate = drawCount / positions.length;
-      if (score > bestScore) {
-        bestScore = score;
-        bestWinRate = winRate;
-        bestDrawRate = drawRate;
-        bestWeights = candidateWeights;
-      }
-      console.log(`Iteration ${i + 1}/${options.iterations}...`);
-      console.log("Candidate weights:", candidateWeights);
-      console.log(
-        `Current metrics - Win rate: ${winRate.toFixed(
-          3
-        )}, Score: ${score.toFixed(3)}`
-      );
-    }
+    // impliment
   } else if (method === "genetic") {
     // Genetic Algorithm cải tiến
     const populationSize = 20;
@@ -192,111 +192,7 @@ export async function tuneParameters(
       );
     }
   } else if (method === "gradient") {
-    // Population-based Gradient Descent
-    const populationSize = 20;
-    const mutationRate = 0.2;
-    let population: (typeof bestWeights)[] = [];
-    // Khởi tạo quần thể ban đầu
-    for (let i = 0; i < populationSize; i++) {
-      let individual = { ...bestWeights };
-      for (const key of Object.keys(individual) as Array<
-        keyof typeof individual
-      >) {
-        individual[key] += Math.floor(Math.random() * 21 - 10);
-      }
-      population.push(individual);
-    }
-    for (let gen = 0; gen < options.iterations; gen++) {
-      // Tính gradient cho từng cá thể
-      let newPopulation: (typeof bestWeights)[] = [];
-      let fitness: number[] = [];
-      let winRates: number[] = [];
-      let drawRates: number[] = [];
-      for (let i = 0; i < populationSize; i++) {
-        let weights = { ...population[i] };
-        let gradients: { [key in keyof typeof weights]: number } = {
-          pawn: 0,
-          knight: 0,
-          bishop: 0,
-          rook: 0,
-          queen: 0,
-          king: 0,
-          centerControl: 0,
-          kingSafety: 0,
-          development: 0,
-        };
-        for (const key of Object.keys(weights) as Array<keyof typeof weights>) {
-          let orig = weights[key];
-          weights[key] = orig + 1;
-          let plusScore = 0;
-          for (const pos of positions) {
-            const gameState = fenToGameState(pos.fen);
-            plusScore += evaluateBoard(gameState, weights);
-          }
-          plusScore /= positions.length;
-          weights[key] = orig - 1;
-          let minusScore = 0;
-          for (const pos of positions) {
-            const gameState = fenToGameState(pos.fen);
-            minusScore += evaluateBoard(gameState, weights);
-          }
-          minusScore /= positions.length;
-          gradients[key] = (plusScore - minusScore) / 2;
-          weights[key] = orig;
-        }
-        // Cập nhật trọng số bằng gradient
-        for (const key of Object.keys(weights) as Array<keyof typeof weights>) {
-          weights[key] += options.learningRate * gradients[key];
-          // Mutation
-          if (Math.random() < mutationRate) {
-            weights[key] += Math.floor(Math.random() * 21 - 10);
-          }
-        }
-        newPopulation.push(weights);
-      }
-      // Đánh giá fitness, win/draw cho quần thể mới
-      for (let i = 0; i < populationSize; i++) {
-        let weights = newPopulation[i];
-        let totalScore = 0;
-        let winCount = 0;
-        let drawCount = 0;
-        for (const pos of positions) {
-          const gameState = fenToGameState(pos.fen);
-          const evalScore = evaluateBoard(gameState, weights);
-          totalScore += evalScore;
-          // Xác định thắng/hòa/thua dựa trên ngưỡng điểm số
-          if (evalScore > 5000) winCount++;
-          else if (evalScore < -5000) {
-            // Nếu muốn tính thua tuyệt đối, có thể thêm biến loseCount++;
-          } else if (Math.abs(evalScore) < 10) drawCount++;
-        }
-        fitness.push(totalScore / positions.length);
-        winRates.push(winCount / positions.length);
-        drawRates.push(drawCount / positions.length);
-      }
-      // Chọn cá thể tốt nhất
-      let bestGenIdx = fitness.indexOf(Math.max(...fitness));
-      let bestGenScore = fitness[bestGenIdx];
-      let bestGenWinRate = winRates[bestGenIdx];
-      let bestGenDrawRate = drawRates[bestGenIdx];
-      if (bestGenScore > bestScore) {
-        bestScore = bestGenScore;
-        bestWinRate = bestGenWinRate;
-        bestDrawRate = bestGenDrawRate;
-        bestWeights = { ...newPopulation[bestGenIdx] };
-      }
-      // Quần thể cho thế hệ tiếp theo
-      population = newPopulation;
-      console.log(
-        `Gradient generation ${gen + 1}/${
-          options.iterations
-        }... Best score: ${bestGenScore.toFixed(
-          3
-        )}, Win rate: ${bestGenWinRate.toFixed(
-          3
-        )}, Draw rate: ${bestGenDrawRate.toFixed(3)}`
-      );
-    }
+    // Implement gradient descent optimization
   }
 
   console.log("Parameter tuning completed!");
