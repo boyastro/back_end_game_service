@@ -1,4 +1,5 @@
 import { loadBestWeights } from "./load-weights.js";
+import { evaluateMissingWeights } from "./chess-additional-evaluations.js";
 // Tự động nạp trọng số tối ưu nếu có
 let AI_WEIGHTS = loadBestWeights() || undefined;
 // Chess AI Bot implementation - Optimized Version
@@ -1434,6 +1435,18 @@ export function evaluateBoard(gameState: GameState): number {
   score += (myKingSafety * useWeights.kingSafety) / 10;
   score -= (oppKingSafety * useWeights.kingSafety) / 10;
 
+  // Áp dụng các đánh giá bổ sung từ module ngoài
+  if (useWeights) {
+    score += evaluateMissingWeights(
+      board,
+      myPrefix,
+      oppPrefix,
+      myKingPos,
+      oppKingPos,
+      useWeights
+    );
+  }
+
   // Đánh giá các đe dọa thăng cấp tốt
   for (const pawn of myPawns) {
     const { x, y } = pawn;
@@ -2297,6 +2310,16 @@ function isValidPosition(p: Position): boolean {
 function getOpponentPrefix(color: "WHITE" | "BLACK"): "w" | "b" {
   return color === "WHITE" ? "b" : "w";
 }
+
+// Xuất các hàm tiện ích để module khác có thể sử dụng
+export {
+  getAttackers,
+  getDefenders,
+  isPiecePinned,
+  isSquareAttacked,
+  isSquareAttackedBy,
+  isValidPosition,
+};
 
 /**
  * Get all valid moves for a pawn, including en passant.
