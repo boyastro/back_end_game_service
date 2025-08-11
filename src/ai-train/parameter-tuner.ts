@@ -67,14 +67,14 @@ export async function tuneParameters(
     isolatedPawn: -15,
     passedPawn: 30,
     backwardPawn: -10,
-    connectedPawn: 15,
+    connectedPawn: 25, // Tăng giá trị mặc định cho tốt liên kết
     pawnShield: 20,
 
     centerControl: 30,
-    mobility: 5,
+    mobility: 20, // Tăng giá trị mặc định cho mobility
     attackKing: 40,
     defendKing: 20,
-    bishopPair: 30,
+    bishopPair: 40, // Tăng giá trị mặc định cho cặp tượng
     spaceAdvantage: 10,
     pieceCoordination: 15,
 

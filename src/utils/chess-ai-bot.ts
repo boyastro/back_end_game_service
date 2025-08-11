@@ -798,6 +798,9 @@ export function evaluateBoard(gameState: GameState): number {
 
     // Kiểm tra tốt liên kết (connected pawns)
     let isConnected = false;
+    let chainLength = 0;
+    let isProtected = false;
+
     for (
       let checkX = Math.max(0, x - 1);
       checkX <= Math.min(7, x + 1);
@@ -814,16 +817,51 @@ export function evaluateBoard(gameState: GameState): number {
               otherPawn.y === y - 1)
           ) {
             isConnected = true;
-            break;
+            chainLength++;
+
+            // Kiểm tra xem tốt có được bảo vệ bởi tốt khác không
+            if (myPrefix === "w") {
+              // Đối với quân trắng (đi từ trên xuống)
+              if (otherPawn.y === y + 1 && Math.abs(otherPawn.x - x) === 1) {
+                isProtected = true;
+              }
+            } else {
+              // Đối với quân đen (đi từ dưới lên)
+              if (otherPawn.y === y - 1 && Math.abs(otherPawn.x - x) === 1) {
+                isProtected = true;
+              }
+            }
           }
         }
       }
-      if (isConnected) break;
     }
 
     if (isConnected) {
       myConnectedPawnCount++;
-      score += useWeights.connectedPawn;
+
+      // Cơ bản cho tốt liên kết
+      let connectedPawnBonus = Math.abs(useWeights.connectedPawn);
+
+      // Thưởng thêm cho tốt được bảo vệ bởi tốt khác
+      if (isProtected) {
+        connectedPawnBonus *= 1.5;
+      }
+
+      // Thưởng thêm cho tốt ở trung tâm (cột d và e)
+      if (x >= 3 && x <= 4) {
+        connectedPawnBonus *= 1.3;
+      }
+
+      // Thưởng thêm cho tốt thông qua đã liên kết
+      if (isPassed) {
+        connectedPawnBonus *= 1.5;
+      }
+
+      // Giá trị tốt liên kết tăng theo tầng mà tốt đã tiến
+      const advancementBonus = myPrefix === "w" ? (6 - y) / 6 : y / 6;
+      connectedPawnBonus *= 1 + advancementBonus;
+
+      score += connectedPawnBonus;
     }
 
     // Kiểm tra tốt bảo vệ vua (pawn shield)
@@ -951,6 +989,9 @@ export function evaluateBoard(gameState: GameState): number {
 
     // Kiểm tra tốt liên kết (connected pawns)
     let isConnected = false;
+    let chainLength = 0;
+    let isProtected = false;
+
     for (
       let checkX = Math.max(0, x - 1);
       checkX <= Math.min(7, x + 1);
@@ -967,16 +1008,51 @@ export function evaluateBoard(gameState: GameState): number {
               otherPawn.y === y - 1)
           ) {
             isConnected = true;
-            break;
+            chainLength++;
+
+            // Kiểm tra xem tốt có được bảo vệ bởi tốt khác không
+            if (oppPrefix === "w") {
+              // Đối với quân trắng (đi từ trên xuống)
+              if (otherPawn.y === y + 1 && Math.abs(otherPawn.x - x) === 1) {
+                isProtected = true;
+              }
+            } else {
+              // Đối với quân đen (đi từ dưới lên)
+              if (otherPawn.y === y - 1 && Math.abs(otherPawn.x - x) === 1) {
+                isProtected = true;
+              }
+            }
           }
         }
       }
-      if (isConnected) break;
     }
 
     if (isConnected) {
       oppConnectedPawnCount++;
-      score -= useWeights.connectedPawn;
+
+      // Cơ bản cho tốt liên kết
+      let connectedPawnBonus = Math.abs(useWeights.connectedPawn);
+
+      // Thưởng thêm cho tốt được bảo vệ bởi tốt khác
+      if (isProtected) {
+        connectedPawnBonus *= 1.5;
+      }
+
+      // Thưởng thêm cho tốt ở trung tâm (cột d và e)
+      if (x >= 3 && x <= 4) {
+        connectedPawnBonus *= 1.3;
+      }
+
+      // Thưởng thêm cho tốt thông qua đã liên kết
+      if (isPassed) {
+        connectedPawnBonus *= 1.5;
+      }
+
+      // Giá trị tốt liên kết tăng theo tầng mà tốt đã tiến
+      const advancementBonus = oppPrefix === "w" ? (6 - y) / 6 : y / 6;
+      connectedPawnBonus *= 1 + advancementBonus;
+
+      score -= connectedPawnBonus;
     }
 
     // Kiểm tra tốt bảo vệ vua (pawn shield)
@@ -1085,17 +1161,28 @@ export function evaluateBoard(gameState: GameState): number {
       }
     }
 
+    // Đếm số tốt trên bàn cờ để đánh giá mức độ mở của thế cờ
+    const totalPawns = myPawns.length + oppPawns.length;
+
+    // Hệ số điều chỉnh dựa trên số tốt - càng ít tốt, cặp tượng càng có giá trị
+    // Khi có ít tốt (thế cờ mở), giá trị cặp tượng sẽ tăng lên
+    const openPositionBonus = Math.max(0, 16 - totalPawns) / 16;
+
     // Chỉ thưởng điểm nếu có cả tượng trên ô đen và ô trắng
     if (darkSquareBishop && lightSquareBishop) {
-      score += useWeights.bishopPair;
+      // Giá trị cơ bản của cặp tượng
+      const baseBishopPairValue = Math.abs(useWeights.bishopPair);
+
+      // Áp dụng hệ số thế cờ mở
+      score += baseBishopPairValue * (1 + openPositionBonus);
 
       // Thêm thưởng cho cặp tượng trong tàn cuộc
       if (isEndgame) {
-        score += useWeights.bishopPair / 2; // Thêm 50% giá trị trong tàn cuộc
+        score += baseBishopPairValue * 0.5; // Thêm 50% giá trị trong tàn cuộc
       }
     } else {
       // Nếu hai tượng cùng màu ô, vẫn có lợi thế nhưng ít hơn
-      score += useWeights.bishopPair / 3;
+      score += Math.abs(useWeights.bishopPair) * 0.3;
     }
   }
 
@@ -1112,14 +1199,25 @@ export function evaluateBoard(gameState: GameState): number {
       }
     }
 
+    // Đếm số tốt trên bàn cờ để đánh giá mức độ mở của thế cờ
+    const totalPawns = myPawns.length + oppPawns.length;
+
+    // Hệ số điều chỉnh dựa trên số tốt - càng ít tốt, cặp tượng càng có giá trị
+    const openPositionBonus = Math.max(0, 16 - totalPawns) / 16;
+
     if (darkSquareBishop && lightSquareBishop) {
-      score -= useWeights.bishopPair;
+      // Giá trị cơ bản của cặp tượng
+      const baseBishopPairValue = Math.abs(useWeights.bishopPair);
+
+      // Áp dụng hệ số thế cờ mở
+      score -= baseBishopPairValue * (1 + openPositionBonus);
 
       if (isEndgame) {
-        score -= useWeights.bishopPair / 2;
+        score -= baseBishopPairValue * 0.5;
       }
     } else {
-      score -= useWeights.bishopPair / 3;
+      // Nếu hai tượng cùng màu ô, vẫn có bất lợi nhưng ít hơn
+      score -= Math.abs(useWeights.bishopPair) * 0.3;
     }
   }
 
