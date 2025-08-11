@@ -208,14 +208,6 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
       } else if (score === currentBestScore) {
         currentBestMoves.push(move);
       }
-
-      // Phản hồi sớm nếu tìm thấy nước thắng tuyệt đối
-      if (score > 9000000) {
-        bestScore = score;
-        bestMoves = [move];
-        // Ngắt vòng lặp nếu tìm thấy nước thắng
-        break;
-      }
     }
 
     // Cập nhật kết quả tốt nhất tổng thể từ độ sâu hiện tại
@@ -302,36 +294,6 @@ function minimax(
 
     if (alpha >= beta) {
       return ttEntry.score;
-    }
-  }
-
-  // Kiểm tra trước nếu có nước đi ăn vua của đối phương, trả về giá trị cực lớn
-  if (maximizing) {
-    const moves = getAllPossibleMoves(gameState);
-    for (const move of moves) {
-      const targetPiece = gameState.board[move.to.y][move.to.x];
-      if (targetPiece) {
-        const oppColor = gameState.aiColor === "WHITE" ? "BLACK" : "WHITE";
-        const oppKingPrefix = oppColor === "WHITE" ? "w" : "b";
-        if (targetPiece.startsWith(oppKingPrefix) && targetPiece[1] === "K") {
-          return 10000000; // Giá trị cực lớn cho nước ăn vua
-        }
-      }
-    }
-  } else {
-    // Nếu đối thủ có nước ăn vua của AI, trả về giá trị cực nhỏ
-    const opponentColor: "WHITE" | "BLACK" =
-      gameState.aiColor === "WHITE" ? "BLACK" : "WHITE";
-    const opponentState: GameState = { ...gameState, aiColor: opponentColor };
-    const moves = getAllPossibleMoves(opponentState);
-    for (const move of moves) {
-      const targetPiece = opponentState.board[move.to.y][move.to.x];
-      if (targetPiece) {
-        const aiKingPrefix = gameState.aiColor === "WHITE" ? "w" : "b";
-        if (targetPiece.startsWith(aiKingPrefix) && targetPiece[1] === "K") {
-          return -10000000; // Giá trị cực nhỏ nếu đối thủ có thể ăn vua của AI
-        }
-      }
     }
   }
 
