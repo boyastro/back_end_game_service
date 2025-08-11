@@ -1,5 +1,8 @@
 import { loadBestWeights } from "./load-weights.js";
-import { evaluateMissingWeights } from "./chess-additional-evaluations.js";
+import {
+  evaluateMissingWeights,
+  evaluateMobility,
+} from "./chess-additional-evaluations.js";
 // Tự động nạp trọng số tối ưu nếu có
 let AI_WEIGHTS = loadBestWeights() || undefined;
 // Chess AI Bot implementation - Optimized Version
@@ -634,6 +637,10 @@ export function evaluateBoard(gameState: GameState): number {
   const myPawns: Position[] = [];
   const oppPawns: Position[] = [];
 
+  // Mảng đánh dấu vị trí tượng
+  const myBishops: Position[] = [];
+  const oppBishops: Position[] = [];
+
   // Đánh dấu tốt trên các cột
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
@@ -675,8 +682,10 @@ export function evaluateBoard(gameState: GameState): number {
       if (piece[1] === "B") {
         if (piece.startsWith(myPrefix)) {
           myBishopCount++;
+          myBishops.push({ x, y });
         } else {
           oppBishopCount++;
+          oppBishops.push({ x, y });
         }
       }
     }
@@ -1060,10 +1069,58 @@ export function evaluateBoard(gameState: GameState): number {
 
   // Đánh giá cặp tượng (bishop pair)
   if (myBishopCount >= 2) {
-    score += useWeights.bishopPair;
+    // Cải thiện đánh giá cặp tượng - tạo thêm điều kiện để đảm bảo chúng thực sự có giá trị
+    // Kiểm tra xem hai tượng có ở trên các ô màu khác nhau không (một tượng đen, một tượng trắng)
+    let darkSquareBishop = false;
+    let lightSquareBishop = false;
+
+    for (const bishop of myBishops) {
+      // Kiểm tra xem tượng này đang ở ô đen hay ô trắng
+      // Ô đen: tổng của tọa độ x và y là số lẻ
+      // Ô trắng: tổng của tọa độ x và y là số chẵn
+      if ((bishop.x + bishop.y) % 2 === 0) {
+        lightSquareBishop = true;
+      } else {
+        darkSquareBishop = true;
+      }
+    }
+
+    // Chỉ thưởng điểm nếu có cả tượng trên ô đen và ô trắng
+    if (darkSquareBishop && lightSquareBishop) {
+      score += useWeights.bishopPair;
+
+      // Thêm thưởng cho cặp tượng trong tàn cuộc
+      if (isEndgame) {
+        score += useWeights.bishopPair / 2; // Thêm 50% giá trị trong tàn cuộc
+      }
+    } else {
+      // Nếu hai tượng cùng màu ô, vẫn có lợi thế nhưng ít hơn
+      score += useWeights.bishopPair / 3;
+    }
   }
+
   if (oppBishopCount >= 2) {
-    score -= useWeights.bishopPair;
+    // Tương tự cho đối thủ
+    let darkSquareBishop = false;
+    let lightSquareBishop = false;
+
+    for (const bishop of oppBishops) {
+      if ((bishop.x + bishop.y) % 2 === 0) {
+        lightSquareBishop = true;
+      } else {
+        darkSquareBishop = true;
+      }
+    }
+
+    if (darkSquareBishop && lightSquareBishop) {
+      score -= useWeights.bishopPair;
+
+      if (isEndgame) {
+        score -= useWeights.bishopPair / 2;
+      }
+    } else {
+      score -= useWeights.bishopPair / 3;
+    }
   }
 
   // 1. Đánh giá vị trí và quân
@@ -1309,20 +1366,22 @@ export function evaluateBoard(gameState: GameState): number {
   // 3. Trừ điểm nếu vua mình bị chiếu
   if (myKingPos && isSquareAttacked(board, myKingPos, oppPrefix)) {
     score -= useWeights.checkBonus * 2;
-    const myMoves = getAllPossibleMoves(gameState);
-    if (myMoves.length === 0) score -= useWeights.checkBonus * 100; // Thua tuyệt đối
+    const kingCheckMoves = getAllPossibleMoves(gameState);
+    if (kingCheckMoves.length === 0) score -= useWeights.checkBonus * 100; // Thua tuyệt đối
   }
 
-  // 4. Đánh giá linh động (mobility) - số nước đi có thể thực hiện
+  // Lấy tất cả các nước đi khả thi cho mỗi bên để sử dụng cho các đánh giá sau này
   const myMoves = getAllPossibleMoves(gameState);
-  const oppMoves = getAllPossibleMoves({
+  const oppGameState = {
     ...gameState,
-    aiColor: aiColor === "WHITE" ? "BLACK" : "WHITE",
-  });
+    aiColor: aiColor === "WHITE" ? "BLACK" : ("WHITE" as "WHITE" | "BLACK"),
+  };
+  const oppMoves = getAllPossibleMoves(oppGameState);
 
-  // Thưởng cho tính linh động trong trận đấu
-  score += myMoves.length * mobilityWeight;
-  score -= oppMoves.length * mobilityWeight;
+  // 4. Đánh giá linh động (mobility) - số nước đi có thể thực hiện và chất lượng của các nước đi
+  // Sử dụng đánh giá chi tiết hơn từ chess-additional-evaluations.ts
+  const detailedMobilityScore = evaluateMobility(board, myPrefix, oppPrefix);
+  score += detailedMobilityScore * mobilityWeight;
 
   // Kiểm tra số nước đi khả thi cho trung tâm (ô d4, d5, e4, e5)
   let myCenterMoves = 0;
@@ -1569,18 +1628,25 @@ export function evaluateBoard(gameState: GameState): number {
   }
 
   // Kiểm soát tính linh động và sự phát triển
-  if (myMoves.length > oppMoves.length * 1.3) {
+  const mobilityControlMoves = getAllPossibleMoves(gameState);
+  const oppControlGameState = {
+    ...gameState,
+    aiColor: aiColor === "WHITE" ? "BLACK" : ("WHITE" as "WHITE" | "BLACK"),
+  };
+  const oppControlMoves = getAllPossibleMoves(oppControlGameState);
+
+  if (mobilityControlMoves.length > oppControlMoves.length * 1.3) {
     // Nếu có nhiều hơn 30% số nước so với đối thủ
     score += 30; // Thưởng thêm cho việc có nhiều lựa chọn hơn
   }
 
   // Phạt khi bị hạn chế nước đi nhiều hơn so với đối thủ
-  if (myMoves.length * 1.3 < oppMoves.length) {
+  if (mobilityControlMoves.length * 1.3 < oppControlMoves.length) {
     score -= 30;
   }
 
   // Trong tàn cuộc, đánh giá cao tempo (ai đi trước) nếu có nhiều nước đi hơn
-  if (isEndgame && myMoves.length > oppMoves.length) {
+  if (isEndgame && mobilityControlMoves.length > oppControlMoves.length) {
     score += kingTempoWeight;
   }
 
@@ -1725,10 +1791,10 @@ export function evaluateBoard(gameState: GameState): number {
 
   // Cải thiện tính di động: khuyến khích kiểm soát trung tâm và di chuyển
   // Tối ưu: Chỉ dùng 50% số nước khả thi để tăng tốc đánh giá
-  const mobilityScore = Math.floor(
+  const simpleMobilityScore = Math.floor(
     getAllPossibleMoves(gameState).length * mobilityWeight
   );
-  score += mobilityScore;
+  score += simpleMobilityScore;
 
   // Tổng hợp các yếu tố đã phân tích
   const structureScore =
