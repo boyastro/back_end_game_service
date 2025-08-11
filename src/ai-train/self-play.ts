@@ -12,7 +12,13 @@ import { GameState, ChessMove, evaluateBoard } from "../utils/chess-ai-bot.js";
 import { FEN } from "./types.js";
 import { cloneGameState, boardToFEN } from "./utils.js";
 
-import { saveGame, savePositionEvaluation } from "./dataset.js";
+import { saveGame, savePositionEvaluation, resetDataset } from "./dataset.js";
+/**
+ * Reset dataset (positions.json, games.json) về mảng rỗng trước khi train mới
+ */
+export async function resetSelfPlayDataset(): Promise<void> {
+  await resetDataset();
+}
 
 /**
  * Options for self-play game generation

@@ -173,3 +173,18 @@ export async function getDatasetStats(): Promise<{
     };
   }
 }
+
+/**
+ * Reset dataset files (positions.json, games.json) về mảng rỗng
+ */
+export async function resetDataset(): Promise<void> {
+  try {
+    fs.writeFileSync(POSITIONS_FILE, JSON.stringify([], null, 2));
+    fs.writeFileSync(GAMES_FILE, JSON.stringify([], null, 2));
+    console.log(
+      "Dataset reset: positions.json và games.json đã được làm rỗng."
+    );
+  } catch (error) {
+    console.error("Error resetting dataset:", error);
+  }
+}
