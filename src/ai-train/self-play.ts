@@ -8,12 +8,7 @@ export function generateAllAIMoves(gameState: GameState): ChessMove[] {
 }
 // Self-play module for chess AI training
 
-import {
-  GameState,
-  ChessMove,
-  generateAIMove,
-  evaluateBoard,
-} from "../utils/chess-ai-bot.js";
+import { GameState, ChessMove, evaluateBoard } from "../utils/chess-ai-bot.js";
 import { FEN } from "./types.js";
 import { cloneGameState, boardToFEN } from "./utils.js";
 
