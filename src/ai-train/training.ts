@@ -44,6 +44,7 @@ export async function runTrainingCycle(
 
   // Step 2: Load positions for evaluation
   console.log("Loading positions for evaluation...");
+  // Tăng số lượng vị trí từ cơ sở dữ liệu
   const positions = await loadPositions(fullConfig.positionsPerGame);
 
   // Đọc dữ liệu đa dạng từ file
@@ -57,6 +58,17 @@ export async function runTrainingCycle(
     );
   } catch (err) {
     console.warn("Could not load diverse-positions.json:", err);
+    // Tạo file diverse-positions nếu không tồn tại
+    try {
+      fs.writeFileSync(
+        "src/ai-train/diverse-positions.json",
+        JSON.stringify([], null, 2),
+        "utf-8"
+      );
+      console.log("Created empty diverse-positions.json file");
+    } catch (createErr) {
+      console.error("Failed to create diverse-positions.json:", createErr);
+    }
   }
 
   // Add some opening positions to ensure good coverage
@@ -81,8 +93,44 @@ export async function runTrainingCycle(
     });
   }
 
-  // Trộn tất cả các vị trí
-  const allPositions = [...diversePositions, ...positions];
+  // Trộn tất cả các vị trí và cân bằng các loại vị trí
+  let allPositions = [
+    ...diversePositions,
+    ...positions,
+    ...openingPositions.map((fen) => ({ fen, evaluation: 0, bestMove: "" })),
+    ...endgamePositions.map((fen) => ({ fen, evaluation: 0, bestMove: "" })),
+  ];
+
+  // Đảm bảo số lượng vị trí không quá lớn để tránh chậm
+  const maxPositionsToEvaluate = 500; // Số lượng vị trí tối đa để đánh giá
+  if (allPositions.length > maxPositionsToEvaluate) {
+    console.log(
+      `Limiting positions to ${maxPositionsToEvaluate} for evaluation efficiency`
+    );
+    // Ưu tiên giữ lại các vị trí đa dạng, khai cuộc và tàn cuộc
+    const priorityPositions = [
+      ...diversePositions,
+      ...openingPositions.map((fen) => ({ fen, evaluation: 0, bestMove: "" })),
+      ...endgamePositions.map((fen) => ({ fen, evaluation: 0, bestMove: "" })),
+    ];
+
+    // Số lượng vị trí còn lại từ self-play
+    const remainingSlots = Math.max(
+      0,
+      maxPositionsToEvaluate - priorityPositions.length
+    );
+
+    // Lấy ngẫu nhiên từ các vị trí self-play
+    const selfPlayPositions = positions
+      .sort(() => 0.5 - Math.random())
+      .slice(0, remainingSlots);
+
+    // Kết hợp
+    allPositions = [...priorityPositions, ...selfPlayPositions];
+  }
+
+  // Xáo trộn các vị trí để đảm bảo tính đa dạng trong đánh giá
+  allPositions = allPositions.sort(() => 0.5 - Math.random());
 
   // Step 3: Evaluate positions
   console.log("Evaluating positions...");
@@ -124,7 +172,7 @@ export async function quickTrain(): Promise<EvaluationMetrics> {
     selfPlayGames: 5,
     positionsPerGame: 300,
     maxDepth: 3,
-    iterations: 10,
+    iterations: 15, // Tăng từ 10 lên 15 thế hệ
     learningRate: 0.1,
   });
 }
@@ -137,7 +185,7 @@ export async function extendedTrain(): Promise<EvaluationMetrics> {
     selfPlayGames: 500,
     positionsPerGame: 5000,
     maxDepth: 6,
-    iterations: 20,
+    iterations: 30, // Tăng từ 20 lên 30 thế hệ
     learningRate: 0.03,
   });
 }

@@ -118,21 +118,46 @@ export async function tuneParameters(
     // impliment
   } else if (method === "genetic") {
     // Genetic Algorithm cải tiến
-    const populationSize = 20;
-    const mutationRate = 0.2;
+    const populationSize = 30; // Tăng kích thước quần thể từ 20 lên 30
+    const mutationRate = 0.15; // Giảm tỷ lệ đột biến từ 0.2 xuống 0.15
+    const eliteCount = 2; // Số lượng cá thể ưu tú được giữ lại qua mỗi thế hệ
     let population: (typeof bestWeights)[] = [];
 
     // Khởi tạo quần thể ban đầu
     // Đảm bảo rằng trọng số tốt nhất hiện tại luôn được bao gồm trong quần thể
     population.push({ ...bestWeights });
 
-    // Tạo các cá thể còn lại trong quần thể
-    for (let i = 1; i < populationSize; i++) {
+    // Thêm một số biến thể nhẹ của trọng số tốt nhất (thay đổi nhỏ)
+    for (let i = 1; i < eliteCount; i++) {
+      let lightVariation = { ...bestWeights };
+      for (const key of Object.keys(lightVariation) as Array<
+        keyof typeof lightVariation
+      >) {
+        lightVariation[key] += Math.floor(Math.random() * 11 - 5); // Biến thể nhỏ ±5
+      }
+      population.push(lightVariation);
+    }
+
+    // Tạo các cá thể còn lại trong quần thể với mức độ đa dạng cao hơn
+    for (let i = eliteCount; i < populationSize; i++) {
       let individual = { ...bestWeights };
       for (const key of Object.keys(individual) as Array<
         keyof typeof individual
       >) {
-        individual[key] += Math.floor(Math.random() * 21 - 10);
+        // Tạo mức độ đa dạng khác nhau dựa trên loại tham số
+        // Các tham số quan trọng (giá trị quân cờ) thay đổi ít hơn
+        if (
+          key === "pawn" ||
+          key === "knight" ||
+          key === "bishop" ||
+          key === "rook" ||
+          key === "queen" ||
+          key === "king"
+        ) {
+          individual[key] += Math.floor(Math.random() * 21 - 10); // ±10
+        } else {
+          individual[key] += Math.floor(Math.random() * 31 - 15); // ±15 cho các tham số khác
+        }
       }
       population.push(individual);
     }
@@ -150,67 +175,168 @@ export async function tuneParameters(
           const gameState = fenToGameState(pos.fen);
           const evalScore = evaluateBoard(gameState);
           totalScore += evalScore;
-          // Xác định thắng/hòa/thua dựa trên ngưỡng điểm số
-          if (evalScore > 5000) winCount++;
-          else if (evalScore < -5000) {
-            // Nếu muốn tính thua tuyệt đối, có thể thêm biến loseCount++;
-          } else if (Math.abs(evalScore) < 10) drawCount++;
+
+          // Cải thiện xác định thắng/hòa/thua dựa trên ngưỡng điểm số
+          // Sử dụng ngưỡng linh hoạt hơn
+          if (evalScore > 3000) {
+            // Ưu thế chiến thắng rõ ràng
+            winCount++;
+          } else if (evalScore < -3000) {
+            // Thua rõ ràng - có thể thêm biến loseCount nếu muốn theo dõi riêng
+          } else if (Math.abs(evalScore) < 30) {
+            // Mở rộng phạm vi hòa, thể hiện vị trí cân bằng hơn
+            drawCount++;
+          }
+          // Có thể thêm trọng số cho điểm số của vị trí quan trọng
+          // Ví dụ: tàn cuộc hoặc các vị trí chiến thuật
         }
         fitness.push(totalScore / positions.length);
         winRates.push(winCount / positions.length);
         drawRates.push(drawCount / positions.length);
       }
-      // Tournament selection: chọn ngẫu nhiên 4 cá thể, lấy 2 tốt nhất làm cha mẹ
+      // Tournament selection cải tiến: chọn ngẫu nhiên 4 cá thể, lấy tốt nhất làm cha mẹ
       function tournamentSelect(): typeof bestWeights {
-        const idxs = Array.from({ length: 4 }, () =>
+        const tournamentSize = 4; // Kích thước giải đấu
+        const idxs = Array.from({ length: tournamentSize }, () =>
           Math.floor(Math.random() * populationSize)
         );
-        let bestIdx = idxs[0];
-        for (const idx of idxs) {
-          if (fitness[idx] > fitness[bestIdx]) bestIdx = idx;
+
+        // Sắp xếp các cá thể theo thứ tự ưu tiên winRate, sau đó đến fitness
+        idxs.sort((a, b) => {
+          // Ưu tiên tỷ lệ thắng cao hơn
+          if (Math.abs(winRates[a] - winRates[b]) > 0.05) {
+            return winRates[b] - winRates[a];
+          }
+          // Nếu tỷ lệ thắng gần bằng nhau, xem xét điểm số
+          return fitness[b] - fitness[a];
+        });
+
+        // Chọn cá thể tốt nhất với xác suất cao, nhưng đôi khi chọn cá thể kém hơn để duy trì đa dạng
+        const selectionProb = Math.random();
+        if (selectionProb < 0.7) {
+          return population[idxs[0]]; // 70% chọn cá thể tốt nhất
+        } else if (selectionProb < 0.9) {
+          return population[idxs[1]]; // 20% chọn cá thể tốt thứ hai
+        } else {
+          return population[idxs[2]]; // 10% chọn cá thể tốt thứ ba
         }
-        return population[bestIdx];
       }
       let parent1 = tournamentSelect();
       let parent2 = tournamentSelect();
       // Uniform crossover + mutation
       let newPopulation: (typeof bestWeights)[] = [];
-      for (let i = 0; i < populationSize; i++) {
+
+      // Elitism: giữ lại cá thể tốt nhất qua các thế hệ
+      // Sắp xếp quần thể theo fitness và winRate
+      const sortedIndices = Array.from(
+        { length: populationSize },
+        (_, i) => i
+      ).sort((a, b) => {
+        if (winRates[a] !== winRates[b]) {
+          return winRates[b] - winRates[a]; // Ưu tiên winRate
+        }
+        return fitness[b] - fitness[a]; // Sau đó mới xét đến fitness
+      });
+
+      // Thêm cá thể ưu tú vào quần thể mới
+      for (let i = 0; i < eliteCount; i++) {
+        newPopulation.push({ ...population[sortedIndices[i]] });
+      }
+
+      // Tạo các cá thể mới thông qua lai ghép và đột biến
+      for (let i = eliteCount; i < populationSize; i++) {
+        // Tournament selection để chọn cha mẹ
+        let parent1 = tournamentSelect();
+        let parent2 = tournamentSelect();
+
         let child: typeof bestWeights = { ...parent1 };
         for (const key of Object.keys(child) as Array<keyof typeof child>) {
           // Uniform crossover
           child[key] = Math.random() < 0.5 ? parent1[key] : parent2[key];
-          // Mutation
-          if (Math.random() < mutationRate) {
-            child[key] += Math.floor(Math.random() * 21 - 10);
+          // Mutation với tỷ lệ thay đổi theo thế hệ
+          const adaptiveMutationRate =
+            mutationRate * (1 - (gen / options.iterations) * 0.5); // Giảm dần tỷ lệ đột biến
+          if (Math.random() < adaptiveMutationRate) {
+            // Biên độ đột biến cũng giảm dần theo thế hệ
+            const mutationAmplitude = Math.ceil(
+              10 * (1 - (gen / options.iterations) * 0.5)
+            );
+            child[key] += Math.floor(
+              Math.random() * (mutationAmplitude * 2 + 1) - mutationAmplitude
+            );
           }
         }
         newPopulation.push(child);
       }
       population = newPopulation;
-      // Cập nhật bestWeights và bestWinRate/drawRate
-      let bestGenIdx = fitness.indexOf(Math.max(...fitness));
+
+      // Phân tích và lưu trữ thống kê về quần thể
+      const avgFitness =
+        fitness.reduce((sum, f) => sum + f, 0) / populationSize;
+      const avgWinRate =
+        winRates.reduce((sum, wr) => sum + wr, 0) / populationSize;
+
+      // Cập nhật bestWeights và bestWinRate/drawRate với tiêu chí đa mục tiêu
+      let bestGenIdx = 0;
+      let maxFitness = -Infinity;
+
+      // Kết hợp winRate và score để tìm cá thể tốt nhất
+      // Công thức: fitness_combined = winRate * 10000 + score
+      for (let i = 0; i < populationSize; i++) {
+        const combinedFitness = winRates[i] * 10000 + fitness[i] / 100;
+        if (combinedFitness > maxFitness) {
+          maxFitness = combinedFitness;
+          bestGenIdx = i;
+        }
+      }
+
       let bestGenScore = fitness[bestGenIdx];
       let bestGenWinRate = winRates[bestGenIdx];
       let bestGenDrawRate = drawRates[bestGenIdx];
+
+      // Tiêu chí lựa chọn cải tiến, ưu tiên winRate hơn và cân nhắc score
       if (
-        bestGenWinRate > bestWinRate ||
-        (bestGenWinRate === bestWinRate && bestGenScore > bestScore)
+        bestGenWinRate > bestWinRate + 0.01 || // Cải thiện rõ rệt về winRate
+        (Math.abs(bestGenWinRate - bestWinRate) < 0.01 &&
+          bestGenScore > bestScore) || // Cùng winRate nhưng score tốt hơn
+        (bestGenWinRate >= bestWinRate &&
+          bestGenDrawRate > bestDrawRate &&
+          bestGenScore > bestScore * 0.9) // Cân bằng giữa win, draw và score
       ) {
         bestScore = bestGenScore;
         bestWinRate = bestGenWinRate;
         bestDrawRate = bestGenDrawRate;
-        bestWeights = population[bestGenIdx];
+        bestWeights = { ...population[bestGenIdx] }; // Tạo bản sao để tránh tham chiếu
       }
       console.log(
-        `Generation ${gen + 1}/${
-          options.iterations
-        }... Best score: ${bestGenScore.toFixed(
-          3
-        )}, Win rate: ${bestGenWinRate.toFixed(
-          3
-        )}, Draw rate: ${bestGenDrawRate.toFixed(3)}`
+        `Generation ${gen + 1}/${options.iterations}... ` +
+          `Best score: ${bestGenScore.toFixed(3)}, ` +
+          `Win rate: ${bestGenWinRate.toFixed(3)}, ` +
+          `Draw rate: ${bestGenDrawRate.toFixed(3)}, ` +
+          `Avg pop. win rate: ${avgWinRate.toFixed(3)}, ` +
+          `Current best win rate: ${bestWinRate.toFixed(3)}`
       );
+
+      // Mỗi 5 thế hệ, lưu trọng số trung gian để có thể khôi phục nếu cần
+      if ((gen + 1) % 5 === 0 || gen === options.iterations - 1) {
+        try {
+          const __dirname = path.dirname(new URL(import.meta.url).pathname);
+          const checkpointPath = path.resolve(
+            __dirname,
+            `../../checkpoint-weights-gen${gen + 1}.json`
+          );
+          fs.writeFileSync(
+            checkpointPath,
+            JSON.stringify(bestWeights, null, 2),
+            "utf-8"
+          );
+        } catch (err) {
+          console.error(
+            `Failed to save checkpoint weights at generation ${gen + 1}:`,
+            err
+          );
+        }
+      }
     }
   } else if (method === "gradient") {
     // Implement gradient descent optimization
