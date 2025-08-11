@@ -700,6 +700,59 @@ export function evaluateBoard(gameState: GameState): number {
       myIsolatedPawnCount++;
       score -= useWeights.isolatedPawn;
     }
+
+    // Kiểm tra tốt lùi (backward pawns) - tốt không thể được bảo vệ bởi tốt khác
+    if (pawnColumns.my[x] > 0) {
+      // Tìm tốt ở cột x đầu tiên (gần nhất với phía mình)
+      let frontPawnY = -1;
+      for (let checkY = 7; checkY >= 0; checkY--) {
+        if (board[checkY][x] && board[checkY][x] === `${myPrefix}P`) {
+          frontPawnY = checkY;
+          break;
+        }
+      }
+
+      if (frontPawnY !== -1) {
+        // Kiểm tra xem tốt này có thể được bảo vệ bởi tốt khác không
+        const leftX = x - 1;
+        const rightX = x + 1;
+        let canBeDefended = false;
+
+        // Kiểm tra các tốt ở cột bên trái
+        if (leftX >= 0 && pawnColumns.my[leftX] > 0) {
+          for (const otherPawn of myPawns) {
+            if (
+              otherPawn.x === leftX &&
+              ((myPrefix === "w" && otherPawn.y > frontPawnY) ||
+                (myPrefix === "b" && otherPawn.y < frontPawnY))
+            ) {
+              canBeDefended = true;
+              break;
+            }
+          }
+        }
+
+        // Kiểm tra các tốt ở cột bên phải
+        if (!canBeDefended && rightX < 8 && pawnColumns.my[rightX] > 0) {
+          for (const otherPawn of myPawns) {
+            if (
+              otherPawn.x === rightX &&
+              ((myPrefix === "w" && otherPawn.y > frontPawnY) ||
+                (myPrefix === "b" && otherPawn.y < frontPawnY))
+            ) {
+              canBeDefended = true;
+              break;
+            }
+          }
+        }
+
+        // Nếu không thể bảo vệ, đó là tốt lùi
+        if (!canBeDefended) {
+          myBackwardPawnCount++;
+          score += useWeights.backwardPawn; // Trừ điểm vì đây là bất lợi
+        }
+      }
+    }
   }
 
   // Kiểm tra tốt thông qua (passed pawns) và tốt liên kết (connected pawns)
@@ -799,6 +852,59 @@ export function evaluateBoard(gameState: GameState): number {
     ) {
       oppIsolatedPawnCount++;
       score += useWeights.isolatedPawn;
+    }
+
+    // Kiểm tra tốt lùi (backward pawns) - tốt không thể được bảo vệ bởi tốt khác
+    if (pawnColumns.opp[x] > 0) {
+      // Tìm tốt ở cột x đầu tiên (gần nhất với phía đối thủ)
+      let frontPawnY = -1;
+      for (let checkY = 0; checkY < 8; checkY++) {
+        if (board[checkY][x] && board[checkY][x] === `${oppPrefix}P`) {
+          frontPawnY = checkY;
+          break;
+        }
+      }
+
+      if (frontPawnY !== -1) {
+        // Kiểm tra xem tốt này có thể được bảo vệ bởi tốt khác không
+        const leftX = x - 1;
+        const rightX = x + 1;
+        let canBeDefended = false;
+
+        // Kiểm tra các tốt ở cột bên trái
+        if (leftX >= 0 && pawnColumns.opp[leftX] > 0) {
+          for (const otherPawn of oppPawns) {
+            if (
+              otherPawn.x === leftX &&
+              ((oppPrefix === "w" && otherPawn.y > frontPawnY) ||
+                (oppPrefix === "b" && otherPawn.y < frontPawnY))
+            ) {
+              canBeDefended = true;
+              break;
+            }
+          }
+        }
+
+        // Kiểm tra các tốt ở cột bên phải
+        if (!canBeDefended && rightX < 8 && pawnColumns.opp[rightX] > 0) {
+          for (const otherPawn of oppPawns) {
+            if (
+              otherPawn.x === rightX &&
+              ((oppPrefix === "w" && otherPawn.y > frontPawnY) ||
+                (oppPrefix === "b" && otherPawn.y < frontPawnY))
+            ) {
+              canBeDefended = true;
+              break;
+            }
+          }
+        }
+
+        // Nếu không thể bảo vệ, đó là tốt lùi
+        if (!canBeDefended) {
+          oppBackwardPawnCount++;
+          score -= useWeights.backwardPawn; // Cộng điểm vì đây là bất lợi cho đối thủ
+        }
+      }
     }
   }
 
@@ -1619,8 +1725,8 @@ export function evaluateBoard(gameState: GameState): number {
     (oppDoubledPawnCount - myDoubledPawnCount) * useWeights.doubledPawn +
     (oppIsolatedPawnCount - myIsolatedPawnCount) * useWeights.isolatedPawn +
     (myPassedPawnCount - oppPassedPawnCount) * useWeights.passedPawn +
-    (myPawnShieldCount - oppPawnShieldCount) * useWeights.pawnShield;
-
+    (myPawnShieldCount - oppPawnShieldCount) * useWeights.pawnShield +
+    (oppBackwardPawnCount - myBackwardPawnCount) * useWeights.backwardPawn;
   const tacticalScore =
     (myRookOnOpenFile - oppRookOnOpenFile) * useWeights.rookOpenFile +
     (myRookOn7thRank - oppRookOn7thRank) * useWeights.rook7thRank +
