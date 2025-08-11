@@ -1,7 +1,7 @@
 /**
  * Trả về tất cả nước đi hợp lệ cho trạng thái hiện tại
  */
-import { getAllPossibleMoves } from "../utils/chess-ai-bot.js";
+import { getAllPossibleMoves, isKingInCheck } from "../utils/chess-ai-bot.js";
 
 export function generateAllAIMoves(gameState: GameState): ChessMove[] {
   return getAllPossibleMoves(gameState);
@@ -70,7 +70,31 @@ async function generateSelfPlayGame(
   let isGameOver = false;
   let moveCount = 0;
   const maxMoves = 300; // Prevent infinite games
+  let halfmoveClock = 0; // Đếm số nước không ăn quân/đi tốt
 
+  function isInsufficientMaterial(board: (string | null)[][]): boolean {
+    // Đếm số quân còn lại
+    const pieces = [];
+    for (let row of board) {
+      for (let cell of row) {
+        if (cell && cell[1] !== "K") pieces.push(cell);
+      }
+    }
+    // Chỉ còn vua vs vua
+    if (pieces.length === 0) return true;
+    // Chỉ còn vua + tượng hoặc vua + mã
+    if (pieces.length === 1 && (pieces[0][1] === "B" || pieces[0][1] === "N"))
+      return true;
+    // Chỉ còn vua + tượng vs vua + tượng cùng màu
+    if (pieces.length === 2 && pieces[0][1] === "B" && pieces[1][1] === "B") {
+      // Kiểm tra màu ô của tượng
+      // Đơn giản: nếu cùng màu thì hòa
+      return true;
+    }
+    return false;
+  }
+
+  let endReason = "";
   while (!isGameOver && moveCount < maxMoves) {
     // Get current FEN position
     const currentColor = gameState.aiColor === "WHITE" ? "w" : "b";
@@ -78,6 +102,7 @@ async function generateSelfPlayGame(
 
     // Check for threefold repetition
     if (positions.has(fen)) {
+      endReason = "draw_by_repetition";
       console.log("Draw by repetition detected");
       isGameOver = true;
       break;
@@ -86,6 +111,7 @@ async function generateSelfPlayGame(
 
     const possibleMoves: ChessMove[] = generateAllAIMoves(gameState);
     if (possibleMoves.length === 0) {
+      endReason = "no_valid_moves";
       console.log("No valid moves, game over");
       isGameOver = true;
       break;
@@ -96,40 +122,66 @@ async function generateSelfPlayGame(
       // Clone state, apply move
       const nextState = cloneGameState(gameState);
       const piece = nextState.board[move.from.y][move.from.x];
+      const captured = nextState.board[move.to.y][move.to.x];
       nextState.board[move.from.y][move.from.x] = null;
       nextState.board[move.to.y][move.to.x] = piece;
       // Đánh giá
       const score = evaluateBoard(nextState);
-      return { move, score };
+      return { move, score, captured, piece };
     });
     // Sắp xếp theo score (tối ưu cho màu hiện tại)
     evaluatedMoves.sort((a, b) =>
       currentColor === "w" ? b.score - a.score : a.score - b.score
     );
-    // Chọn nước đi tốt nhất hoặc ngẫu nhiên trong top 3 nếu randomize
-    let chosenMove;
-    if (randomize && evaluatedMoves.length > 2) {
-      const topN = evaluatedMoves.slice(0, 3);
-      chosenMove = topN[Math.floor(Math.random() * topN.length)].move;
+    // Chọn nước đi tốt nhất hoặc ngẫu nhiên theo softmax nếu randomize
+    let chosenMove, chosenEval, chosenCaptured, chosenPiece;
+    if (randomize && evaluatedMoves.length > 1) {
+      // Softmax chọn xác suất theo điểm số
+      const scores = evaluatedMoves.map((m) => m.score);
+      const maxScore = Math.max(...scores);
+      // Để tránh tràn số, trừ maxScore trước khi exp
+      const expScores = scores.map((s) => Math.exp((s - maxScore) / 100));
+      const sumExp = expScores.reduce((a, b) => a + b, 0);
+      const probs = expScores.map((e) => e / sumExp);
+      // Chọn theo phân phối xác suất
+      let r = Math.random();
+      let acc = 0;
+      let idx = 0;
+      for (; idx < probs.length; idx++) {
+        acc += probs[idx];
+        if (r < acc) break;
+      }
+      const chosen = evaluatedMoves[idx];
+      chosenMove = chosen.move;
+      chosenEval = chosen.score;
+      chosenCaptured = chosen.captured;
+      chosenPiece = chosen.piece;
     } else {
       chosenMove = evaluatedMoves[0].move;
+      chosenEval = evaluatedMoves[0].score;
+      chosenCaptured = evaluatedMoves[0].captured;
+      chosenPiece = evaluatedMoves[0].piece;
     }
 
-    // Evaluate position after move
-    const evaluation = evaluatedMoves[0].score;
+    // 50-move rule: nếu không ăn quân và không đi tốt thì tăng halfmoveClock
+    if (!chosenCaptured && chosenPiece !== "wP" && chosenPiece !== "bP") {
+      halfmoveClock++;
+    } else {
+      halfmoveClock = 0;
+    }
 
     // Save move and position information
     moves.push({
       fen,
       move: chosenMove,
-      evaluation,
+      evaluation: chosenEval,
     });
 
     // Save position evaluation data if requested
     if (savePositions) {
       await savePositionEvaluation({
         fen,
-        evaluation,
+        evaluation: chosenEval,
         bestMove: `${chosenMove.from.x},${chosenMove.from.y}-${chosenMove.to.x},${chosenMove.to.y}`,
       });
     }
@@ -146,42 +198,109 @@ async function generateSelfPlayGame(
     gameState = nextGameState;
     moveCount++;
 
-    // Kiểm tra kết thúc đơn giản: nếu không còn nước đi cho đối thủ => checkmate hoặc pat
+    // Kiểm tra kết thúc nâng cao
     const opponentMoves: ChessMove[] = generateAllAIMoves(gameState);
-    if (opponentMoves.length === 0) {
-      // Nếu đang bị chiếu => checkmate, ngược lại => pat
-      // (giả lập đơn giản: nếu evaluation > 500 hoặc < -500)
-      if (
-        (currentColor === "w" && evaluation > 500) ||
-        (currentColor === "b" && evaluation < -500)
-      ) {
-        console.log("Checkmate detected");
-      } else {
-        console.log("Stalemate detected");
-      }
+    const opponentColor = gameState.aiColor === "WHITE" ? "w" : "b";
+    const kingInCheck = isKingInCheck(gameState, opponentColor);
+
+    // Checkmate: không còn nước đi cho đối thủ và vua bị chiếu
+    if (opponentMoves.length === 0 && kingInCheck) {
+      endReason = "checkmate";
+      console.log("Checkmate detected");
       isGameOver = true;
       break;
     }
+    // Stalemate: không còn nước đi cho đối thủ và vua không bị chiếu
+    if (opponentMoves.length === 0 && !kingInCheck) {
+      endReason = "stalemate";
+      console.log("Stalemate detected");
+      isGameOver = true;
+      break;
+    }
+    // Hòa 50 nước
+    if (halfmoveClock >= 50) {
+      endReason = "draw_50_move_rule";
+      console.log("Draw by 50-move rule");
+      isGameOver = true;
+      break;
+    }
+    // Hòa do không đủ lực chiếu bí
+    if (isInsufficientMaterial(gameState.board)) {
+      endReason = "draw_insufficient_material";
+      console.log("Draw by insufficient material");
+      isGameOver = true;
+      break;
+    }
+    // Hòa do hết quân (chỉ còn vua)
+    // Đã kiểm tra trong isInsufficientMaterial
     if (moveCount >= maxMoves) {
+      endReason = "max_moves";
       console.log("Game reached maximum move limit");
       isGameOver = true;
     }
   }
 
-  // Determine game result
+  // Determine game result & reason
   const finalEvaluation = evaluateBoard(gameState);
   let result = "1/2-1/2"; // Default to draw
+  let reason = endReason;
 
-  if (finalEvaluation > 500) {
-    result = "1-0"; // White wins
-  } else if (finalEvaluation < -500) {
-    result = "0-1"; // Black wins
+  if (endReason === "checkmate") {
+    result = gameState.aiColor === "WHITE" ? "0-1" : "1-0";
+    reason = "checkmate";
+  } else if (endReason === "stalemate") {
+    result = "1/2-1/2";
+    reason = "stalemate";
+  } else if (
+    endReason === "draw_50_move_rule" ||
+    endReason === "draw_insufficient_material" ||
+    endReason === "draw_by_repetition"
+  ) {
+    result = "1/2-1/2";
+    reason = endReason;
+  } else if (endReason === "max_moves") {
+    // Nếu điểm số vượt ngưỡng thì thắng/thua, ngược lại hòa
+    if (finalEvaluation > 500) {
+      result = "1-0";
+      reason = "max_moves_white_win";
+    } else if (finalEvaluation < -500) {
+      result = "0-1";
+      reason = "max_moves_black_win";
+    } else {
+      result = "1/2-1/2";
+      reason = "max_moves_draw";
+    }
+  } else if (endReason === "no_valid_moves") {
+    // Trường hợp không còn nước đi, kiểm tra vua bị chiếu không
+    if (finalEvaluation > 500) {
+      result = "1-0";
+      reason = "no_moves_white_win";
+    } else if (finalEvaluation < -500) {
+      result = "0-1";
+      reason = "no_moves_black_win";
+    } else {
+      result = "1/2-1/2";
+      reason = "no_moves_draw";
+    }
+  } else {
+    // Fallback: đánh giá điểm số
+    if (finalEvaluation > 500) {
+      result = "1-0";
+      reason = "score_white_win";
+    } else if (finalEvaluation < -500) {
+      result = "0-1";
+      reason = "score_black_win";
+    } else {
+      result = "1/2-1/2";
+      reason = "score_draw";
+    }
   }
 
   // Save the complete game
   const gameId = await saveGame({
     moves,
     result,
+    reason,
     timestamp: Date.now(),
   });
 

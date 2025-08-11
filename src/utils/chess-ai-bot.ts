@@ -2864,3 +2864,25 @@ export function boardToFEN(
   fen += " " + (aiColor === "WHITE" ? "w" : "b");
   return fen;
 }
+
+/**
+ * Kiểm tra vua của màu chỉ định có đang bị chiếu không
+ */
+export function isKingInCheck(gameState: GameState, color: "w" | "b"): boolean {
+  // Tìm vị trí vua
+  let kingPos: Position | null = null;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = gameState.board[y][x];
+      if (piece && piece.startsWith(color) && piece[1] === "K") {
+        kingPos = { x, y };
+        break;
+      }
+    }
+    if (kingPos) break;
+  }
+  if (!kingPos) return false;
+  // Kiểm tra xem ô vua có bị tấn công không
+  const attackerPrefix = color === "w" ? "b" : "w";
+  return isSquareAttacked(gameState.board, kingPos, attackerPrefix);
+}
