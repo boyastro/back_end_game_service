@@ -37,3 +37,7 @@ coverage
 data/games.json
 data/positions.json
 best-weights.json
+checkpoint-weights-gen5.json
+.gitignore
+checkpoint-weights-gen15.json
+checkpoint-weights-gen10.json
