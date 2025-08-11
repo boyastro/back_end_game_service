@@ -46,7 +46,7 @@ export async function tuneParameters(
     `Learning rate: ${options.learningRate}, Iterations: ${options.iterations}`
   );
 
-  // Khởi tạo trọng số ban đầu
+  // Khởi tạo trọng số ban đầu, tải từ file nếu có
   let bestWeights = {
     pawn: 100,
     knight: 320,
@@ -94,7 +94,20 @@ export async function tuneParameters(
     kingSafety: 50,
     development: 20,
   };
-  let bestScore = 0;
+
+  // Tải trọng số tốt nhất từ file nếu có
+  try {
+    const __dirname = path.dirname(new URL(import.meta.url).pathname);
+    const weightsPath = path.resolve(__dirname, "../../best-weights.json");
+    if (fs.existsSync(weightsPath)) {
+      const savedWeights = JSON.parse(fs.readFileSync(weightsPath, "utf-8"));
+      console.log("Loaded previous best weights from file");
+      bestWeights = savedWeights;
+    }
+  } catch (err) {
+    console.error("Failed to load best weights:", err);
+  }
+  let bestScore = -Infinity; // Khởi tạo là -Infinity thay vì 0
   let bestWinRate: number = 0;
   let bestDrawRate: number = 0;
 
@@ -108,8 +121,13 @@ export async function tuneParameters(
     const populationSize = 20;
     const mutationRate = 0.2;
     let population: (typeof bestWeights)[] = [];
+
     // Khởi tạo quần thể ban đầu
-    for (let i = 0; i < populationSize; i++) {
+    // Đảm bảo rằng trọng số tốt nhất hiện tại luôn được bao gồm trong quần thể
+    population.push({ ...bestWeights });
+
+    // Tạo các cá thể còn lại trong quần thể
+    for (let i = 1; i < populationSize; i++) {
       let individual = { ...bestWeights };
       for (const key of Object.keys(individual) as Array<
         keyof typeof individual
@@ -175,7 +193,10 @@ export async function tuneParameters(
       let bestGenScore = fitness[bestGenIdx];
       let bestGenWinRate = winRates[bestGenIdx];
       let bestGenDrawRate = drawRates[bestGenIdx];
-      if (bestGenScore > bestScore) {
+      if (
+        bestGenWinRate > bestWinRate ||
+        (bestGenWinRate === bestWinRate && bestGenScore > bestScore)
+      ) {
         bestScore = bestGenScore;
         bestWinRate = bestGenWinRate;
         bestDrawRate = bestGenDrawRate;

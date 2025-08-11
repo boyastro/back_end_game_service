@@ -69,7 +69,7 @@ async function generateSelfPlayGame(
   // Play the game until completion or draw
   let isGameOver = false;
   let moveCount = 0;
-  const maxMoves = 100; // Prevent infinite games
+  const maxMoves = 300; // Prevent infinite games
 
   while (!isGameOver && moveCount < maxMoves) {
     // Get current FEN position
