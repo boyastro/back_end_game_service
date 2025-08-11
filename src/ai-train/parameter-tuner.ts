@@ -67,26 +67,28 @@ export async function tuneParameters(
     isolatedPawn: -15,
     passedPawn: 30,
     backwardPawn: -10,
-    connectedPawn: 25, // Tăng giá trị mặc định cho tốt liên kết
+    connectedPawn: 45, // Tăng giá trị mặc định cho tốt liên kết
     pawnShield: 20,
 
     centerControl: 30,
-    mobility: 20, // Tăng giá trị mặc định cho mobility
+    mobility: 25, // Tăng giá trị mặc định cho mobility
     attackKing: 40,
     defendKing: 20,
     bishopPair: 40, // Tăng giá trị mặc định cho cặp tượng
-    spaceAdvantage: 10,
+    spaceAdvantage: 15,
     pieceCoordination: 15,
+    pawnStructure: 25, // Tham số mới cho đánh giá cấu trúc tốt (pawn chain)
+    centralPawnDuo: 30, // Tham số mới cho đánh giá cặp tốt trung tâm
 
     rookOpenFile: 25,
-    rook7thRank: 20,
-    rookConnected: 15,
+    rook7thRank: 30,
+    rookConnected: 20, // Đổi thành giá trị dương thay vì âm
     promotionThreat: 80,
     kingActivityEndgame: 40,
     tempo: 5,
 
-    threatMinorPiece: 15,
-    threatMajorPiece: 25,
+    threatMinorPiece: 25, // Tăng giá trị đe dọa quân nhỏ
+    threatMajorPiece: 35, // Tăng giá trị đe dọa quân lớn
     checkBonus: 10,
     pinBonus: 8,
     forkBonus: 12,

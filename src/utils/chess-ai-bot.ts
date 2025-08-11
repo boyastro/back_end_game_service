@@ -2,6 +2,9 @@ import { loadBestWeights } from "./load-weights.js";
 import {
   evaluateMissingWeights,
   evaluateMobility,
+  evaluatePawnChain,
+  evaluateCentralPawnDuo,
+  evaluateDetailedPassedPawns,
 } from "./chess-additional-evaluations.js";
 // Tự động nạp trọng số tối ưu nếu có
 let AI_WEIGHTS = loadBestWeights() || undefined;
@@ -798,8 +801,9 @@ export function evaluateBoard(gameState: GameState): number {
 
     // Kiểm tra tốt liên kết (connected pawns)
     let isConnected = false;
-    let chainLength = 0;
+    let isHorizontallyConnected = false;
     let isProtected = false;
+    let isEdgePawn = x === 0 || x === 7;
 
     for (
       let checkX = Math.max(0, x - 1);
@@ -810,26 +814,29 @@ export function evaluateBoard(gameState: GameState): number {
       if (pawnColumns.my[checkX] > 0) {
         // Kiểm tra xem có tốt bên cạnh ở cùng hàng hoặc liên kết chéo không
         for (const otherPawn of myPawns) {
-          if (
+          // Kiểm tra liên kết ngang (cùng hàng)
+          if (otherPawn.x === checkX && otherPawn.y === y) {
+            isHorizontallyConnected = true;
+            isConnected = true;
+          }
+          // Kiểm tra liên kết chéo, nhưng với mức độ ưu tiên thấp hơn
+          else if (
             otherPawn.x === checkX &&
-            (otherPawn.y === y ||
-              otherPawn.y === y + 1 ||
-              otherPawn.y === y - 1)
+            (otherPawn.y === y + 1 || otherPawn.y === y - 1)
           ) {
             isConnected = true;
-            chainLength++;
+          }
 
-            // Kiểm tra xem tốt có được bảo vệ bởi tốt khác không
-            if (myPrefix === "w") {
-              // Đối với quân trắng (đi từ trên xuống)
-              if (otherPawn.y === y + 1 && Math.abs(otherPawn.x - x) === 1) {
-                isProtected = true;
-              }
-            } else {
-              // Đối với quân đen (đi từ dưới lên)
-              if (otherPawn.y === y - 1 && Math.abs(otherPawn.x - x) === 1) {
-                isProtected = true;
-              }
+          // Kiểm tra xem tốt có được bảo vệ bởi tốt khác không
+          if (myPrefix === "w") {
+            // Đối với quân trắng (đi từ trên xuống)
+            if (otherPawn.y === y + 1 && Math.abs(otherPawn.x - x) === 1) {
+              isProtected = true;
+            }
+          } else {
+            // Đối với quân đen (đi từ dưới lên)
+            if (otherPawn.y === y - 1 && Math.abs(otherPawn.x - x) === 1) {
+              isProtected = true;
             }
           }
         }
@@ -842,24 +849,34 @@ export function evaluateBoard(gameState: GameState): number {
       // Cơ bản cho tốt liên kết
       let connectedPawnBonus = Math.abs(useWeights.connectedPawn);
 
-      // Thưởng thêm cho tốt được bảo vệ bởi tốt khác
+      // Thưởng thêm cho tốt được bảo vệ bởi tốt khác (giảm hệ số từ 1.5 xuống 1.2)
       if (isProtected) {
-        connectedPawnBonus *= 1.5;
+        connectedPawnBonus *= 1.2;
       }
 
-      // Thưởng thêm cho tốt ở trung tâm (cột d và e)
+      // Thưởng thêm cho tốt ở trung tâm (cột d và e), giảm hệ số từ 1.3 xuống 1.1
       if (x >= 3 && x <= 4) {
-        connectedPawnBonus *= 1.3;
+        connectedPawnBonus *= 1.1;
       }
 
-      // Thưởng thêm cho tốt thông qua đã liên kết
+      // Giảm giá trị của tốt liên kết ở biên
+      if (isEdgePawn) {
+        connectedPawnBonus *= 0.8;
+      }
+
+      // Thưởng thêm cho tốt thông qua đã liên kết (giảm hệ số từ 1.5 xuống 1.2)
       if (isPassed) {
-        connectedPawnBonus *= 1.5;
+        connectedPawnBonus *= 1.2;
       }
 
-      // Giá trị tốt liên kết tăng theo tầng mà tốt đã tiến
+      // Ưu tiên liên kết ngang (cùng hàng) hơn là liên kết chéo
+      if (isHorizontallyConnected) {
+        connectedPawnBonus *= 1.15;
+      }
+
+      // Giá trị tốt liên kết tăng theo tầng mà tốt đã tiến (giảm ảnh hưởng xuống 80%)
       const advancementBonus = myPrefix === "w" ? (6 - y) / 6 : y / 6;
-      connectedPawnBonus *= 1 + advancementBonus;
+      connectedPawnBonus *= 1 + advancementBonus * 0.8;
 
       score += connectedPawnBonus;
     }
@@ -989,8 +1006,9 @@ export function evaluateBoard(gameState: GameState): number {
 
     // Kiểm tra tốt liên kết (connected pawns)
     let isConnected = false;
-    let chainLength = 0;
+    let isHorizontallyConnected = false;
     let isProtected = false;
+    let isEdgePawn = x === 0 || x === 7;
 
     for (
       let checkX = Math.max(0, x - 1);
@@ -1001,26 +1019,29 @@ export function evaluateBoard(gameState: GameState): number {
       if (pawnColumns.opp[checkX] > 0) {
         // Kiểm tra xem có tốt bên cạnh ở cùng hàng hoặc liên kết chéo không
         for (const otherPawn of oppPawns) {
-          if (
+          // Kiểm tra liên kết ngang (cùng hàng)
+          if (otherPawn.x === checkX && otherPawn.y === y) {
+            isHorizontallyConnected = true;
+            isConnected = true;
+          }
+          // Kiểm tra liên kết chéo, nhưng với mức độ ưu tiên thấp hơn
+          else if (
             otherPawn.x === checkX &&
-            (otherPawn.y === y ||
-              otherPawn.y === y + 1 ||
-              otherPawn.y === y - 1)
+            (otherPawn.y === y + 1 || otherPawn.y === y - 1)
           ) {
             isConnected = true;
-            chainLength++;
+          }
 
-            // Kiểm tra xem tốt có được bảo vệ bởi tốt khác không
-            if (oppPrefix === "w") {
-              // Đối với quân trắng (đi từ trên xuống)
-              if (otherPawn.y === y + 1 && Math.abs(otherPawn.x - x) === 1) {
-                isProtected = true;
-              }
-            } else {
-              // Đối với quân đen (đi từ dưới lên)
-              if (otherPawn.y === y - 1 && Math.abs(otherPawn.x - x) === 1) {
-                isProtected = true;
-              }
+          // Kiểm tra xem tốt có được bảo vệ bởi tốt khác không
+          if (oppPrefix === "w") {
+            // Đối với quân trắng (đi từ trên xuống)
+            if (otherPawn.y === y + 1 && Math.abs(otherPawn.x - x) === 1) {
+              isProtected = true;
+            }
+          } else {
+            // Đối với quân đen (đi từ dưới lên)
+            if (otherPawn.y === y - 1 && Math.abs(otherPawn.x - x) === 1) {
+              isProtected = true;
             }
           }
         }
@@ -1033,24 +1054,34 @@ export function evaluateBoard(gameState: GameState): number {
       // Cơ bản cho tốt liên kết
       let connectedPawnBonus = Math.abs(useWeights.connectedPawn);
 
-      // Thưởng thêm cho tốt được bảo vệ bởi tốt khác
+      // Thưởng thêm cho tốt được bảo vệ bởi tốt khác (giảm hệ số từ 1.5 xuống 1.2)
       if (isProtected) {
-        connectedPawnBonus *= 1.5;
+        connectedPawnBonus *= 1.2;
       }
 
-      // Thưởng thêm cho tốt ở trung tâm (cột d và e)
+      // Thưởng thêm cho tốt ở trung tâm (cột d và e), giảm hệ số từ 1.3 xuống 1.1
       if (x >= 3 && x <= 4) {
-        connectedPawnBonus *= 1.3;
+        connectedPawnBonus *= 1.1;
       }
 
-      // Thưởng thêm cho tốt thông qua đã liên kết
+      // Giảm giá trị của tốt liên kết ở biên
+      if (isEdgePawn) {
+        connectedPawnBonus *= 0.8;
+      }
+
+      // Thưởng thêm cho tốt thông qua đã liên kết (giảm hệ số từ 1.5 xuống 1.2)
       if (isPassed) {
-        connectedPawnBonus *= 1.5;
+        connectedPawnBonus *= 1.2;
       }
 
-      // Giá trị tốt liên kết tăng theo tầng mà tốt đã tiến
+      // Ưu tiên liên kết ngang (cùng hàng) hơn là liên kết chéo
+      if (isHorizontallyConnected) {
+        connectedPawnBonus *= 1.15;
+      }
+
+      // Giá trị tốt liên kết tăng theo tầng mà tốt đã tiến (giảm ảnh hưởng xuống 80%)
       const advancementBonus = oppPrefix === "w" ? (6 - y) / 6 : y / 6;
-      connectedPawnBonus *= 1 + advancementBonus;
+      connectedPawnBonus *= 1 + advancementBonus * 0.8;
 
       score -= connectedPawnBonus;
     }
@@ -1930,6 +1961,27 @@ export function evaluateBoard(gameState: GameState): number {
   if (repetitionCount >= 2) {
     score -= useWeights.tempo * 20; // Phạt nặng khi vị trí lặp lại 3 lần (sắp hòa)
   }
+
+  // Đánh giá các cấu trúc tốt nâng cao
+  // 1. Đánh giá dây chuyền tốt
+  const pawnChainScore = evaluatePawnChain(board, myPrefix, oppPrefix);
+  score += pawnChainScore * (useWeights.pawnStructure || 1.0);
+
+  // 2. Đánh giá cặp tốt trung tâm
+  const centralPawnDuoScore = evaluateCentralPawnDuo(
+    board,
+    myPrefix,
+    oppPrefix
+  );
+  score += centralPawnDuoScore * (useWeights.centerControl || 1.0);
+
+  // 3. Đánh giá chi tiết tốt thông qua
+  const detailedPassedPawnScore = evaluateDetailedPassedPawns(
+    board,
+    myPrefix,
+    oppPrefix
+  );
+  score += detailedPassedPawnScore * (useWeights.passedPawn || 1.0);
 
   // Chuẩn hóa: Luôn trả về điểm số theo hướng AI (dương là tốt cho AI)
   return aiColor === "WHITE" ? score : -score;
