@@ -102,7 +102,7 @@ export async function runTrainingCycle(
   ];
 
   // Đảm bảo số lượng vị trí không quá lớn để tránh chậm
-  const maxPositionsToEvaluate = 500; // Số lượng vị trí tối đa để đánh giá
+  const maxPositionsToEvaluate = 10000; // Số lượng vị trí tối đa để đánh giá
   if (allPositions.length > maxPositionsToEvaluate) {
     console.log(
       `Limiting positions to ${maxPositionsToEvaluate} for evaluation efficiency`
@@ -170,7 +170,7 @@ export async function runTrainingCycle(
 export async function quickTrain(): Promise<EvaluationMetrics> {
   return runTrainingCycle({
     selfPlayGames: 20,
-    positionsPerGame: 500,
+    positionsPerGame: 2000,
     maxDepth: 4,
     iterations: 30, // Tăng từ 10 lên 30 thế hệ
     learningRate: 0.05,

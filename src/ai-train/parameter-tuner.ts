@@ -173,26 +173,66 @@ export async function tuneParameters(
         let totalScore = 0;
         let winCount = 0;
         let drawCount = 0;
+        let tacticalScore = 0;
+        let defenseScore = 0;
+        let coordinationScore = 0;
+        let endgameScore = 0;
         for (const pos of positions) {
           const gameState = fenToGameState(pos.fen);
           const evalScore = evaluateBoard(gameState);
           totalScore += evalScore;
 
+          // Chất lượng nước đi: các chỉ số chiến thuật
+          tacticalScore +=
+            (weights.checkBonus || 0) +
+            (weights.pinBonus || 0) +
+            (weights.forkBonus || 0) +
+            (weights.promotionThreat || 0);
+          // Khả năng phòng thủ/tấn công
+          defenseScore +=
+            (weights.kingSafety || 0) +
+            (weights.attackKing || 0) +
+            (weights.defendKing || 0);
+          // Phối hợp quân và kiểm soát vị trí
+          coordinationScore +=
+            (weights.pieceCoordination || 0) +
+            (weights.spaceAdvantage || 0) +
+            (weights.mobility || 0);
+          // Endgame: hoạt động vua và tempo
+          endgameScore +=
+            (weights.kingActivityEndgame || 0) + (weights.tempo || 0);
+
           // Cải thiện xác định thắng/hòa/thua dựa trên ngưỡng điểm số
-          // Sử dụng ngưỡng linh hoạt hơn
           if (evalScore > 3000) {
-            // Ưu thế chiến thắng rõ ràng
             winCount++;
           } else if (evalScore < -3000) {
-            // Thua rõ ràng - có thể thêm biến loseCount nếu muốn theo dõi riêng
+            // thua
           } else if (Math.abs(evalScore) < 30) {
-            // Mở rộng phạm vi hòa, thể hiện vị trí cân bằng hơn
             drawCount++;
           }
-          // Có thể thêm trọng số cho điểm số của vị trí quan trọng
-          // Ví dụ: tàn cuộc hoặc các vị trí chiến thuật
         }
-        fitness.push(totalScore / positions.length);
+        // Tính điểm trung bình cho từng tiêu chí
+        tacticalScore = tacticalScore / positions.length;
+        defenseScore = defenseScore / positions.length;
+        coordinationScore = coordinationScore / positions.length;
+        endgameScore = endgameScore / positions.length;
+
+        // Regularization: phạt các trọng số quá lớn/quá nhỏ
+        let regularizationPenalty = 0;
+        for (const key of Object.keys(weights) as Array<keyof typeof weights>) {
+          if (Math.abs(weights[key]) > 500)
+            regularizationPenalty += Math.abs(weights[key]) * 0.01;
+        }
+
+        // Hàm fitness tổng hợp cải tiến
+        const combinedFitness =
+          (totalScore / positions.length) * 0.4 +
+          tacticalScore * 0.18 +
+          defenseScore * 0.12 +
+          coordinationScore * 0.12 +
+          endgameScore * 0.18 -
+          regularizationPenalty;
+        fitness.push(combinedFitness);
         winRates.push(winCount / positions.length);
         drawRates.push(drawCount / positions.length);
       }
@@ -266,6 +306,23 @@ export async function tuneParameters(
             child[key] += Math.floor(
               Math.random() * (mutationAmplitude * 2 + 1) - mutationAmplitude
             );
+          }
+          // Ràng buộc giá trị tối thiểu cho các trọng số mang ý nghĩa tích cực
+          const minZeroKeys = [
+            "bishopPair",
+            "mobility",
+            "kingSafety",
+            "connectedPawn",
+            "rookOpenFile",
+            "rookConnected",
+            "development",
+            "pieceCoordination",
+            "spaceAdvantage",
+            "pawnStructure",
+            "centralPawnDuo",
+          ];
+          if (minZeroKeys.includes(key)) {
+            child[key] = Math.max(0, child[key]);
           }
         }
         newPopulation.push(child);
