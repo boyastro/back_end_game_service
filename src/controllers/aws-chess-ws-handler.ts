@@ -6,7 +6,7 @@ import {
 
 import { Request, Response } from "express";
 import redisClient from "../utils/redisClient.js";
-import { generateAIMove } from "../utils/chess-ai-bot.js";
+import { generateAIMove } from "../utils/chess-ai-bot-server.js";
 
 interface GameState {
   board: (string | null)[][];
