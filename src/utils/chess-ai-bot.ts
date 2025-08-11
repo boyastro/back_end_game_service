@@ -549,14 +549,12 @@ export function evaluateBoard(gameState: GameState): number {
   let myRookOn7thRank = 0;
   let myConnectedRooks = 0;
   let myPromotionThreats = 0;
-  let myCenterControlCount = 0;
 
   let oppBishopCount = 0;
   let oppRookOnOpenFile = 0;
   let oppRookOn7thRank = 0;
   let oppConnectedRooks = 0;
   let oppPromotionThreats = 0;
-  let oppCenterControlCount = 0;
 
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
