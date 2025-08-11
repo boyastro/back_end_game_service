@@ -196,18 +196,33 @@ async function generateSelfPlayGame(
  */
 export async function generateSelfPlayGames(
   numGames: number,
-  options: SelfPlayOptions = {}
+  options: SelfPlayOptions = {},
+  maxParallel: number = 4 // Số lượng game chạy đồng thời tối đa
 ): Promise<string[]> {
+  console.log(
+    `Generating ${numGames} self-play games (max ${maxParallel} parallel)...`
+  );
   const gameIds: string[] = [];
-
-  console.log(`Generating ${numGames} self-play games...`);
+  let running: Promise<string>[] = [];
 
   for (let i = 0; i < numGames; i++) {
-    console.log(`Generating game ${i + 1}/${numGames}...`);
-    const gameId = await generateSelfPlayGame(options);
-    gameIds.push(gameId);
-    console.log(`Game ${i + 1} completed, ID: ${gameId}`);
-  }
+    console.log(`Scheduling game ${i + 1}/${numGames}...`);
+    const promise = generateSelfPlayGame(options);
+    running.push(promise);
 
+    if (running.length >= maxParallel) {
+      const finishedId = await Promise.race(running);
+      gameIds.push(finishedId);
+      // Loại bỏ promise đã hoàn thành khỏi mảng
+      running = running.filter((p) => p !== promise);
+    }
+  }
+  // Đợi các game còn lại hoàn thành
+  const remainingIds = await Promise.all(running);
+  gameIds.push(...remainingIds);
+
+  gameIds.forEach((id, idx) => {
+    console.log(`Game ${idx + 1} completed, ID: ${id}`);
+  });
   return gameIds;
 }
