@@ -130,7 +130,7 @@ export async function tuneParameters(
         let drawCount = 0;
         for (const pos of positions) {
           const gameState = fenToGameState(pos.fen);
-          const evalScore = evaluateBoard(gameState, weights);
+          const evalScore = evaluateBoard(gameState);
           totalScore += evalScore;
           // Xác định thắng/hòa/thua dựa trên ngưỡng điểm số
           if (evalScore > 5000) winCount++;

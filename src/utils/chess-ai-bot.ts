@@ -509,22 +509,9 @@ function orderMoves(
 }
 
 // Hàm đánh giá bàn cờ nâng cao
-export function evaluateBoard(
-  gameState: GameState,
-  weights?: {
-    pawn: number;
-    knight: number;
-    bishop: number;
-    rook: number;
-    queen: number;
-    king: number;
-    centerControl?: number;
-    kingSafety?: number;
-    development?: number;
-  }
-): number {
-  // Ưu tiên dùng AI_WEIGHTS do mô hình sinh ra, chỉ fallback sang weights truyền vào nếu AI_WEIGHTS chưa có
-  const useWeights = AI_WEIGHTS ?? weights;
+export function evaluateBoard(gameState: GameState): number {
+  // Sử dụng trọng số từ AI_WEIGHTS
+  const useWeights = AI_WEIGHTS;
   const { board, aiColor } = gameState;
   let score = 0;
   let myKingPos: Position | null = null;
@@ -538,6 +525,36 @@ export function evaluateBoard(
   let oppBigPieceCount = 0;
   let myMaterial = 0;
   let oppMaterial = 0;
+
+  // Thống kê cấu trúc tốt
+  let myDoubledPawnCount = 0;
+  let myIsolatedPawnCount = 0;
+  let myPassedPawnCount = 0;
+  let myBackwardPawnCount = 0;
+  let myConnectedPawnCount = 0;
+  let myPawnShieldCount = 0;
+
+  let oppDoubledPawnCount = 0;
+  let oppIsolatedPawnCount = 0;
+  let oppPassedPawnCount = 0;
+  let oppBackwardPawnCount = 0;
+  let oppConnectedPawnCount = 0;
+  let oppPawnShieldCount = 0;
+
+  // Thống kê các yếu tố chiến thuật
+  let myBishopCount = 0;
+  let myRookOnOpenFile = 0;
+  let myRookOn7thRank = 0;
+  let myConnectedRooks = 0;
+  let myPromotionThreats = 0;
+  let myCenterControlCount = 0;
+
+  let oppBishopCount = 0;
+  let oppRookOnOpenFile = 0;
+  let oppRookOn7thRank = 0;
+  let oppConnectedRooks = 0;
+  let oppPromotionThreats = 0;
+  let oppCenterControlCount = 0;
 
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
@@ -571,13 +588,16 @@ export function evaluateBoard(
 
   // Điều chỉnh các trọng số theo giai đoạn, ưu tiên dùng weights nếu có
   const developmentWeight =
-    weights?.development ?? (isOpening ? 15 : isMiddlegame ? 10 : 5);
+    useWeights.development * (isOpening ? 1.5 : isMiddlegame ? 1.0 : 0.5);
   const kingActivityWeight =
-    weights?.kingSafety ?? (isEndgame ? 30 : isMiddlegame ? 10 : 0);
+    (useWeights.kingActivityEndgame || useWeights.kingSafety) *
+    (isEndgame ? 3.0 : isMiddlegame ? 1.0 : 0);
   const centerControlWeight =
-    weights?.centerControl ?? (isMiddlegame ? 15 : 10);
-  const mobilityWeight = isEndgame ? 10 : isMiddlegame ? 8 : 5;
-  const kingTempoWeight = isEndgame ? 15 : 0;
+    useWeights.centerControl * (isOpening ? 1.5 : isMiddlegame ? 1.2 : 0.8);
+  const mobilityWeight =
+    useWeights.mobility * (isEndgame ? 1.5 : isMiddlegame ? 1.2 : 1.0);
+  const kingTempoWeight =
+    useWeights.tempo * (isEndgame ? 1.5 : isMiddlegame ? 1.0 : 0.7);
   const materialAdvantageWeight = isEndgame ? 1.3 : isMiddlegame ? 1.1 : 1.0;
 
   // Cập nhật điểm dựa trên chênh lệch vật chất
@@ -594,6 +614,351 @@ export function evaluateBoard(
   }
 
   score += materialScore;
+
+  // 5. Phân tích cấu trúc tốt và các yếu tố chiến thuật
+  // Kiểm tra cột cho các tốt và xe
+  const pawnColumns = {
+    my: Array(8).fill(0),
+    opp: Array(8).fill(0),
+  };
+  const rookFiles = {
+    my: [] as number[],
+    opp: [] as number[],
+  };
+
+  // Mảng đánh dấu xe trắng và đen
+  const myRooks: Position[] = [];
+  const oppRooks: Position[] = [];
+
+  // Mảng đánh dấu vị trí tốt
+  const myPawns: Position[] = [];
+  const oppPawns: Position[] = [];
+
+  // Đánh dấu tốt trên các cột
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = board[y][x];
+      if (!piece) continue;
+
+      // Lưu vị trí vua
+      if (piece[1] === "K") {
+        if (piece.startsWith(myPrefix)) {
+          myKingPos = { x, y };
+        } else {
+          oppKingPos = { x, y };
+        }
+      }
+
+      // Đếm tốt trên mỗi cột
+      if (piece[1] === "P") {
+        if (piece.startsWith(myPrefix)) {
+          pawnColumns.my[x]++;
+          myPawns.push({ x, y });
+        } else {
+          pawnColumns.opp[x]++;
+          oppPawns.push({ x, y });
+        }
+      }
+
+      // Lưu vị trí xe
+      if (piece[1] === "R") {
+        if (piece.startsWith(myPrefix)) {
+          myRooks.push({ x, y });
+          rookFiles.my.push(x);
+        } else {
+          oppRooks.push({ x, y });
+          rookFiles.opp.push(x);
+        }
+      }
+
+      // Đếm tượng (để kiểm tra cặp tượng)
+      if (piece[1] === "B") {
+        if (piece.startsWith(myPrefix)) {
+          myBishopCount++;
+        } else {
+          oppBishopCount++;
+        }
+      }
+    }
+  }
+
+  // Phân tích cấu trúc tốt - bên của mình
+  for (let x = 0; x < 8; x++) {
+    // Tốt trùng cột (doubled pawns)
+    if (pawnColumns.my[x] > 1) {
+      myDoubledPawnCount += pawnColumns.my[x] - 1;
+      score -= (pawnColumns.my[x] - 1) * useWeights.doubledPawn;
+    }
+
+    // Tốt cô lập (isolated pawns) - không có tốt ở cột kề
+    if (
+      pawnColumns.my[x] > 0 &&
+      (x === 0 || pawnColumns.my[x - 1] === 0) &&
+      (x === 7 || pawnColumns.my[x + 1] === 0)
+    ) {
+      myIsolatedPawnCount++;
+      score -= useWeights.isolatedPawn;
+    }
+  }
+
+  // Kiểm tra tốt thông qua (passed pawns) và tốt liên kết (connected pawns)
+  for (const pawn of myPawns) {
+    const { x, y } = pawn;
+    const forward = myPrefix === "w" ? -1 : 1;
+    let isPassed = true;
+
+    // Kiểm tra tốt thông qua - không có tốt địch phía trước hoặc ở cột kề
+    for (
+      let checkY = y + forward;
+      checkY >= 0 && checkY < 8;
+      checkY += forward
+    ) {
+      for (
+        let checkX = Math.max(0, x - 1);
+        checkX <= Math.min(7, x + 1);
+        checkX++
+      ) {
+        const piece = board[checkY][checkX];
+        if (piece && piece[1] === "P" && piece.startsWith(oppPrefix)) {
+          isPassed = false;
+          break;
+        }
+      }
+      if (!isPassed) break;
+    }
+
+    if (isPassed) {
+      myPassedPawnCount++;
+      // Tốt thông qua càng gần hàng thăng cấp càng có giá trị
+      const promotionDistance = myPrefix === "w" ? y : 7 - y;
+      score += (useWeights.passedPawn * (8 - promotionDistance)) / 2;
+    }
+
+    // Kiểm tra tốt liên kết (connected pawns)
+    let isConnected = false;
+    for (
+      let checkX = Math.max(0, x - 1);
+      checkX <= Math.min(7, x + 1);
+      checkX++
+    ) {
+      if (checkX === x) continue;
+      if (pawnColumns.my[checkX] > 0) {
+        // Kiểm tra xem có tốt bên cạnh ở cùng hàng hoặc liên kết chéo không
+        for (const otherPawn of myPawns) {
+          if (
+            otherPawn.x === checkX &&
+            (otherPawn.y === y ||
+              otherPawn.y === y + 1 ||
+              otherPawn.y === y - 1)
+          ) {
+            isConnected = true;
+            break;
+          }
+        }
+      }
+      if (isConnected) break;
+    }
+
+    if (isConnected) {
+      myConnectedPawnCount++;
+      score += useWeights.connectedPawn;
+    }
+
+    // Kiểm tra tốt bảo vệ vua (pawn shield)
+    if (myKingPos) {
+      const kingX = myKingPos.x;
+      const kingY = myKingPos.y;
+      // Tốt ở gần vua (±1 cột, phía trước vua 1-2 hàng)
+      if (Math.abs(x - kingX) <= 1) {
+        const pawnShieldDirection = myPrefix === "w" ? -1 : 1;
+        if (
+          y === kingY + pawnShieldDirection ||
+          y === kingY + 2 * pawnShieldDirection
+        ) {
+          myPawnShieldCount++;
+          score += useWeights.pawnShield;
+        }
+      }
+    }
+  }
+
+  // Phân tích cấu trúc tốt - bên của đối thủ
+  for (let x = 0; x < 8; x++) {
+    // Tốt trùng cột (doubled pawns)
+    if (pawnColumns.opp[x] > 1) {
+      oppDoubledPawnCount += pawnColumns.opp[x] - 1;
+      score += (pawnColumns.opp[x] - 1) * useWeights.doubledPawn;
+    }
+
+    // Tốt cô lập (isolated pawns) - không có tốt ở cột kề
+    if (
+      pawnColumns.opp[x] > 0 &&
+      (x === 0 || pawnColumns.opp[x - 1] === 0) &&
+      (x === 7 || pawnColumns.opp[x + 1] === 0)
+    ) {
+      oppIsolatedPawnCount++;
+      score += useWeights.isolatedPawn;
+    }
+  }
+
+  // Kiểm tra tốt thông qua (passed pawns) và tốt liên kết (connected pawns) của đối thủ
+  for (const pawn of oppPawns) {
+    const { x, y } = pawn;
+    const forward = oppPrefix === "w" ? -1 : 1;
+    let isPassed = true;
+
+    // Kiểm tra tốt thông qua - không có tốt mình phía trước hoặc ở cột kề
+    for (
+      let checkY = y + forward;
+      checkY >= 0 && checkY < 8;
+      checkY += forward
+    ) {
+      for (
+        let checkX = Math.max(0, x - 1);
+        checkX <= Math.min(7, x + 1);
+        checkX++
+      ) {
+        const piece = board[checkY][checkX];
+        if (piece && piece[1] === "P" && piece.startsWith(myPrefix)) {
+          isPassed = false;
+          break;
+        }
+      }
+      if (!isPassed) break;
+    }
+
+    if (isPassed) {
+      oppPassedPawnCount++;
+      // Tốt thông qua càng gần hàng thăng cấp càng có giá trị
+      const promotionDistance = oppPrefix === "w" ? y : 7 - y;
+      score -= (useWeights.passedPawn * (8 - promotionDistance)) / 2;
+    }
+
+    // Kiểm tra tốt liên kết (connected pawns)
+    let isConnected = false;
+    for (
+      let checkX = Math.max(0, x - 1);
+      checkX <= Math.min(7, x + 1);
+      checkX++
+    ) {
+      if (checkX === x) continue;
+      if (pawnColumns.opp[checkX] > 0) {
+        // Kiểm tra xem có tốt bên cạnh ở cùng hàng hoặc liên kết chéo không
+        for (const otherPawn of oppPawns) {
+          if (
+            otherPawn.x === checkX &&
+            (otherPawn.y === y ||
+              otherPawn.y === y + 1 ||
+              otherPawn.y === y - 1)
+          ) {
+            isConnected = true;
+            break;
+          }
+        }
+      }
+      if (isConnected) break;
+    }
+
+    if (isConnected) {
+      oppConnectedPawnCount++;
+      score -= useWeights.connectedPawn;
+    }
+
+    // Kiểm tra tốt bảo vệ vua (pawn shield)
+    if (oppKingPos) {
+      const kingX = oppKingPos.x;
+      const kingY = oppKingPos.y;
+      // Tốt ở gần vua (±1 cột, phía trước vua 1-2 hàng)
+      if (Math.abs(x - kingX) <= 1) {
+        const pawnShieldDirection = oppPrefix === "w" ? -1 : 1;
+        if (
+          y === kingY + pawnShieldDirection ||
+          y === kingY + 2 * pawnShieldDirection
+        ) {
+          oppPawnShieldCount++;
+          score -= useWeights.pawnShield;
+        }
+      }
+    }
+  }
+
+  // Phân tích xe
+  // Xe trên cột mở (không có tốt trên cột)
+  for (const rook of myRooks) {
+    const { x, y } = rook;
+    // Cột mở - không có tốt nào trên cột
+    if (pawnColumns.my[x] === 0 && pawnColumns.opp[x] === 0) {
+      myRookOnOpenFile++;
+      score += useWeights.rookOpenFile;
+    }
+    // Cột nửa mở - không có tốt của mình nhưng có tốt của đối thủ
+    else if (pawnColumns.my[x] === 0 && pawnColumns.opp[x] > 0) {
+      score += useWeights.rookOpenFile / 2;
+    }
+
+    // Xe ở hàng 7 (đối với trắng) hoặc hàng 2 (đối với đen)
+    if ((myPrefix === "w" && y === 1) || (myPrefix === "b" && y === 6)) {
+      myRookOn7thRank++;
+      score += useWeights.rook7thRank;
+    }
+  }
+
+  // Xe liên kết (connected rooks) - 2 xe ở cùng hàng hoặc cột
+  if (myRooks.length >= 2) {
+    for (let i = 0; i < myRooks.length - 1; i++) {
+      for (let j = i + 1; j < myRooks.length; j++) {
+        if (myRooks[i].x === myRooks[j].x || myRooks[i].y === myRooks[j].y) {
+          myConnectedRooks++;
+          score += useWeights.rookConnected;
+          break;
+        }
+      }
+    }
+  }
+
+  // Phân tích xe của đối thủ
+  for (const rook of oppRooks) {
+    const { x, y } = rook;
+    // Cột mở - không có tốt nào trên cột
+    if (pawnColumns.my[x] === 0 && pawnColumns.opp[x] === 0) {
+      oppRookOnOpenFile++;
+      score -= useWeights.rookOpenFile;
+    }
+    // Cột nửa mở - không có tốt của đối thủ nhưng có tốt của mình
+    else if (pawnColumns.opp[x] === 0 && pawnColumns.my[x] > 0) {
+      score -= useWeights.rookOpenFile / 2;
+    }
+
+    // Xe ở hàng 7 (đối với đen) hoặc hàng 2 (đối với trắng)
+    if ((oppPrefix === "w" && y === 1) || (oppPrefix === "b" && y === 6)) {
+      oppRookOn7thRank++;
+      score -= useWeights.rook7thRank;
+    }
+  }
+
+  // Xe liên kết (connected rooks) của đối thủ
+  if (oppRooks.length >= 2) {
+    for (let i = 0; i < oppRooks.length - 1; i++) {
+      for (let j = i + 1; j < oppRooks.length; j++) {
+        if (
+          oppRooks[i].x === oppRooks[j].x ||
+          oppRooks[i].y === oppRooks[j].y
+        ) {
+          oppConnectedRooks++;
+          score -= useWeights.rookConnected;
+          break;
+        }
+      }
+    }
+  }
+
+  // Đánh giá cặp tượng (bishop pair)
+  if (myBishopCount >= 2) {
+    score += useWeights.bishopPair;
+  }
+  if (oppBishopCount >= 2) {
+    score -= useWeights.bishopPair;
+  }
 
   // Bảng giá trị vị trí cho các quân - khuyến khích các vị trí tốt
   const piecePositionBonus = {
@@ -817,6 +1182,238 @@ export function evaluateBoard(
   score += myMoves.length * mobilityWeight;
   score -= oppMoves.length * mobilityWeight;
 
+  // Kiểm tra số nước đi khả thi cho trung tâm (ô d4, d5, e4, e5)
+  let myCenterMoves = 0;
+  let oppCenterMoves = 0;
+
+  for (const move of myMoves) {
+    if (move.to.x >= 3 && move.to.x <= 4 && move.to.y >= 3 && move.to.y <= 4) {
+      myCenterMoves++;
+    }
+  }
+
+  for (const move of oppMoves) {
+    if (move.to.x >= 3 && move.to.x <= 4 && move.to.y >= 3 && move.to.y <= 4) {
+      oppCenterMoves++;
+    }
+  }
+
+  // Thưởng cho việc kiểm soát trung tâm
+  score += myCenterMoves * centerControlWeight;
+  score -= oppCenterMoves * centerControlWeight;
+
+  // Đánh giá an toàn vua
+  let myKingSafety = 0;
+  let oppKingSafety = 0;
+
+  if (myKingPos) {
+    // Kiểm tra các ô xung quanh vua của tôi
+    for (const dir of [...DIRECTIONS.BISHOP, ...DIRECTIONS.ROOK]) {
+      const checkPos = { x: myKingPos.x + dir.x, y: myKingPos.y + dir.y };
+      if (isValidPosition(checkPos)) {
+        // Thưởng nếu ô xung quanh vua được bảo vệ
+        if (isSquareDefendedBy(board, checkPos.x, checkPos.y, myPrefix)) {
+          myKingSafety += 5;
+        }
+        // Phạt nếu ô xung quanh vua bị tấn công
+        if (isSquareAttackedBy(board, checkPos.x, checkPos.y, oppPrefix)) {
+          myKingSafety -= 10;
+        }
+      }
+    }
+
+    // Phạt thêm nếu vua ở trung tâm trong giai đoạn đầu hoặc giữa
+    if (
+      (isOpening || isMiddlegame) &&
+      myKingPos.x >= 2 &&
+      myKingPos.x <= 5 &&
+      myKingPos.y >= 2 &&
+      myKingPos.y <= 5
+    ) {
+      myKingSafety -= 50;
+    }
+
+    // Thưởng cho vua ở góc trong giai đoạn đầu và giữa
+    if (
+      (isOpening || isMiddlegame) &&
+      (myKingPos.x <= 1 || myKingPos.x >= 6) &&
+      (myKingPos.y <= 1 || myKingPos.y >= 6)
+    ) {
+      myKingSafety += 30;
+    }
+
+    // Thưởng cho tính linh động của vua trong tàn cuộc
+    if (isEndgame) {
+      // Khuyến khích vua tiến gần trung tâm trong tàn cuộc
+      const distanceToCenter =
+        Math.abs(3.5 - myKingPos.x) + Math.abs(3.5 - myKingPos.y);
+      myKingSafety += (7 - distanceToCenter) * 10;
+
+      // Khuyến khích vua tiếp cận vua đối phương trong tàn cuộc
+      if (oppKingPos && myBigPieceCount > oppBigPieceCount) {
+        const distanceToOppKing =
+          Math.abs(oppKingPos.x - myKingPos.x) +
+          Math.abs(oppKingPos.y - myKingPos.y);
+        myKingSafety += (14 - distanceToOppKing) * 5;
+      }
+    }
+  }
+
+  if (oppKingPos) {
+    // Kiểm tra các ô xung quanh vua đối thủ
+    for (const dir of [...DIRECTIONS.BISHOP, ...DIRECTIONS.ROOK]) {
+      const checkPos = { x: oppKingPos.x + dir.x, y: oppKingPos.y + dir.y };
+      if (isValidPosition(checkPos)) {
+        // Phạt nếu ô xung quanh vua đối thủ được bảo vệ
+        if (isSquareDefendedBy(board, checkPos.x, checkPos.y, oppPrefix)) {
+          oppKingSafety += 5;
+        }
+        // Thưởng nếu ô xung quanh vua đối thủ bị tấn công
+        if (isSquareAttackedBy(board, checkPos.x, checkPos.y, myPrefix)) {
+          oppKingSafety -= 10;
+        }
+      }
+    }
+
+    // Thưởng nếu vua đối thủ ở trung tâm trong giai đoạn đầu hoặc giữa
+    if (
+      (isOpening || isMiddlegame) &&
+      oppKingPos.x >= 2 &&
+      oppKingPos.x <= 5 &&
+      oppKingPos.y >= 2 &&
+      oppKingPos.y <= 5
+    ) {
+      oppKingSafety -= 50;
+    }
+  }
+
+  // Cập nhật điểm với trọng số kingSafety
+  score += (myKingSafety * useWeights.kingSafety) / 10;
+  score -= (oppKingSafety * useWeights.kingSafety) / 10;
+
+  // Đánh giá các đe dọa thăng cấp tốt
+  for (const pawn of myPawns) {
+    const { x, y } = pawn;
+    const promotionRank = myPrefix === "w" ? 0 : 7;
+    const distanceToPromotion = Math.abs(y - promotionRank);
+
+    // Tốt càng gần hàng thăng cấp
+    if (distanceToPromotion <= 2) {
+      // Kiểm tra xem có đường đi thông thoáng không
+      let hasPath = true;
+      let checkY = y;
+      const direction = myPrefix === "w" ? -1 : 1;
+
+      while (checkY !== promotionRank) {
+        checkY += direction;
+        if (board[checkY][x] !== null) {
+          hasPath = false;
+          break;
+        }
+      }
+
+      if (hasPath) {
+        myPromotionThreats++;
+        score += useWeights.promotionThreat * (3 - distanceToPromotion);
+      }
+    }
+  }
+
+  for (const pawn of oppPawns) {
+    const { x, y } = pawn;
+    const promotionRank = oppPrefix === "w" ? 0 : 7;
+    const distanceToPromotion = Math.abs(y - promotionRank);
+
+    // Tốt càng gần hàng thăng cấp
+    if (distanceToPromotion <= 2) {
+      // Kiểm tra xem có đường đi thông thoáng không
+      let hasPath = true;
+      let checkY = y;
+      const direction = oppPrefix === "w" ? -1 : 1;
+
+      while (checkY !== promotionRank) {
+        checkY += direction;
+        if (board[checkY][x] !== null) {
+          hasPath = false;
+          break;
+        }
+      }
+
+      if (hasPath) {
+        oppPromotionThreats++;
+        score -= useWeights.promotionThreat * (3 - distanceToPromotion);
+      }
+    }
+  }
+
+  // Đánh giá đe dọa quân nhỏ/lớn
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = board[y][x];
+      if (!piece) continue;
+
+      // Kiểm tra các đe dọa đối với quân của đối thủ
+      if (piece.startsWith(oppPrefix)) {
+        const pieceType = piece[1];
+
+        // Đánh giá đe dọa quân nhỏ (tốt, mã, tượng)
+        if (pieceType === "P" || pieceType === "N" || pieceType === "B") {
+          if (
+            isSquareAttackedBy(board, x, y, myPrefix) &&
+            !isSquareDefendedBy(board, x, y, oppPrefix)
+          ) {
+            score += useWeights.threatMinorPiece;
+          }
+        }
+        // Đánh giá đe dọa quân lớn (xe, hậu)
+        else if (pieceType === "R" || pieceType === "Q") {
+          if (
+            isSquareAttackedBy(board, x, y, myPrefix) &&
+            !isSquareDefendedBy(board, x, y, oppPrefix)
+          ) {
+            score += useWeights.threatMajorPiece;
+          } else if (
+            isSquareAttackedBy(board, x, y, myPrefix) &&
+            isSquareDefendedBy(board, x, y, oppPrefix)
+          ) {
+            // Ngay cả khi được bảo vệ, việc đe dọa quân lớn vẫn có giá trị
+            score += useWeights.threatMajorPiece / 2;
+          }
+        }
+      }
+
+      // Kiểm tra các đe dọa đối với quân của mình
+      if (piece.startsWith(myPrefix)) {
+        const pieceType = piece[1];
+
+        // Đánh giá đe dọa quân nhỏ (tốt, mã, tượng)
+        if (pieceType === "P" || pieceType === "N" || pieceType === "B") {
+          if (
+            isSquareAttackedBy(board, x, y, oppPrefix) &&
+            !isSquareDefendedBy(board, x, y, myPrefix)
+          ) {
+            score -= useWeights.threatMinorPiece;
+          }
+        }
+        // Đánh giá đe dọa quân lớn (xe, hậu)
+        else if (pieceType === "R" || pieceType === "Q") {
+          if (
+            isSquareAttackedBy(board, x, y, oppPrefix) &&
+            !isSquareDefendedBy(board, x, y, myPrefix)
+          ) {
+            score -= useWeights.threatMajorPiece;
+          } else if (
+            isSquareAttackedBy(board, x, y, oppPrefix) &&
+            isSquareDefendedBy(board, x, y, myPrefix)
+          ) {
+            // Ngay cả khi được bảo vệ, việc đe dọa quân lớn vẫn có giá trị
+            score -= useWeights.threatMajorPiece / 2;
+          }
+        }
+      }
+    }
+  }
+
   // Kiểm soát tính linh động và sự phát triển
   if (myMoves.length > oppMoves.length * 1.3) {
     // Nếu có nhiều hơn 30% số nước so với đối thủ
@@ -970,8 +1567,29 @@ export function evaluateBoard(
 
   // Cải thiện tính di động: khuyến khích kiểm soát trung tâm và di chuyển
   // Tối ưu: Chỉ dùng 50% số nước khả thi để tăng tốc đánh giá
-  const mobilityScore = Math.floor(getAllPossibleMoves(gameState).length * 1.5);
+  const mobilityScore = Math.floor(
+    getAllPossibleMoves(gameState).length * mobilityWeight
+  );
   score += mobilityScore;
+
+  // Tổng hợp các yếu tố đã phân tích
+  const structureScore =
+    (myConnectedPawnCount - oppConnectedPawnCount) * useWeights.connectedPawn +
+    (oppDoubledPawnCount - myDoubledPawnCount) * useWeights.doubledPawn +
+    (oppIsolatedPawnCount - myIsolatedPawnCount) * useWeights.isolatedPawn +
+    (myPassedPawnCount - oppPassedPawnCount) * useWeights.passedPawn +
+    (myPawnShieldCount - oppPawnShieldCount) * useWeights.pawnShield;
+
+  const tacticalScore =
+    (myRookOnOpenFile - oppRookOnOpenFile) * useWeights.rookOpenFile +
+    (myRookOn7thRank - oppRookOn7thRank) * useWeights.rook7thRank +
+    (myConnectedRooks - oppConnectedRooks) * useWeights.rookConnected +
+    (myBishopCount >= 2 ? useWeights.bishopPair : 0) -
+    (oppBishopCount >= 2 ? useWeights.bishopPair : 0) +
+    (myPromotionThreats - oppPromotionThreats) * useWeights.promotionThreat;
+
+  // Thêm điểm từ cấu trúc tốt và yếu tố chiến thuật
+  score += structureScore + tacticalScore;
 
   // Phân tích vị trí hiện tại để tìm thay đổi
   // Tăng điểm nếu có trùng lặp vị trí từ lịch sử
