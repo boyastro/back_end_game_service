@@ -41,3 +41,7 @@ checkpoint-weights-gen5.json
 .gitignore
 checkpoint-weights-gen15.json
 checkpoint-weights-gen10.json
+src/ai-train/training.ts
+checkpoint-weights-gen20.json
+checkpoint-weights-gen25.json
+checkpoint-weights-gen30.json

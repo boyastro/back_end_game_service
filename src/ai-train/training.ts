@@ -169,11 +169,11 @@ export async function runTrainingCycle(
  */
 export async function quickTrain(): Promise<EvaluationMetrics> {
   return runTrainingCycle({
-    selfPlayGames: 5,
-    positionsPerGame: 300,
-    maxDepth: 3,
-    iterations: 15, // Tăng từ 10 lên 15 thế hệ
-    learningRate: 0.1,
+    selfPlayGames: 20,
+    positionsPerGame: 500,
+    maxDepth: 4,
+    iterations: 30, // Tăng từ 10 lên 30 thế hệ
+    learningRate: 0.05,
   });
 }
 
