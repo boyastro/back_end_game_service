@@ -2020,7 +2020,7 @@ export function evaluateBoard(gameState: GameState): number {
   score += detailedPassedPawnScore * (useWeights.passedPawn || 1.0);
 
   // Chuẩn hóa: Luôn trả về điểm số theo hướng AI (dương là tốt cho AI)
-  return aiColor === "WHITE" ? score : -score;
+  return score;
 }
 
 // Kiểm tra một ô có bị tấn công bởi màu nào đó không
