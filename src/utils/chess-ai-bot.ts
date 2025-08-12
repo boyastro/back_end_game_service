@@ -401,14 +401,6 @@ function minimax(
         }
       }
     }
-
-    if (kingPos && isSquareAttacked(gameState.board, kingPos, oppPrefix)) {
-      // Checkmate - trả về giá trị cực lớn/nhỏ tùy theo bên
-      return maximizing ? -9999999 : 9999999;
-    } else {
-      // Stalemate - hòa cờ
-      return 0;
-    }
   }
 
   // Tối ưu: Sắp xếp lại nước đi để cải thiện hiệu quả alpha-beta
@@ -1303,7 +1295,7 @@ export function evaluateBoard(gameState: GameState): number {
       if (!piece) continue;
 
       const pieceType = piece[1];
-      const value = PIECE_VALUES[pieceType];
+      const value = getPieceValue(pieceType);
 
       // Tính toán điểm vị trí dựa trên các nguyên tắc cơ bản thay vì bảng cố định
       let positionBonus = 0;
@@ -1830,7 +1822,7 @@ export function evaluateBoard(gameState: GameState): number {
       if (!piece) continue;
 
       const pieceType = piece[1];
-      const pieceValue = PIECE_VALUES[pieceType];
+      const pieceValue = getPieceValue(pieceType);
 
       // Xử lý quân của AI
       if (piece.startsWith(myPrefix)) {
@@ -1895,7 +1887,7 @@ export function evaluateBoard(gameState: GameState): number {
                 score += pieceValue * 0.15; // Thưởng thêm cho quân quan trọng được bảo vệ nhiều lớp
               }
             }
-          } else if (pieceValue > PIECE_VALUES["P"]) {
+          } else if (pieceValue > getPieceValue("P")) {
             // Quân giá trị cao không được bảo vệ - phạt nặng hơn
             score -= pieceValue * 0.25 * pieceImportance;
           }
@@ -2215,7 +2207,7 @@ function getMinPieceValue(
 ): number {
   if (pieces.length === 0) return Infinity;
 
-  return Math.min(...pieces.map((p) => PIECE_VALUES[p.piece[1]]));
+  return Math.min(...pieces.map((p) => getPieceValue(p.piece[1])));
 }
 
 // Tạo trạng thái mới sau khi đi một nước
@@ -2351,8 +2343,8 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
   piecesCoordinates.sort((a, b) => {
     const pieceA = board[a.y][a.x];
     const pieceB = board[b.y][b.x];
-    const valueA = pieceA ? PIECE_VALUES[pieceA[1]] || 0 : 0;
-    const valueB = pieceB ? PIECE_VALUES[pieceB[1]] || 0 : 0;
+    const valueA = pieceA ? getPieceValue(pieceA[1]) || 0 : 0;
+    const valueB = pieceB ? getPieceValue(pieceB[1]) || 0 : 0;
     return valueB - valueA;
   });
 
