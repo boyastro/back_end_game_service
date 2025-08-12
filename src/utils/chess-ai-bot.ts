@@ -6,8 +6,52 @@ import {
   evaluateCentralPawnDuo,
   evaluateDetailedPassedPawns,
 } from "./chess-additional-evaluations.js";
-// Tự động nạp trọng số tối ưu nếu có
-let AI_WEIGHTS = loadBestWeights() || undefined;
+// Trọng số mặc định nếu không load được file
+export const WEIGHTS = {
+  pawn: 185,
+  knight: 351,
+  bishop: 325,
+  rook: 551,
+  queen: 970,
+  king: 20052,
+  pawnSquare: -35,
+  knightSquare: 92,
+  bishopSquare: -115,
+  rookSquare: 8,
+  queenSquare: 30,
+  kingSquareMiddle: -12,
+  kingSquareEnd: 93,
+  doubledPawn: 30,
+  isolatedPawn: 88,
+  passedPawn: 98,
+  backwardPawn: 46,
+  connectedPawn: 101,
+  pawnShield: 47,
+  centerControl: -108,
+  mobility: 12,
+  attackKing: 14,
+  defendKing: 211,
+  bishopPair: 0,
+  spaceAdvantage: 158,
+  pieceCoordination: 139,
+  rookOpenFile: 14,
+  rook7thRank: 151,
+  rookConnected: 29,
+  promotionThreat: 98,
+  kingActivityEndgame: 143,
+  tempo: 110,
+  threatMinorPiece: -103,
+  threatMajorPiece: 6,
+  checkBonus: 160,
+  pinBonus: 210,
+  forkBonus: 43,
+  kingSafety: 41,
+  development: 0,
+  pawnStructure: 27,
+  centralPawnDuo: 132,
+};
+// Tự động nạp trọng số tối ưu nếu có, nếu không thì dùng WEIGHTS
+let AI_WEIGHTS = loadBestWeights() || WEIGHTS;
 // Chess AI Bot implementation - Optimized Version
 // This bot makes moves for the opponent when there's only one player in the game
 
