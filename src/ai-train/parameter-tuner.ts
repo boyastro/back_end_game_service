@@ -203,9 +203,9 @@ export async function tuneParameters(
             (weights.kingActivityEndgame || 0) + (weights.tempo || 0);
 
           // Cải thiện xác định thắng/hòa/thua dựa trên ngưỡng điểm số
-          if (evalScore > 3000) {
+          if (evalScore > 1500) {
             winCount++;
-          } else if (evalScore < -3000) {
+          } else if (evalScore < -1500) {
             // thua
           } else if (Math.abs(evalScore) < 30) {
             drawCount++;

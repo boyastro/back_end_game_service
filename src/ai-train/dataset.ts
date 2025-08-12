@@ -101,7 +101,7 @@ export async function saveGame(gameData: any): Promise<string> {
  * @returns Array of position data
  */
 export async function loadPositions(
-  limit: number = 1000
+  limit: number = 50000
 ): Promise<PositionData[]> {
   try {
     // Load existing positions

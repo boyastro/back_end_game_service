@@ -103,17 +103,27 @@ export async function runTrainingCycle(
   ];
 
   // Đảm bảo số lượng vị trí không quá lớn để tránh chậm
-  const maxPositionsToEvaluate = 10000; // Số lượng vị trí tối đa để đánh giá
+  const maxPositionsToEvaluate = 50000; // Số lượng vị trí tối đa để đánh giá
   if (allPositions.length > maxPositionsToEvaluate) {
     console.log(
       `Limiting positions to ${maxPositionsToEvaluate} for evaluation efficiency`
     );
     // Ưu tiên giữ lại các vị trí đa dạng, khai cuộc và tàn cuộc
-    const priorityPositions = [
-      ...diversePositions,
+    // Loại bỏ trùng lặp theo FEN để tăng đa dạng
+    type PositionEval = { fen: string; evaluation: number; bestMove: string };
+    function uniqueByFEN(arr: PositionEval[]): PositionEval[] {
+      const seen = new Set<string>();
+      return arr.filter((item) => {
+        if (seen.has(item.fen)) return false;
+        seen.add(item.fen);
+        return true;
+      });
+    }
+    const priorityPositions = uniqueByFEN([
+      ...(diversePositions as PositionEval[]),
       ...openingPositions.map((fen) => ({ fen, evaluation: 0, bestMove: "" })),
       ...endgamePositions.map((fen) => ({ fen, evaluation: 0, bestMove: "" })),
-    ];
+    ]);
 
     // Số lượng vị trí còn lại từ self-play
     const remainingSlots = Math.max(
@@ -171,7 +181,7 @@ export async function runTrainingCycle(
 export async function quickTrain(): Promise<EvaluationMetrics> {
   return runTrainingCycle({
     selfPlayGames: 100,
-    positionsPerGame: 2000,
+    positionsPerGame: 100000,
     maxDepth: 4,
     iterations: 10, // Tăng từ 10 lên 30 thế hệ
     learningRate: 0.1,
