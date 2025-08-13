@@ -1280,6 +1280,7 @@ export function evaluateBoard(gameState: GameState, weights?: any): number {
       // Áp dụng hệ số thế cờ mở
       score -= baseBishopPairValue * (1 + openPositionBonus);
 
+      // Thêm thưởng cho cặp tượng trong tàn cuộc
       if (isEndgame) {
         score -= baseBishopPairValue * 0.5;
       }
@@ -1474,7 +1475,7 @@ export function evaluateBoard(gameState: GameState, weights?: any): number {
             kingBonus -= useWeights.kingSafety * 1.5;
           }
 
-          // Phạt nếu vua di chuyển khỏi hàng cuối/đầu quá sớm
+          // Phạt nếu vua di chuyển khỏi hàng cuối cùng quá sớm
           if (
             (piece.startsWith("w") && y < 6) ||
             (piece.startsWith("b") && y > 1)
@@ -2353,12 +2354,10 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
   for (const position of piecesCoordinates) {
     const piece = board[position.y][position.x];
     if (piece) {
-      const pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
-      moves.push(...pieceMoves);
+      let pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
 
       // Kiểm tra đặc biệt cho các nước ăn vua
       if (opponentKingPos) {
-        // Đảm bảo nước ăn vua được thêm vào nếu quân này có thể tấn công vua
         const canAttackKing = checkIfCanAttackKing(
           board,
           position,
@@ -2366,9 +2365,19 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
           opponentKingPos
         );
         if (canAttackKing) {
-          moves.push({ from: position, to: opponentKingPos });
+          pieceMoves.push({ from: position, to: opponentKingPos });
         }
       }
+
+      // Lọc nước đi hợp lệ: không làm vua bị chiếu sau khi đi
+      pieceMoves = pieceMoves.filter((move) => {
+        const nextState = makeMove(gameState, move);
+        // aiColor: "WHITE" | "BLACK" => "w" | "b"
+        const colorPrefix = aiColor === "WHITE" ? "w" : "b";
+        return !isKingInCheck(nextState, colorPrefix);
+      });
+
+      moves.push(...pieceMoves);
     }
   }
 
@@ -2726,6 +2735,7 @@ function getKingMoves(
   const moves: ChessMove[] = [];
   const opponentPrefix = getOpponentPrefix(color);
   const prefix = color === "WHITE" ? "w" : "b";
+  const rank = color === "WHITE" ? 7 : 0;
 
   // Count pieces to determine game phase
   const pieceCount = countPiecesOnBoard(board);
