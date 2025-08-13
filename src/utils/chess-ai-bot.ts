@@ -166,18 +166,26 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
   const possibleMoves = getAllPossibleMoves(gameState);
   if (possibleMoves.length === 0) return null;
 
+  // Loại bỏ nước đi lặp lại: chỉ giữ lại các nước đi không dẫn đến trạng thái đã xuất hiện >= 2 lần
+  const filteredMoves = possibleMoves.filter((move) => {
+    const nextState = makeMove(gameState, move);
+    const fen = boardToFEN(nextState.board, nextState.aiColor);
+    const repetitionCount = positionHistory.get(fen) || 0;
+    return repetitionCount < 2;
+  });
+
+  // Nếu còn nước không lặp, chỉ xét các nước này
+  const movesToUse = filteredMoves.length > 0 ? filteredMoves : possibleMoves;
+
   // Kiểm tra trước nếu có nước đi ăn vua, ưu tiên chọn ngay lập tức
-  const kingCaptureMoves = possibleMoves.filter((move) => {
+  const kingCaptureMoves = movesToUse.filter((move) => {
     const targetPiece = gameState.board[move.to.y][move.to.x];
     if (!targetPiece) return false;
-
     const oppColor = gameState.aiColor === "WHITE" ? "BLACK" : "WHITE";
     const oppKingPrefix = oppColor === "WHITE" ? "w" : "b";
     return targetPiece.startsWith(oppKingPrefix) && targetPiece[1] === "K";
   });
-
   if (kingCaptureMoves.length > 0) {
-    // Nếu có nước ăn vua, chọn ngay lập tức
     return kingCaptureMoves[
       Math.floor(Math.random() * kingCaptureMoves.length)
     ];
@@ -187,8 +195,6 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
   const myPrefix = gameState.aiColor === "WHITE" ? "w" : "b";
   const oppPrefix = gameState.aiColor === "WHITE" ? "b" : "w";
   let myKingPos: Position | null = null;
-
-  // Tìm vị trí vua
   kingSearch: for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const piece = gameState.board[y][x];
@@ -198,52 +204,33 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
       }
     }
   }
-
-  // Nếu vua đang bị chiếu, dùng độ sâu tìm kiếm cao hơn để tìm nước thoát chiếu tốt nhất
   const isInCheck =
     myKingPos && isSquareAttacked(gameState.board, myKingPos, oppPrefix);
-  const SEARCH_DEPTH = isInCheck ? 4 : 3; // Tăng độ sâu khi bị chiếu
+  const SEARCH_DEPTH = isInCheck ? 4 : 3;
   let bestScore = -Infinity;
   let bestMoves: ChessMove[] = [];
-
-  // Thêm cơ chế timeout để tránh AI suy nghĩ quá lâu
   const START_TIME = Date.now();
-  const MAX_THINK_TIME = 2000; // Tối đa 2 giây suy nghĩ
-
-  // Đặt biến để theo dõi thời gian còn lại
+  const MAX_THINK_TIME = 2000;
   let timeRemaining = MAX_THINK_TIME;
-
-  // Tối ưu: Nếu có nhiều nước, giới hạn số nước xem xét
-  // Ưu tiên các nước tốt nhất dựa trên đánh giá cơ bản
   const movesToConsider =
-    possibleMoves.length > 20
-      ? orderMoves(possibleMoves, gameState, 0, []).slice(0, 20) // Tăng số lượng nước xem xét
-      : orderMoves(possibleMoves, gameState, 0, []); // Vẫn sắp xếp cho cả trường hợp ít nước
-
-  // Triển khai iterative deepening - tăng dần độ sâu tìm kiếm
+    movesToUse.length > 20
+      ? orderMoves(movesToUse, gameState, 0, []).slice(0, 20)
+      : orderMoves(movesToUse, gameState, 0, []);
   let currentDepth = 1;
-  const maxDepth = isInCheck ? 5 : 4; // Tăng độ sâu tối đa
-
-  // Mỗi lần tăng độ sâu, ta sẽ lưu lại kết quả tốt nhất
+  const maxDepth = isInCheck ? 5 : 4;
   while (currentDepth <= maxDepth) {
-    // Nếu đã sử dụng 70% thời gian, dừng lại với kết quả hiện tại
     if (
       Date.now() - START_TIME > MAX_THINK_TIME * 0.7 &&
       bestMoves.length > 0
     ) {
       break;
     }
-
     let currentBestScore = -Infinity;
     let currentBestMoves: ChessMove[] = [];
-
-    // Sử dụng các nước đã được sắp xếp
     for (const move of movesToConsider) {
-      // Kiểm tra timeout - nếu quá thời gian suy nghĩ thì dừng và sử dụng kết quả tốt nhất hiện tại
       if (Date.now() - START_TIME > MAX_THINK_TIME * 0.9) {
         break;
       }
-
       const nextState = makeMove(gameState, move);
       const score = minimax(
         nextState,
@@ -261,14 +248,9 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
         currentBestMoves.push(move);
       }
     }
-
-    // Cập nhật kết quả tốt nhất tổng thể từ độ sâu hiện tại
     if (currentBestMoves.length > 0) {
       bestScore = currentBestScore;
       bestMoves = currentBestMoves;
-
-      // Sắp xếp lại nước đi để ưu tiên cho lần tìm kiếm tiếp theo
-      // Đây là kỹ thuật "move ordering" - sắp xếp các nước đi tốt nhất lên đầu
       movesToConsider.sort((a, b) => {
         if (currentBestMoves.includes(a) && !currentBestMoves.includes(b))
           return -1;
@@ -277,20 +259,12 @@ export function generateAIMove(gameState: GameState): ChessMove | null {
         return 0;
       });
     }
-
-    // Tăng độ sâu tìm kiếm
     currentDepth++;
   }
-
-  // Nếu không tìm được nước nào (do timeout) thì chọn nước đầu tiên
-  if (bestMoves.length === 0 && possibleMoves.length > 0) {
-    return possibleMoves[0];
+  if (bestMoves.length === 0 && movesToUse.length > 0) {
+    return movesToUse[0];
   }
-
-  // Làm sạch bảng transposition nếu cần
   cleanTranspositionTable();
-
-  // Chọn ngẫu nhiên trong các nước tốt nhất
   return bestMoves[Math.floor(Math.random() * bestMoves.length)];
 }
 
@@ -562,6 +536,44 @@ function orderMoves(
   killers: ChessMove[]
 ): ChessMove[] {
   // Ưu tiên: killer moves > nước ăn quân > nước chiếu > nước thường
+  // Ưu tiên phát triển quân, kiểm soát trung tâm ở khai cuộc
+  const { board, aiColor } = gameState;
+  let totalPieces = 0;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const piece = board[y][x];
+      if (piece && piece[1] !== "P" && piece[1] !== "K") totalPieces++;
+    }
+  }
+  const isOpening = totalPieces > 20;
+
+  function moveHeuristic(move: ChessMove): number {
+    let score = 0;
+    const fromPiece = board[move.from.y][move.from.x];
+    if (!fromPiece) return score;
+    // Phát triển mã, tượng ở khai cuộc
+    if (isOpening && (fromPiece[1] === "N" || fromPiece[1] === "B")) {
+      score += 50;
+      // Nếu di chuyển ra các ô trung tâm (d4, d5, e4, e5)
+      if ([3, 4].includes(move.to.x) && [3, 4].includes(move.to.y)) score += 30;
+    }
+    // Hạn chế tốt biên di chuyển ở khai cuộc
+    if (
+      isOpening &&
+      fromPiece[1] === "P" &&
+      (move.from.x === 0 || move.from.x === 7)
+    ) {
+      score -= 40;
+    }
+    // Hạn chế xe, hậu ra quá sớm ở khai cuộc
+    if (isOpening && (fromPiece[1] === "R" || fromPiece[1] === "Q")) {
+      score -= 30;
+    }
+    // Kiểm soát trung tâm
+    if ([3, 4].includes(move.to.x) && [3, 4].includes(move.to.y)) score += 20;
+    return score;
+  }
+
   return [...moves].sort((a, b) => {
     // Killer move ưu tiên nhất
     const isKillerA = killers.some(
@@ -609,6 +621,11 @@ function orderMoves(
       );
     if (isCheckA && !isCheckB) return -1;
     if (!isCheckA && isCheckB) return 1;
+
+    // Ưu tiên phát triển quân, kiểm soát trung tâm ở khai cuộc
+    const hA = moveHeuristic(a);
+    const hB = moveHeuristic(b);
+    if (hA !== hB) return hB - hA;
 
     // Cuối cùng, sắp xếp theo đánh giá bàn cờ
     const scoreA = evaluateBoard(nextStateA);
