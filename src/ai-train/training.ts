@@ -1,6 +1,6 @@
 // Chess AI Training Coordinator
 
-import { resetSelfPlayDataset, generateSelfPlayGames } from "./self-play.js";
+import { generateSelfPlayGames } from "./self-play.js";
 import { evaluatePositions } from "./evaluator.js";
 import { tuneParameters } from "./parameter-tuner.js";
 import { getOpeningPositions, getEndgamePositions } from "./utils.js";
@@ -37,7 +37,6 @@ export async function runTrainingCycle(
 
   // Step 1: Generate self-play games
   console.log(`Generating ${fullConfig.selfPlayGames} self-play games...`);
-  await resetSelfPlayDataset();
   const gameIds = await generateSelfPlayGames(fullConfig.selfPlayGames, {
     maxDepth: fullConfig.maxDepth,
   });

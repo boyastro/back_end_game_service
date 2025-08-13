@@ -10,15 +10,18 @@ export function generateAllAIMoves(gameState: GameState): ChessMove[] {
 
 import { GameState, ChessMove, evaluateBoard } from "../utils/chess-ai-bot.js";
 import { FEN } from "./types.js";
-import { cloneGameState, boardToFEN } from "./utils.js";
+import {
+  cloneGameState,
+  boardToFEN,
+  getOpeningPositions,
+  getEndgamePositions,
+  fenToGameState,
+} from "./utils.js";
 
-import { saveGame, savePositionEvaluation, resetDataset } from "./dataset.js";
+import { saveGame, savePositionEvaluation } from "./dataset.js";
 /**
  * Reset dataset (positions.json, games.json) về mảng rỗng trước khi train mới
  */
-export async function resetSelfPlayDataset(): Promise<void> {
-  await resetDataset();
-}
 
 /**
  * Options for self-play game generation
@@ -27,6 +30,7 @@ interface SelfPlayOptions {
   maxDepth?: number; // Maximum depth for move calculation
   randomize?: boolean; // Whether to add randomness to avoid repetition
   savePositions?: boolean; // Whether to save positions during play
+  startFEN?: string; // Khởi tạo từ FEN cụ thể
 }
 
 /**
@@ -43,25 +47,80 @@ async function generateSelfPlayGame(
   const savePositions =
     options.savePositions !== undefined ? options.savePositions : true;
 
-  // Initialize game state
-  let gameState: GameState = {
-    board: [
-      ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
-      ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
-      [null, null, null, null, null, null, null, null],
-      [null, null, null, null, null, null, null, null],
-      [null, null, null, null, null, null, null, null],
-      [null, null, null, null, null, null, null, null],
-      ["wP", "wP", "wP", "wP", "wP", "wP", "wP", "wP"],
-      ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"],
-    ],
-    aiColor: "WHITE", // White starts
-    castlingRights: {
-      w: { k: true, q: true },
-      b: { k: true, q: true },
-    },
-    enPassantTarget: null,
-  };
+  // Khởi tạo game state từ các thế cờ đa dạng
+  let gameState: GameState;
+  if (options.startFEN) {
+    gameState = fenToGameState(options.startFEN);
+  } else {
+    // Chọn ngẫu nhiên: 60% khai cuộc, 30% tàn cuộc, 10% random
+    const rand = Math.random();
+    if (rand < 0.6) {
+      // Khai cuộc
+      const openings = getOpeningPositions();
+      const fen = openings[Math.floor(Math.random() * openings.length)];
+      gameState = fenToGameState(fen);
+    } else if (rand < 0.9) {
+      // Tàn cuộc
+      const endgames = getEndgamePositions();
+      const fen = endgames[Math.floor(Math.random() * endgames.length)];
+      gameState = fenToGameState(fen);
+    } else {
+      // Sinh random: đảo vị trí quân trên bàn cờ chuẩn
+      const base = [
+        ["bR", "bN", "bB", "bQ", "bK", "bB", "bN", "bR"],
+        ["bP", "bP", "bP", "bP", "bP", "bP", "bP", "bP"],
+        [null, null, null, null, null, null, null, null],
+        [null, null, null, null, null, null, null, null],
+        [null, null, null, null, null, null, null, null],
+        [null, null, null, null, null, null, null, null],
+        ["wP", "wP", "wP", "wP", "wP", "wP", "wP", "wP"],
+        ["wR", "wN", "wB", "wQ", "wK", "wB", "wN", "wR"],
+      ];
+      // Đảo ngẫu nhiên một số quân tốt, mã, tượng
+      function shuffleBoard(board: (string | null)[][]) {
+        const pieces: { v: string; x: number; y: number }[] = [];
+        for (let y = 0; y < 8; y++) {
+          for (let x = 0; x < 8; x++) {
+            if (board[y][x]) pieces.push({ v: board[y][x]!, x, y });
+          }
+        }
+        // Shuffle vị trí các quân
+        for (let i = pieces.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const tmp = pieces[i];
+          pieces[i] = pieces[j];
+          pieces[j] = tmp;
+        }
+        // Clear board
+        const newBoard: (string | null)[][] = Array(8)
+          .fill(null)
+          .map(() => Array(8).fill(null));
+        for (let i = 0; i < pieces.length; i++) {
+          const x = pieces[i].x,
+            y = pieces[i].y;
+          // Random vị trí mới
+          let nx = Math.floor(Math.random() * 8),
+            ny = Math.floor(Math.random() * 8);
+          while (newBoard[ny][nx]) {
+            nx = Math.floor(Math.random() * 8);
+            ny = Math.floor(Math.random() * 8);
+          }
+          newBoard[ny][nx] = pieces[i].v;
+        }
+        return newBoard;
+      }
+      const shuffledBoard = shuffleBoard(base);
+      gameState = {
+        board: shuffledBoard,
+        aiColor: Math.random() > 0.5 ? "WHITE" : "BLACK",
+        castlingRights: {
+          w: { k: true, q: true },
+          b: { k: true, q: true },
+        },
+        enPassantTarget: null,
+      };
+    }
+  }
 
   const moves: {
     fen: FEN;
