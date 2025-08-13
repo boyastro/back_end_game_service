@@ -381,7 +381,7 @@ async function generateSelfPlayGame(
 export async function generateSelfPlayGames(
   numGames: number,
   options: SelfPlayOptions = {},
-  maxParallel: number = 4 // Số lượng game chạy đồng thời tối đa
+  maxParallel: number = 5 // Số lượng game chạy đồng thời tối đa
 ): Promise<string[]> {
   console.log(
     `Generating ${numGames} self-play games (max ${maxParallel} parallel)...`
