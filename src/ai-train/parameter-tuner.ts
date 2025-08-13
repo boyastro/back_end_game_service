@@ -133,6 +133,8 @@ export async function tuneParameters(
         pawn: 0,
         king: 0,
       };
+      // Lưu giá trị khởi tạo ban đầu để có thể reset
+      const initialWeights = { ...bestWeights };
       for (const pos of positions) {
         const gameState = fenToGameState(pos.fen);
         const evalScore = evaluateBoard(gameState, bestWeights);
@@ -194,6 +196,21 @@ export async function tuneParameters(
             bestWeights[key] -= Math.ceil(
               options.learningRate * Math.abs(bestWeights[key]) * 0.05
             );
+          }
+        }
+      }
+      // Nếu winRate giảm quá mạnh (>10% so với bestWinRate), tăng lại trọng số hoặc reset về giá trị ban đầu
+      if (winRate < bestWinRate * 0.9) {
+        if (
+          ["rook", "queen", "bishop", "knight", "pawn", "king"].includes(
+            maxPiece[0]
+          )
+        ) {
+          const pieceKey = maxPiece[0] as keyof typeof bestWeights;
+          if (bestWeights[pieceKey] < initialWeights[pieceKey] * 0.7) {
+            bestWeights[pieceKey] = initialWeights[pieceKey];
+          } else {
+            bestWeights[pieceKey] = Math.ceil(bestWeights[pieceKey] * 1.1);
           }
         }
       }
