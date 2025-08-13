@@ -138,9 +138,6 @@ export const DIRECTIONS = {
   ],
 };
 
-// Biến toàn cục để theo dõi trạng thái tổng thể
-let totalPieces = 32; // Ban đầu có 32 quân trên bàn cờ
-
 // Helper function to count pieces on the board
 function countPiecesOnBoard(board: ChessBoard): number {
   let count = 0;
