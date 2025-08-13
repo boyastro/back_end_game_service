@@ -1280,6 +1280,7 @@ export function evaluateBoard(gameState: GameState, weights?: any): number {
       // Áp dụng hệ số thế cờ mở
       score -= baseBishopPairValue * (1 + openPositionBonus);
 
+      // Thêm thưởng cho cặp tượng trong tàn cuộc
       if (isEndgame) {
         score -= baseBishopPairValue * 0.5;
       }
@@ -1474,7 +1475,7 @@ export function evaluateBoard(gameState: GameState, weights?: any): number {
             kingBonus -= useWeights.kingSafety * 1.5;
           }
 
-          // Phạt nếu vua di chuyển khỏi hàng cuối/đầu quá sớm
+          // Phạt nếu vua di chuyển khỏi hàng cuối cùng quá sớm
           if (
             (piece.startsWith("w") && y < 6) ||
             (piece.startsWith("b") && y > 1)
@@ -2353,22 +2354,27 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
   for (const position of piecesCoordinates) {
     const piece = board[position.y][position.x];
     if (piece) {
-      const pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
-      moves.push(...pieceMoves);
-
-      // Kiểm tra đặc biệt cho các nước ăn vua
-      if (opponentKingPos) {
-        // Đảm bảo nước ăn vua được thêm vào nếu quân này có thể tấn công vua
-        const canAttackKing = checkIfCanAttackKing(
-          board,
-          position,
-          piece[1],
-          opponentKingPos
-        );
-        if (canAttackKing) {
-          moves.push({ from: position, to: opponentKingPos });
-        }
+      // Loại bỏ nước đi của quân bị ghim
+      if (isPiecePinned(board, position, colorPrefix)) {
+        // Nếu quân bị ghim, chỉ cho phép di chuyển trên đường thẳng giữa vua và quân tấn công
+        let pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
+        pieceMoves = pieceMoves.filter((move) => {
+          // Kiểm tra nước đi có nằm trên đường thẳng giữa vua và quân bị ghim không
+          // (giả lập nước đi, kiểm tra vua có bị chiếu không)
+          const nextState = makeMove(gameState, move);
+          return !isKingInCheck(nextState, colorPrefix);
+        });
+        moves.push(...pieceMoves);
+      } else {
+        // Quân không bị ghim, lấy tất cả nước đi hợp lệ
+        let pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
+        pieceMoves = pieceMoves.filter((move) => {
+          const nextState = makeMove(gameState, move);
+          return !isKingInCheck(nextState, colorPrefix);
+        });
+        moves.push(...pieceMoves);
       }
+      // ...existing code...
     }
   }
 
@@ -2738,7 +2744,7 @@ function getKingMoves(
     const initialRank = color === "WHITE" ? 7 : 0;
     const isInInitialPosition = pos.y === initialRank && pos.x === 4;
 
-    // If king is in initial position, only add castling moves or moves to escape check
+    // If king is in initial position, only add castling moves or moves to escape
     if (isInInitialPosition) {
       // Check if king is in check
       const inCheck = isSquareAttacked(board, pos, opponentPrefix);

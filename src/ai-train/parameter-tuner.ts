@@ -120,179 +120,90 @@ export async function tuneParameters(
   if (method === "random") {
     // impliment
   } else if (method === "genetic") {
+    // Simulated Annealing
+    let temperature = 1.0;
+    const coolingRate = 0.97; // Giảm nhiệt độ mỗi thế hệ
+    const minTemperature = 0.001;
+    const maxWeight = 50000;
+    const minWeight = -50000;
     for (let gen = 0; gen < options.iterations; gen++) {
-      // Trọng số tốt nhất ở đầu thế hệ, được dùng làm cơ sở so sánh cho mọi thay đổi.
-      const startingWeightsOfGen = { ...bestWeights };
-
-      let bestGenWinRate = bestWinRate;
-      let bestGenWeights = { ...bestWeights };
-      let bestGenTotalScore = bestScore;
-
-      // Xáo trộn thứ tự các trọng số để tránh cực đại cục bộ
-      const keys = Object.keys(bestWeights) as Array<keyof typeof bestWeights>;
-      for (let i = keys.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [keys[i], keys[j]] = [keys[j], keys[i]];
-      }
-
-      // Lưu lịch sử thay đổi cho debug/phân tích
-      const weightHistory: Array<{
-        gen: number;
-        key: string;
-        up: number;
-        down: number;
-        winRateUp: number;
-        winRateDown: number;
-      }> = [];
-
-      // Duyệt qua từng trọng số để tinh chỉnh
-      for (const key of keys) {
-        // --- Thử tăng trọng số ---
-        let testWeightsUp = { ...startingWeightsOfGen };
-        // Bổ sung kiểm tra biên: không cho vượt quá một ngưỡng nhất định
-        const maxWeight = 50000;
-        const minWeight = -50000;
-        // Bước nhảy động: nếu winRate thấp, tăng mạnh hơn
-        let dynamicRate = options.learningRate;
-        if (bestGenWinRate < 0.2) dynamicRate *= 2;
-        else if (bestGenWinRate > 0.8) dynamicRate *= 0.5;
-        const changeAmountUp = Math.max(
-          1,
-          Math.ceil(dynamicRate * Math.abs(testWeightsUp[key]) * 0.05)
-        );
-        testWeightsUp[key] = Math.min(
-          maxWeight,
-          testWeightsUp[key] + changeAmountUp
-        );
-
-        let winCountUp = 0,
-          drawCountUp = 0,
-          totalScoreUp = 0;
-        for (const pos of positions) {
-          const gameState = fenToGameState(pos.fen);
-          const evalScore = evaluateBoard(gameState, testWeightsUp);
-          totalScoreUp += evalScore;
-          if (evalScore > 1500) winCountUp++;
-          else if (Math.abs(evalScore) < 30) drawCountUp++;
-        }
-        const winRateUp = winCountUp / positions.length;
-
-        // Lưu lịch sử
-        weightHistory.push({
-          gen,
-          key,
-          up: testWeightsUp[key],
-          down: startingWeightsOfGen[key],
-          winRateUp,
-          winRateDown: 0,
-        });
-
-        // Nếu cải thiện so với kết quả tốt nhất tìm được TRONG THẾ HỆ NÀY
-        if (
-          winRateUp > bestGenWinRate ||
-          (winRateUp === bestGenWinRate && totalScoreUp > bestGenTotalScore)
-        ) {
-          bestGenWinRate = winRateUp;
-          bestGenTotalScore = totalScoreUp;
-          bestGenWeights = { ...testWeightsUp };
-        }
-
-        // --- Thử giảm trọng số ---
-        let testWeightsDown = { ...startingWeightsOfGen };
-        const changeAmountDown = Math.max(
-          1,
-          Math.ceil(dynamicRate * Math.abs(testWeightsDown[key]) * 0.05)
-        );
-        testWeightsDown[key] = Math.max(
+      // Tạo bộ trọng số mới bằng cách nhiễu ngẫu nhiên lên từng trọng số
+      let candidateWeights = { ...bestWeights };
+      for (const key of Object.keys(candidateWeights) as Array<
+        keyof typeof candidateWeights
+      >) {
+        // Nhiễu ngẫu nhiên, tỷ lệ theo nhiệt độ và learningRate
+        const noise =
+          (Math.random() * 2 - 1) *
+          options.learningRate *
+          temperature *
+          Math.abs(candidateWeights[key]) *
+          0.1;
+        candidateWeights[key] = Math.max(
           minWeight,
-          testWeightsDown[key] - changeAmountDown
-        );
-
-        let winCountDown = 0,
-          drawCountDown = 0,
-          totalScoreDown = 0;
-        for (const pos of positions) {
-          const gameState = fenToGameState(pos.fen);
-          const evalScore = evaluateBoard(gameState, testWeightsDown);
-          totalScoreDown += evalScore;
-          if (evalScore > 1500) winCountDown++;
-          else if (Math.abs(evalScore) < 30) drawCountDown++;
-        }
-        const winRateDown = winCountDown / positions.length;
-
-        // Lưu lịch sử
-        weightHistory.push({
-          gen,
-          key,
-          up: startingWeightsOfGen[key],
-          down: testWeightsDown[key],
-          winRateUp: 0,
-          winRateDown,
-        });
-
-        // Nếu cải thiện so với kết quả tốt nhất tìm được TRONG THẾ HỆ NÀY
-        if (
-          winRateDown > bestGenWinRate ||
-          (winRateDown === bestGenWinRate && totalScoreDown > bestGenTotalScore)
-        ) {
-          bestGenWinRate = winRateDown;
-          bestGenTotalScore = totalScoreDown;
-          bestGenWeights = { ...testWeightsDown };
-        }
-
-        // Log chi tiết cho từng trọng số
-        console.log(
-          `[Gen ${gen + 1}] Key: ${key}, Up: ${
-            testWeightsUp[key]
-          }, WinRateUp: ${winRateUp.toFixed(3)}, Down: ${
-            testWeightsDown[key]
-          }, WinRateDown: ${winRateDown.toFixed(3)}`
+          Math.min(maxWeight, candidateWeights[key] + noise)
         );
       }
 
-      // Áp dụng bộ trọng số tốt nhất tìm được trong thế hệ này
-      bestWeights = { ...bestGenWeights };
-
-      // SỬA LỖI: Tính toán lại tất cả các chỉ số cuối cùng một cách chính xác
-      let finalWinCount = 0;
-      let finalDrawCount = 0;
-      let finalTotalScore = 0; // Tính lại score
+      // Đánh giá bộ trọng số mới
+      let winCount = 0,
+        drawCount = 0,
+        totalScore = 0;
       for (const pos of positions) {
         const gameState = fenToGameState(pos.fen);
-        const evalScore = evaluateBoard(gameState, bestWeights);
-        finalTotalScore += evalScore;
-        if (evalScore > 1500) finalWinCount++;
-        else if (Math.abs(evalScore) < 30) finalDrawCount++;
+        const evalScore = evaluateBoard(gameState, candidateWeights);
+        totalScore += evalScore;
+        if (evalScore > 1500) winCount++;
+        else if (Math.abs(evalScore) < 30) drawCount++;
+      }
+      const winRate = winCount / positions.length;
+      const drawRate = drawCount / positions.length;
+
+      // Tính delta score
+      const deltaScore = totalScore - bestScore;
+      const deltaWinRate = winRate - bestWinRate;
+
+      // Quyết định nhận bộ trọng số mới
+      let accept = false;
+      if (deltaScore > 0 || winRate > bestWinRate) {
+        accept = true;
+      } else {
+        // Xác suất nhận bộ kém hơn
+        const prob = Math.exp(deltaScore / (temperature * 1000));
+        if (Math.random() < prob) accept = true;
       }
 
-      const winRate = finalWinCount / positions.length;
-      const drawRate = finalDrawCount / positions.length;
-      const totalScore = finalTotalScore;
-
-      // So sánh kết quả của thế hệ này với kết quả tốt nhất từ trước đến nay
-      if (
-        winRate > bestWinRate ||
-        (winRate === bestWinRate && totalScore > bestScore)
-      ) {
-        console.log(`\n--- NEW BEST FOUND at Gen ${gen + 1} ---`);
+      if (accept) {
+        bestWeights = { ...candidateWeights };
         bestScore = totalScore;
         bestWinRate = winRate;
         bestDrawRate = drawRate;
-
+        console.log(
+          `Gen ${gen + 1}: Accepted new weights. winRate=${winRate.toFixed(
+            3
+          )}, drawRate=${drawRate.toFixed(3)}, score=${totalScore.toFixed(
+            2
+          )}, T=${temperature.toFixed(4)}`
+        );
+        // Lưu lại nếu là tốt nhất từ trước đến nay
         fs.writeFileSync(
           path.resolve(__dirname, "../../best-weights.json"),
           JSON.stringify(bestWeights, null, 2),
           "utf-8"
         );
         console.log("Saved new best weights to best-weights.json");
+      } else {
+        console.log(
+          `Gen ${gen + 1}: Rejected candidate. winRate=${winRate.toFixed(
+            3
+          )}, drawRate=${drawRate.toFixed(3)}, score=${totalScore.toFixed(
+            2
+          )}, T=${temperature.toFixed(4)}`
+        );
       }
 
-      console.log(
-        `Gen ${gen + 1}/${options.iterations}: winRate=${winRate.toFixed(
-          3
-        )}, drawRate=${drawRate.toFixed(3)}, score=${totalScore.toFixed(2)}`
-      );
-
+      // Giảm nhiệt độ
+      temperature = Math.max(minTemperature, temperature * coolingRate);
       // ... checkpointing code ...
     }
   } else if (method === "gradient") {
