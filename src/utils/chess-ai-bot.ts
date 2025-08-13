@@ -2059,6 +2059,116 @@ export function evaluateBoard(gameState: GameState, weights?: any): number {
     if (count >= 3) score -= 5000; // Phạt lớn nếu trạng thái lặp lại >= 3 lần (hòa)
   }
 
+  // --- Robust Endgame, Stalemate, and Draw Detection Enhancements ---
+  // 1. Insufficient material draw detection
+  const onlyKings =
+    myBigPieceCount === 0 &&
+    oppBigPieceCount === 0 &&
+    myPawns.length === 0 &&
+    oppPawns.length === 0;
+  const kingAndMinor =
+    myBigPieceCount + oppBigPieceCount === 1 &&
+    myPawns.length === 0 &&
+    oppPawns.length === 0;
+  const kingAndBishopVsKing =
+    (myBigPieceCount === 1 &&
+      myBishopCount === 1 &&
+      oppBigPieceCount === 0 &&
+      oppPawns.length === 0) ||
+    (oppBigPieceCount === 1 &&
+      oppBishopCount === 1 &&
+      myBigPieceCount === 0 &&
+      myPawns.length === 0);
+  const kingAndKnightVsKing =
+    (myBigPieceCount === 1 &&
+      myBishopCount === 0 &&
+      oppBigPieceCount === 0 &&
+      myPawns.length === 0) ||
+    (oppBigPieceCount === 1 &&
+      oppBishopCount === 0 &&
+      myBigPieceCount === 0 &&
+      oppPawns.length === 0);
+  if (onlyKings || kingAndMinor || kingAndBishopVsKing || kingAndKnightVsKing) {
+    score = 0; // Draw due to insufficient material
+  }
+
+  // 2. Stalemate and threefold repetition (already handled above, but reinforce)
+  if ((gameState as any).history) {
+    const fen = boardToFEN(board, aiColor);
+    const count = (gameState as any).history.filter(
+      (h: string) => h === fen
+    ).length;
+    if (count >= 3) score = 0; // Draw by repetition
+  }
+
+  // 3. Endgame king activity and pawn races
+  if (isEndgame) {
+    // If only pawns and kings, reward king activity and proximity to pawns
+    if (
+      myBigPieceCount === 0 &&
+      oppBigPieceCount === 0 &&
+      (myPawns.length > 0 || oppPawns.length > 0)
+    ) {
+      if (myKingPos && oppKingPos) {
+        // Reward king closer to own passed pawn or opponent's pawn
+        let myKingDist = 0,
+          oppKingDist = 0;
+        for (const pawn of myPawns) {
+          myKingDist +=
+            Math.abs(myKingPos.x - pawn.x) + Math.abs(myKingPos.y - pawn.y);
+          oppKingDist +=
+            Math.abs(oppKingPos.x - pawn.x) + Math.abs(oppKingPos.y - pawn.y);
+        }
+        for (const pawn of oppPawns) {
+          myKingDist +=
+            Math.abs(myKingPos.x - pawn.x) + Math.abs(myKingPos.y - pawn.y);
+          oppKingDist +=
+            Math.abs(oppKingPos.x - pawn.x) + Math.abs(oppKingPos.y - pawn.y);
+        }
+        score += (oppKingDist - myKingDist) * 2; // Encourage king activity
+      }
+    }
+    // If lone king vs king+pawn, check for basic draw (king can reach promotion square)
+    if (
+      (myBigPieceCount === 0 &&
+        myPawns.length === 0 &&
+        oppBigPieceCount === 0 &&
+        oppPawns.length === 1) ||
+      (oppBigPieceCount === 0 &&
+        oppPawns.length === 0 &&
+        myBigPieceCount === 0 &&
+        myPawns.length === 1)
+    ) {
+      // If defending king is in front of pawn and can reach promotion square, score = 0
+      // (Simple heuristic, not full tablebase)
+      const pawn = myPawns.length === 1 ? myPawns[0] : oppPawns[0];
+      const defenderKing = myPawns.length === 1 ? oppKingPos : myKingPos;
+      if (
+        defenderKing &&
+        ((myPawns.length === 1 &&
+          myPrefix === "w" &&
+          defenderKing.y <= pawn.y) ||
+          (myPawns.length === 1 &&
+            myPrefix === "b" &&
+            defenderKing.y >= pawn.y) ||
+          (oppPawns.length === 1 &&
+            oppPrefix === "w" &&
+            defenderKing.y <= pawn.y) ||
+          (oppPawns.length === 1 &&
+            oppPrefix === "b" &&
+            defenderKing.y >= pawn.y))
+      ) {
+        score = 0;
+      }
+    }
+  }
+
+  // 4. Normalize score for extreme endgames
+  if (isEndgame && Math.abs(score) < 100) {
+    // If score is very close, reduce volatility
+    score = Math.round(score / 10) * 10;
+  }
+
   // Chuẩn hóa: Luôn trả về điểm số theo hướng AI (dương là tốt cho AI)
   return score;
 }
