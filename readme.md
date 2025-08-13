@@ -31,6 +31,56 @@ K3s is a lightweight, certified Kubernetes distribution designed for production 
 - **Monitoring:** Built-in Prometheus metrics endpoint and Grafana dashboard support for real-time monitoring and alerting.
 - **Horizontal scaling:** Supports multi-container backend with Nginx reverse proxy and Redis adapter for Socket.io (all chat/game events are synchronized across containers).
 
+## AI & Game Logic
+
+- Built-in AI for games (e.g., caro, chess) using minimax, alpha-beta pruning, move ordering, killer moves, transposition table.
+- Chess AI supports repetition avoidance, threefold repetition detection, opening principles (develop minor pieces, control center), and robust move ordering.
+- Easily extendable for new games in `src/games/`.
+
+## Testing & Quality Assurance
+
+- All modules have sample tests in the `tests/` folder.
+- Uses Jest for unit and integration tests.
+- Key features (auth, game, payment, socket) are covered by automated tests.
+- Run tests:
+  ```sh
+  npm test
+  ```
+
+## Extending & Customization
+
+- Add new games by creating modules in `src/games/`.
+- Extend item, quest, achievement schemas in `src/model/`.
+- Integrate external services (email, push notification, analytics) via middleware or service modules.
+
+## Security Best Practices
+
+- Uses helmet, rate limit, and input validation to prevent XSS, SQL/NoSQL injection.
+- All sensitive APIs require JWT authentication.
+- Redis stores tokens for instant revocation.
+- Never commit `.env` or secrets to git.
+
+## Troubleshooting & FAQ
+
+- MongoDB/Redis connection errors: check environment variables and container status.
+- Stripe webhook issues: verify webhook config and backend logs.
+- Socket.io not realtime: check Redis adapter and Nginx/HAProxy config.
+- HTTP 429 errors: review rate limit settings.
+
+## Contribution Guide
+
+- Fork the repo, create a new branch, commit code, open a pull request.
+- Write tests for new features.
+- Ensure code follows TypeScript and ESLint standards.
+- All contributions are reviewed via GitHub Actions CI/CD.
+
+## Performance & Scaling Tips
+
+- Use Redis adapter for Socket.io to scale realtime chat/game.
+- Use HPA for automatic backend scaling under load.
+- Monitor performance and alerts with Prometheus/Grafana.
+- Consider CDN for static files if needed.
+
 ## Project Structure
 
 ```
@@ -53,15 +103,15 @@ my-ts-app/
 ├── tsconfig.json
 ├── README.md
 ├── k8s/
-│   ├── app-deployment.yaml           # Triển khai backend Node.js/TypeScript
-│   ├── nginx-deployment.yaml         # Triển khai Nginx reverse proxy
-│   ├── nginx-configmap.yaml          # ConfigMap cho Nginx
-│   ├── mongo-deployment.yaml         # Triển khai MongoDB
-│   ├── redis-deployment.yaml         # Triển khai Redis
-│   ├── prometheus-deployment.yaml    # Triển khai Prometheus
-│   ├── prometheus-configmap.yaml     # ConfigMap cho Prometheus
-│   ├── grafana-deployment.yaml       # Triển khai Grafana
-│   └── README-k8s.md                 # Hướng dẫn sử dụng K8s
+│   ├── app-deployment.yaml           # Deploy backend Node.js/TypeScript
+│   ├── nginx-deployment.yaml         # Deploy Nginx reverse proxy
+│   ├── nginx-configmap.yaml          # ConfigMap for Nginx
+│   ├── mongo-deployment.yaml         # Deploy MongoDB
+│   ├── redis-deployment.yaml         # Deploy Redis
+│   ├── prometheus-deployment.yaml    # Deploy Prometheus
+│   ├── prometheus-configmap.yaml     # ConfigMap for Prometheus
+│   ├── grafana-deployment.yaml       # Deploy Grafana
+│   └── README-k8s.md                 # K8s usage guide
 ```
 
 ## Rate Limiting
@@ -203,73 +253,90 @@ docker compose up --scale app=4 --scale nginx=2 --build
 
 Dự án hỗ trợ triển khai production-ready trên Kubernetes với các manifest mẫu trong thư mục `k8s/`:
 
-- `app-deployment.yaml`: Triển khai backend Node.js/TypeScript
-- `nginx-deployment.yaml`, `nginx-configmap.yaml`: Reverse proxy Nginx
+- `app-deployment.yaml`: Deploy backend Node.js/TypeScript
+- `nginx-deployment.yaml`, `nginx-configmap.yaml`: Deploy Nginx reverse proxy
 - `mongo-deployment.yaml`, `redis-deployment.yaml`: Database & cache
 - `prometheus-deployment.yaml`, `prometheus-configmap.yaml`: Monitoring
 - `grafana-deployment.yaml`: Dashboard
 
-### Triển khai nhanh với Minikube
+### Quick Deployment with Minikube
 
-1. **Chuẩn bị:**
-   - Cài đặt `kubectl`, `minikube`, Docker.
-   - Build & push image backend lên Docker Hub:
-     ```sh
-     docker login
-     docker build -t boyastro/app:latest .
-     docker push boyastro/app:latest
-     ```
-2. **Khởi động Minikube:**
-   ```sh
-   minikube start
-   kubectl config use-context minikube
-   ```
-3. **Triển khai toàn bộ stack:**
-   ```sh
-   kubectl apply -f k8s/
-   ```
-4. **Kiểm tra trạng thái:**
-   ```sh
-   kubectl get pods
-   kubectl get svc
-   ```
-5. **Truy cập dịch vụ:**
-   - API/backend qua Nginx:
-     ```sh
-     minikube service nginx
-     # hoặc http://127.0.0.1:<port> do minikube cung cấp
-     ```
-   - Grafana:
-     ```sh
-     minikube service grafana
-     ```
-6. **Cấu hình MongoDB:**
-   - Dùng MongoDB nội bộ K8s (`mongodb://mongo:27017/gamedata`) hoặc MongoDB Atlas cloud (cập nhật biến môi trường `MONGO_URI`).
-   - Nếu dùng Atlas, whitelist IP node/cluster trên trang Atlas.
+1. **Preparation:**
+
+- Install `kubectl`, `minikube`, Docker.
+- Build & push backend image to Docker Hub:
+  ```sh
+  docker login
+  docker build -t boyastro/app:latest .
+  docker push boyastro/app:latest
+  ```
+
+2. **Start Minikube:**
+
+```sh
+minikube start
+kubectl config use-context minikube
+```
+
+3. **Deploy the entire stack:**
+
+```sh
+kubectl apply -f k8s/
+```
+
+4. **Check status:**
+
+```sh
+kubectl get pods
+kubectl get svc
+```
+
+5. **Access services:**
+
+- API/backend via Nginx:
+  ```sh
+  minikube service nginx
+  # or http://127.0.0.1:<port> provided by minikube
+  ```
+- Grafana:
+  ```sh
+  minikube service grafana
+  ```
+
+6. **Configure MongoDB:**
+
+- Use internal K8s MongoDB (`mongodb://mongo:27017/gamedata`) or MongoDB Atlas cloud (update `MONGO_URI` env variable).
+- If using Atlas, whitelist node/cluster IPs in Atlas dashboard.
+
 7. **Scale, log, debug:**
-   ```sh
-   kubectl scale deployment app --replicas=5
-   kubectl logs -l app=app
-   kubectl describe pod <tên-pod>
-   ```
-8. **Xóa tài nguyên:**
-   ```sh
-   kubectl delete -f k8s/
-   ```
-9. **Lưu ý:**
-   - Có thể mở rộng với Ingress, auto-scaling, RBAC, secret, ...
-   - Tham khảo thêm file `k8s/README-k8s.md` để biết chi tiết cấu hình từng thành phần.
+
+```sh
+kubectl scale deployment app --replicas=5
+kubectl logs -l app=app
+kubectl describe pod <pod-name>
+```
+
+8. **Delete resources:**
+
+```sh
+kubectl delete -f k8s/
+```
+
+9. **Notes:**
+
+- Can extend with Ingress, auto-scaling, RBAC, secret, ...
+- See `k8s/README-k8s.md` for detailed configuration of each component.
 
 ### Production/Cloud
 
-- Có thể deploy lên GKE, EKS, AKS hoặc bất kỳ cluster K8s nào bằng cách apply các manifest trong `k8s/`.
-- Nên cấu hình thêm Ingress, SSL, auto-scaling, RBAC, monitoring, alerting cho môi trường production.
+- You can deploy to GKE, EKS, AKS or any K8s cluster by applying manifests in `k8s/`.
+- Should configure Ingress, SSL, auto-scaling, RBAC, monitoring, alerting for production environments.
 
-## Horizontal Pod Autoscaler (HPA) cho Kubernetes
+## Horizontal Pod Autoscaler (HPA) for Kubernetes
 
-- Dự án đã cung cấp sẵn file `k8s/hpa.yaml` để tự động scale số lượng pod backend dựa trên mức sử dụng CPU.
-- HPA sẽ tự động tăng/giảm số lượng pod của deployment app khi CPU trung bình vượt quá hoặc thấp hơn ngưỡng cấu hình (ví dụ: 70%).
-- Cấu hình mẫu:
+- The project provides `k8s/hpa.yaml` for automatic backend pod scaling based on CPU usage.
+- HPA will automatically increase/decrease the number of pods in the app deployment when average CPU exceeds or falls below the configured threshold (e.g., 70%).
+- Example configuration:
   ```yaml
   apiVersion: autoscaling/v2
   kind: HorizontalPodAutoscaler
@@ -290,20 +357,20 @@ Dự án hỗ trợ triển khai production-ready trên Kubernetes với các ma
             type: Utilization
             averageUtilization: 70
   ```
-- Để sử dụng:
-  1. Đảm bảo đã cài đặt và fix xong metrics-server (xem hướng dẫn trong `k8s/README-k8s.md`).
+- To use:
+  1. Make sure metrics-server is installed and fixed (see instructions in `k8s/README-k8s.md`).
   2. Apply HPA:
-     ```sh
-     kubectl apply -f k8s/hpa.yaml
-     ```
-  3. Kiểm tra trạng thái autoscale:
-     ```sh
-     kubectl get hpa
-     ```
-  4. Tăng tải (stress test) để kiểm tra HPA tự động scale pod.
-- HPA giúp backend tự động mở rộng khi tải tăng cao và thu nhỏ khi tải giảm, tối ưu tài nguyên và chi phí vận hành.
+  ```sh
+  kubectl apply -f k8s/hpa.yaml
+  ```
+  3. Check autoscale status:
+  ```sh
+  kubectl get hpa
+  ```
+  4. Stress test to verify HPA auto-scaling.
+- HPA helps backend automatically scale out when load increases and scale in when load decreases, optimizing resources and operating costs.
 
-Tham khảo chi tiết về HPA và metrics-server trong file `k8s/README-k8s.md`.
+See details about HPA and metrics-server in `k8s/README-k8s.md`.
 
 ## Load Balancing with HAProxy on Kubernetes
 
