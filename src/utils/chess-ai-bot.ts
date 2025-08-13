@@ -2021,6 +2021,44 @@ export function evaluateBoard(gameState: GameState, weights?: any): number {
   );
   score += detailedPassedPawnScore * (useWeights.passedPawn || 1.0);
 
+  // Kiểm tra trạng thái đặc biệt cuối ván cờ
+  // 1. Checkmate (chiếu hết)
+  const myMovesFinal = getAllPossibleMoves(gameState);
+  const oppGameStateFinal = {
+    ...gameState,
+    aiColor: aiColor === "WHITE" ? ("BLACK" as "BLACK") : ("WHITE" as "WHITE"),
+  };
+  const oppMovesFinal = getAllPossibleMoves(oppGameStateFinal);
+  const myKingInCheckFinal =
+    myKingPos && isSquareAttacked(board, myKingPos, oppPrefix);
+  const oppKingInCheckFinal =
+    oppKingPos && isSquareAttacked(board, oppKingPos, myPrefix);
+
+  // Nếu đối thủ bị chiếu hết
+  if (oppMovesFinal.length === 0 && oppKingInCheckFinal) {
+    score += 100000; // Thưởng lớn khi chiếu hết đối thủ
+  }
+  // Nếu mình bị chiếu hết
+  if (myMovesFinal.length === 0 && myKingInCheckFinal) {
+    score -= 100000; // Phạt nặng khi bị chiếu hết
+  }
+  // Nếu là chiếu hết hòa (stalemate)
+  if (oppMovesFinal.length === 0 && !oppKingInCheckFinal) {
+    score -= 5000; // Phạt nhẹ khi hòa do chiếu hết hòa
+  }
+  if (myMovesFinal.length === 0 && !myKingInCheckFinal) {
+    score -= 5000; // Phạt nhẹ khi hòa do chiếu hết hòa
+  }
+
+  // Kiểm tra lặp lại nước đi (threefold repetition)
+  if ((gameState as any).history) {
+    const fen = boardToFEN(board, aiColor);
+    const count = (gameState as any).history.filter(
+      (h: string) => h === fen
+    ).length;
+    if (count >= 3) score -= 5000; // Phạt lớn nếu trạng thái lặp lại >= 3 lần (hòa)
+  }
+
   // Chuẩn hóa: Luôn trả về điểm số theo hướng AI (dương là tốt cho AI)
   return score;
 }
