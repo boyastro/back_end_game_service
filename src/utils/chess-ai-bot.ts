@@ -73,9 +73,10 @@ export type GameState = {
 
 // --- CONSTANTS ---
 // Helper: Lấy giá trị quân cờ theo AI_WEIGHTS nếu có
-function getPieceValue(type: string): number {
-  if (AI_WEIGHTS) {
-    const map: { [key: string]: keyof typeof AI_WEIGHTS } = {
+function getPieceValue(type: string, weights?: any): number {
+  const useWeights = weights || AI_WEIGHTS;
+  if (useWeights) {
+    const map: { [key: string]: keyof typeof useWeights } = {
       P: "pawn",
       N: "knight",
       B: "bishop",
@@ -84,7 +85,7 @@ function getPieceValue(type: string): number {
       K: "king",
     };
     const key = map[type.toUpperCase()];
-    if (key && typeof AI_WEIGHTS[key] === "number") return AI_WEIGHTS[key];
+    if (key && typeof useWeights[key] === "number") return useWeights[key];
   }
   return PIECE_VALUES[type.toUpperCase()];
 }
@@ -553,9 +554,9 @@ function orderMoves(
 
 // Hàm đánh giá bàn cờ nâng cao
 
-export function evaluateBoard(gameState: GameState): number {
-  // Sử dụng trọng số từ AI_WEIGHTS
-  const useWeights = AI_WEIGHTS;
+export function evaluateBoard(gameState: GameState, weights?: any): number {
+  // Sử dụng trọng số truyền vào (hoặc AI_WEIGHTS nếu không có)
+  const useWeights = weights || AI_WEIGHTS;
   const { board, aiColor } = gameState;
   let score = 0;
   let myKingPos: Position | null = null;
@@ -604,7 +605,7 @@ export function evaluateBoard(gameState: GameState): number {
       if (!piece) continue;
 
       // Cập nhật tổng giá trị vật chất
-      const pieceValue = getPieceValue(piece[1]);
+      const pieceValue = getPieceValue(piece[1], useWeights);
       if (piece.startsWith(myPrefix)) {
         myMaterial += pieceValue;
       } else {
