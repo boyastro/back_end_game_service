@@ -2169,8 +2169,12 @@ export function evaluateBoard(gameState: GameState, weights?: any): number {
     score = Math.round(score / 10) * 10;
   }
 
-  // Chuẩn hóa: Luôn trả về điểm số theo hướng AI (dương là tốt cho AI)
-  return score;
+  // Chuẩn hóa: Scale điểm số về khoảng [-1000, 1000] để dễ so sánh các trạng thái
+  // Nếu điểm quá lớn (ví dụ chiếu hết), giữ nguyên
+  if (score > 100000 || score < -100000) return score;
+  // Scale về [-1000, 1000]
+  const scaledScore = Math.max(-1000, Math.min(1000, score));
+  return scaledScore;
 }
 
 // Kiểm tra một ô có bị tấn công bởi màu nào đó không
