@@ -122,101 +122,74 @@ export async function tuneParameters(
   } else if (method === "genetic") {
     // Đơn giản hóa: chỉ tăng/giảm trọng số dựa trên tỷ lệ win, không lai tạo/crossover
     for (let gen = 0; gen < options.iterations; gen++) {
-      let totalScore = 0;
       let winCount = 0;
       let drawCount = 0;
-      // Đếm số lần xuất hiện các yếu tố trong các ván thắng
-      let winPieceCount = {
-        rook: 0,
-        queen: 0,
-        bishop: 0,
-        knight: 0,
-        pawn: 0,
-        king: 0,
-      };
-      // Lưu giá trị khởi tạo ban đầu để có thể reset
+      let totalScore = 0;
+      // ...existing code...
+      // Gradient/Random Search: thử tăng/giảm từng trọng số một cách riêng biệt
       const initialWeights = { ...bestWeights };
+      let bestGenWinRate = bestWinRate;
+      let bestGenWeights = { ...bestWeights };
+      for (const key of Object.keys(bestWeights) as Array<
+        keyof typeof bestWeights
+      >) {
+        // Thử tăng trọng số
+        let testWeightsUp = { ...bestWeights };
+        testWeightsUp[key] += Math.ceil(
+          options.learningRate * Math.abs(testWeightsUp[key]) * 0.05
+        );
+        let winCountUp = 0,
+          drawCountUp = 0,
+          totalScoreUp = 0;
+        for (const pos of positions) {
+          const gameState = fenToGameState(pos.fen);
+          const evalScore = evaluateBoard(gameState, testWeightsUp);
+          totalScoreUp += evalScore;
+          if (evalScore > 1500) winCountUp++;
+          else if (Math.abs(evalScore) < 30) drawCountUp++;
+        }
+        const winRateUp = winCountUp / positions.length;
+        // Nếu winRateUp cải thiện, giữ lại thay đổi
+        if (winRateUp > bestGenWinRate) {
+          bestGenWinRate = winRateUp;
+          bestGenWeights = { ...testWeightsUp };
+          continue;
+        }
+        // Thử giảm trọng số
+        let testWeightsDown = { ...bestWeights };
+        testWeightsDown[key] -= Math.ceil(
+          options.learningRate * Math.abs(testWeightsDown[key]) * 0.05
+        );
+        let winCountDown = 0,
+          drawCountDown = 0,
+          totalScoreDown = 0;
+        for (const pos of positions) {
+          const gameState = fenToGameState(pos.fen);
+          const evalScore = evaluateBoard(gameState, testWeightsDown);
+          totalScoreDown += evalScore;
+          if (evalScore > 1500) winCountDown++;
+          else if (Math.abs(evalScore) < 30) drawCountDown++;
+        }
+        const winRateDown = winCountDown / positions.length;
+        // Nếu winRateDown cải thiện, giữ lại thay đổi
+        if (winRateDown > bestGenWinRate) {
+          bestGenWinRate = winRateDown;
+          bestGenWeights = { ...testWeightsDown };
+        }
+      }
+      // Áp dụng bestGenWeights cho gen tiếp theo
+      bestWeights = { ...bestGenWeights };
+      // Tính lại winCount, drawCount, totalScore cho gen này
+      // ...existing code...
       for (const pos of positions) {
         const gameState = fenToGameState(pos.fen);
         const evalScore = evaluateBoard(gameState, bestWeights);
         totalScore += evalScore;
-        if (evalScore > 1500) {
-          winCount++;
-          // Đếm số lượng từng loại quân trong bàn cờ thắng
-          const { board, aiColor } = gameState;
-          const myPrefix = aiColor === "WHITE" ? "w" : "b";
-          for (let y = 0; y < 8; y++) {
-            for (let x = 0; x < 8; x++) {
-              const piece = board[y][x];
-              if (!piece) continue;
-              if (piece.startsWith(myPrefix)) {
-                switch (piece[1].toUpperCase()) {
-                  case "R":
-                    winPieceCount.rook++;
-                    break;
-                  case "Q":
-                    winPieceCount.queen++;
-                    break;
-                  case "B":
-                    winPieceCount.bishop++;
-                    break;
-                  case "N":
-                    winPieceCount.knight++;
-                    break;
-                  case "P":
-                    winPieceCount.pawn++;
-                    break;
-                  case "K":
-                    winPieceCount.king++;
-                    break;
-                }
-              }
-            }
-          }
-        } else if (Math.abs(evalScore) < 30) drawCount++;
+        if (evalScore > 1500) winCount++;
+        else if (Math.abs(evalScore) < 30) drawCount++;
       }
       const winRate = winCount / positions.length;
       const drawRate = drawCount / positions.length;
-      // Chỉ điều chỉnh trọng số các quân xuất hiện nhiều trong ván thắng
-      const maxPiece = Object.entries(winPieceCount).reduce((a, b) =>
-        a[1] > b[1] ? a : b
-      );
-      for (const key of Object.keys(bestWeights) as Array<
-        keyof typeof bestWeights
-      >) {
-        // Điều chỉnh tất cả các trọng số quân cờ theo winRate
-        if (
-          ["rook", "queen", "bishop", "knight", "pawn", "king"].includes(key)
-        ) {
-          if (winRate > bestWinRate) {
-            bestWeights[key] += Math.ceil(
-              options.learningRate * Math.abs(bestWeights[key]) * 0.05
-            );
-          } else if (winRate < bestWinRate) {
-            bestWeights[key] -= Math.ceil(
-              options.learningRate * Math.abs(bestWeights[key]) * 0.05
-            );
-          }
-        }
-      }
-      // Nếu winRate giảm quá mạnh (>10% so với bestWinRate), tăng lại trọng số hoặc reset về giá trị ban đầu
-      if (winRate < bestWinRate * 0.9) {
-        // Điều chỉnh lại tất cả các trọng số nếu winRate giảm quá mạnh
-        for (const key of Object.keys(bestWeights) as Array<
-          keyof typeof bestWeights
-        >) {
-          if (
-            typeof bestWeights[key] === "number" &&
-            typeof initialWeights[key] === "number"
-          ) {
-            if (bestWeights[key] < initialWeights[key] * 0.7) {
-              bestWeights[key] = initialWeights[key];
-            } else {
-              bestWeights[key] = Math.ceil(bestWeights[key] * 1.1);
-            }
-          }
-        }
-      }
       // Chỉ cập nhật bestWeights, bestWinRate, bestDrawRate nếu gen này thực sự cải thiện
       if (
         winRate > bestWinRate ||
@@ -235,9 +208,7 @@ export async function tuneParameters(
       console.log(
         `Gen ${gen + 1}/${options.iterations}: winRate=${winRate.toFixed(
           3
-        )}, drawRate=${drawRate.toFixed(3)}, score=${totalScore.toFixed(
-          2
-        )}, mostWinPiece=${maxPiece[0]}:${maxPiece[1]}`
+        )}, drawRate=${drawRate.toFixed(3)}, score=${totalScore.toFixed(2)}`
       );
       // Lưu checkpoint mỗi 5 gen hoặc cuối cùng
       if ((gen + 1) % 5 === 0 || gen === options.iterations - 1) {
