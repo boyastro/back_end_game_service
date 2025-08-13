@@ -162,10 +162,19 @@ export async function tuneParameters(
       // Tính delta score
       const deltaScore = totalScore - bestScore;
       const deltaWinRate = winRate - bestWinRate;
+      const targetWinRate = 0.8;
+      // Đánh giá dựa vào khoảng cách tới winRate mục tiêu
+      const prevDistance = Math.abs(bestWinRate - targetWinRate);
+      const newDistance = Math.abs(winRate - targetWinRate);
 
       // Quyết định nhận bộ trọng số mới
       let accept = false;
-      if (deltaScore > 0 || winRate > bestWinRate) {
+      // Nếu bộ mới tiến gần hơn tới winRate mục tiêu, hoặc winRate tăng, hoặc score tăng
+      if (
+        newDistance < prevDistance ||
+        winRate > bestWinRate ||
+        (winRate === bestWinRate && deltaScore > 0)
+      ) {
         accept = true;
       } else {
         // Xác suất nhận bộ kém hơn
