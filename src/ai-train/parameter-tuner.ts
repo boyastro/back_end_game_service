@@ -184,10 +184,9 @@ export async function tuneParameters(
       for (const key of Object.keys(bestWeights) as Array<
         keyof typeof bestWeights
       >) {
-        // Nếu là quân xuất hiện nhiều nhất trong ván thắng thì mới điều chỉnh
+        // Điều chỉnh tất cả các trọng số quân cờ theo winRate
         if (
-          ["rook", "queen", "bishop", "knight", "pawn", "king"].includes(key) &&
-          key === maxPiece[0]
+          ["rook", "queen", "bishop", "knight", "pawn", "king"].includes(key)
         ) {
           if (winRate > bestWinRate) {
             bestWeights[key] += Math.ceil(
@@ -202,16 +201,19 @@ export async function tuneParameters(
       }
       // Nếu winRate giảm quá mạnh (>10% so với bestWinRate), tăng lại trọng số hoặc reset về giá trị ban đầu
       if (winRate < bestWinRate * 0.9) {
-        if (
-          ["rook", "queen", "bishop", "knight", "pawn", "king"].includes(
-            maxPiece[0]
-          )
-        ) {
-          const pieceKey = maxPiece[0] as keyof typeof bestWeights;
-          if (bestWeights[pieceKey] < initialWeights[pieceKey] * 0.7) {
-            bestWeights[pieceKey] = initialWeights[pieceKey];
-          } else {
-            bestWeights[pieceKey] = Math.ceil(bestWeights[pieceKey] * 1.1);
+        // Điều chỉnh lại tất cả các trọng số nếu winRate giảm quá mạnh
+        for (const key of Object.keys(bestWeights) as Array<
+          keyof typeof bestWeights
+        >) {
+          if (
+            typeof bestWeights[key] === "number" &&
+            typeof initialWeights[key] === "number"
+          ) {
+            if (bestWeights[key] < initialWeights[key] * 0.7) {
+              bestWeights[key] = initialWeights[key];
+            } else {
+              bestWeights[key] = Math.ceil(bestWeights[key] * 1.1);
+            }
           }
         }
       }
