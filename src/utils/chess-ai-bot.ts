@@ -2462,12 +2462,12 @@ export function makeMove(gameState: GameState, move: ChessMove): GameState {
  * Get all possible moves for the given color
  */
 export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
-  const { board, aiColor, castlingRights, enPassantTarget } = gameState;
+  const { board, aiColor } = gameState;
   const moves: ChessMove[] = [];
   const colorPrefix = aiColor === "WHITE" ? "w" : "b";
   const opponentPrefix = aiColor === "WHITE" ? "b" : "w";
 
-  // Tìm vị trí vua đối phương
+  // 1. Tìm vị trí vua đối phương (nếu cần cho các logic nâng cao)
   let opponentKingPos: Position | null = null;
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
@@ -2480,10 +2480,8 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
     if (opponentKingPos) break;
   }
 
-  // Tối ưu: Duyệt quân cờ mạnh trước để cải thiện alpha-beta pruning
+  // 2. Thu thập vị trí của tất cả quân cờ của AI
   const piecesCoordinates: Position[] = [];
-
-  // Thu thập vị trí của tất cả quân cờ
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
       const piece = board[y][x];
@@ -2493,7 +2491,7 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
     }
   }
 
-  // Sắp xếp theo giá trị quân cờ: quân mạnh nhất trước
+  // 3. Sắp xếp quân cờ theo giá trị (quân mạnh nhất trước)
   piecesCoordinates.sort((a, b) => {
     const pieceA = board[a.y][a.x];
     const pieceB = board[b.y][b.x];
@@ -2502,107 +2500,27 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
     return valueB - valueA;
   });
 
-  // Lấy các nước đi theo thứ tự đã sắp xếp
+  // 4. Duyệt từng quân cờ và lấy các nước đi hợp lệ
   for (const position of piecesCoordinates) {
     const piece = board[position.y][position.x];
-    if (piece) {
-      // Loại bỏ nước đi của quân bị ghim
-      if (isPiecePinned(board, position, colorPrefix)) {
-        // Nếu quân bị ghim, chỉ cho phép di chuyển trên đường thẳng giữa vua và quân tấn công
-        let pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
-        pieceMoves = pieceMoves.filter((move) => {
-          // Kiểm tra nước đi có nằm trên đường thẳng giữa vua và quân bị ghim không
-          // (giả lập nước đi, kiểm tra vua có bị chiếu không)
-          const nextState = makeMove(gameState, move);
-          return !isKingInCheck(nextState, colorPrefix);
-        });
-        moves.push(...pieceMoves);
-      } else {
-        // Quân không bị ghim, lấy tất cả nước đi hợp lệ
-        let pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
-        pieceMoves = pieceMoves.filter((move) => {
-          const nextState = makeMove(gameState, move);
-          return !isKingInCheck(nextState, colorPrefix);
-        });
-        moves.push(...pieceMoves);
-      }
-      // ...existing code...
-    }
+    if (!piece) continue;
+
+    // Nếu quân bị ghim, chỉ cho phép di chuyển trên đường thẳng giữa vua và quân tấn công
+    let pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
+
+    // Lọc các nước đi hợp lệ: giả lập nước đi, kiểm tra vua có bị chiếu không
+    pieceMoves = pieceMoves.filter((move) => {
+      const nextState = makeMove(gameState, move);
+      // Chỉ giữ lại nước đi hợp lệ (không làm vua bị chiếu)
+      return !isKingInCheck(nextState, colorPrefix);
+    });
+
+    // Thêm các nước đi hợp lệ vào danh sách
+    moves.push(...pieceMoves);
   }
 
+  // Trả về tất cả nước đi hợp lệ
   return moves;
-}
-
-// Hàm kiểm tra nếu một quân có thể tấn công vua đối phương
-function checkIfCanAttackKing(
-  board: ChessBoard,
-  pos: Position,
-  pieceType: string,
-  kingPos: Position
-): boolean {
-  const dx = kingPos.x - pos.x;
-  const dy = kingPos.y - pos.y;
-
-  switch (pieceType) {
-    case "P":
-      // Tốt chỉ ăn chéo
-      const piece = board[pos.y][pos.x];
-      if (!piece) return false;
-
-      return (
-        Math.abs(dx) === 1 &&
-        ((piece.startsWith("w") && dy === -1) ||
-          (piece.startsWith("b") && dy === 1))
-      );
-    case "N":
-      // Mã di chuyển hình chữ L
-      return (
-        (Math.abs(dx) === 1 && Math.abs(dy) === 2) ||
-        (Math.abs(dx) === 2 && Math.abs(dy) === 1)
-      );
-    case "B":
-      // Tượng di chuyển theo đường chéo
-      return (
-        Math.abs(dx) === Math.abs(dy) && checkClearPath(board, pos, kingPos)
-      );
-    case "R":
-      // Xe di chuyển theo hàng và cột
-      return (dx === 0 || dy === 0) && checkClearPath(board, pos, kingPos);
-    case "Q":
-      // Hậu di chuyển theo đường chéo, hàng và cột
-      return (
-        (dx === 0 || dy === 0 || Math.abs(dx) === Math.abs(dy)) &&
-        checkClearPath(board, pos, kingPos)
-      );
-    case "K":
-      // Vua di chuyển 1 ô theo mọi hướng
-      return Math.abs(dx) <= 1 && Math.abs(dy) <= 1;
-    default:
-      return false;
-  }
-}
-
-// Kiểm tra xem đường đi có bị chặn không
-function checkClearPath(
-  board: ChessBoard,
-  from: Position,
-  to: Position
-): boolean {
-  const dx = to.x > from.x ? 1 : to.x < from.x ? -1 : 0;
-  const dy = to.y > from.y ? 1 : to.y < from.y ? -1 : 0;
-
-  let x = from.x + dx;
-  let y = from.y + dy;
-
-  while (x !== to.x || y !== to.y) {
-    if (board[y][x] !== null) {
-      return false; // Có quân chặn đường
-    }
-    x += dx;
-    y += dy;
-  }
-
-  return true; // Đường đi thông thoáng
 }
 
 // Tìm các nước khả thi cho mỗi quân
@@ -2615,23 +2533,82 @@ function getMovesForPiece(
   const pieceType = piece[1]; // e.g., 'P', 'R', etc.
   const { board } = gameState;
 
-  // Tối ưu: Chỉ xét các nước đi của quân mạnh trước để cải thiện alpha-beta pruning
-  switch (pieceType) {
-    case "Q":
-      return getQueenMoves(board, position, color);
-    case "R":
-      return getSlidingMoves(board, position, color, DIRECTIONS.ROOK);
-    case "B":
-      return getSlidingMoves(board, position, color, DIRECTIONS.BISHOP);
-    case "N":
-      return getKnightMoves(board, position, color);
-    case "P":
-      return getPawnMoves(gameState, position, color);
-    case "K":
-      return getKingMoves(gameState, position, color);
-    default:
-      return [];
+  // Hàm phụ kiểm tra nước đi hợp lệ (trong bàn cờ và không đụng quân mình)
+  function isValidTarget(target: Position): boolean {
+    const { x, y } = target;
+    if (x < 0 || x > 7 || y < 0 || y > 7) return false;
+    const targetPiece = board[y][x];
+    if (targetPiece && targetPiece[0] === piece[0]) return false;
+    return true;
   }
+
+  let moves: ChessMove[] = [];
+
+  switch (pieceType) {
+    case "Q": {
+      // Hậu: hợp nhất nước đi xe và tượng
+      const queenMoves = getQueenMoves(board, position, color);
+      moves = queenMoves.filter((move) => isValidTarget(move.to));
+      break;
+    }
+    case "R": {
+      // Xe
+      const rookMoves = getSlidingMoves(
+        board,
+        position,
+        color,
+        DIRECTIONS.ROOK
+      );
+      moves = rookMoves.filter((move) => isValidTarget(move.to));
+      break;
+    }
+    case "B": {
+      // Tượng
+      const bishopMoves = getSlidingMoves(
+        board,
+        position,
+        color,
+        DIRECTIONS.BISHOP
+      );
+      moves = bishopMoves.filter((move) => isValidTarget(move.to));
+      break;
+    }
+    case "N": {
+      // Mã
+      const knightMoves = getKnightMoves(board, position, color);
+      moves = knightMoves.filter((move) => isValidTarget(move.to));
+      break;
+    }
+    case "P": {
+      // Tốt
+      const pawnMoves = getPawnMoves(gameState, position, color);
+      moves = pawnMoves.filter((move) => isValidTarget(move.to));
+      break;
+    }
+    case "K": {
+      // Vua
+      const kingMoves = getKingMoves(gameState, position, color);
+      moves = kingMoves.filter((move) => isValidTarget(move.to));
+      break;
+    }
+    default:
+      // Không phải quân cờ hợp lệ
+      moves = [];
+  }
+
+  // Loại bỏ nước đi trùng lặp (nếu có)
+  const uniqueMoves = [];
+  const seen = new Set();
+  for (const move of moves) {
+    const key = `${move.from.x},${move.from.y}->${move.to.x},${move.to.y}`;
+    if (!seen.has(key)) {
+      uniqueMoves.push(move);
+      seen.add(key);
+    }
+  }
+
+  // Trả về mảng nước đi hợp lệ, không trùng lặp
+  return uniqueMoves;
 }
 
 // Kiểm tra một quân có bị ghim (pinned) vào vua không
@@ -2713,6 +2690,10 @@ function isPiecePinned(
 
 // --- UTILITY FUNCTIONS ---
 function isValidPosition(p: Position): boolean {
+  // Kiểm tra đầu vào hợp lệ: p phải là object có thuộc tính x, y là số nguyên
+  if (!p || typeof p.x !== "number" || typeof p.y !== "number") return false;
+  // Kiểm tra x, y nằm trong phạm vi bàn cờ
+  if (!Number.isInteger(p.x) || !Number.isInteger(p.y)) return false;
   return p.x >= 0 && p.x < 8 && p.y >= 0 && p.y < 8;
 }
 
