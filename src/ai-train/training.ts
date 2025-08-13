@@ -183,8 +183,8 @@ export async function quickTrain(): Promise<EvaluationMetrics> {
     selfPlayGames: 100,
     positionsPerGame: 100000,
     maxDepth: 4,
-    iterations: 10, // Tăng từ 10 lên 30 thế hệ
-    learningRate: 0.1,
+    iterations: 100, // Tăng từ 10 lên 30 thế hệ
+    learningRate: 0.0001,
   });
 }
 

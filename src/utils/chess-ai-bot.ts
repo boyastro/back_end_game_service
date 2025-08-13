@@ -2354,30 +2354,27 @@ export function getAllPossibleMoves(gameState: GameState): ChessMove[] {
   for (const position of piecesCoordinates) {
     const piece = board[position.y][position.x];
     if (piece) {
-      let pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
-
-      // Kiểm tra đặc biệt cho các nước ăn vua
-      if (opponentKingPos) {
-        const canAttackKing = checkIfCanAttackKing(
-          board,
-          position,
-          piece[1],
-          opponentKingPos
-        );
-        if (canAttackKing) {
-          pieceMoves.push({ from: position, to: opponentKingPos });
-        }
+      // Loại bỏ nước đi của quân bị ghim
+      if (isPiecePinned(board, position, colorPrefix)) {
+        // Nếu quân bị ghim, chỉ cho phép di chuyển trên đường thẳng giữa vua và quân tấn công
+        let pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
+        pieceMoves = pieceMoves.filter((move) => {
+          // Kiểm tra nước đi có nằm trên đường thẳng giữa vua và quân bị ghim không
+          // (giả lập nước đi, kiểm tra vua có bị chiếu không)
+          const nextState = makeMove(gameState, move);
+          return !isKingInCheck(nextState, colorPrefix);
+        });
+        moves.push(...pieceMoves);
+      } else {
+        // Quân không bị ghim, lấy tất cả nước đi hợp lệ
+        let pieceMoves = getMovesForPiece(gameState, position, piece, aiColor);
+        pieceMoves = pieceMoves.filter((move) => {
+          const nextState = makeMove(gameState, move);
+          return !isKingInCheck(nextState, colorPrefix);
+        });
+        moves.push(...pieceMoves);
       }
-
-      // Lọc nước đi hợp lệ: không làm vua bị chiếu sau khi đi
-      pieceMoves = pieceMoves.filter((move) => {
-        const nextState = makeMove(gameState, move);
-        // aiColor: "WHITE" | "BLACK" => "w" | "b"
-        const colorPrefix = aiColor === "WHITE" ? "w" : "b";
-        return !isKingInCheck(nextState, colorPrefix);
-      });
-
-      moves.push(...pieceMoves);
+      // ...existing code...
     }
   }
 
@@ -2748,7 +2745,7 @@ function getKingMoves(
     const initialRank = color === "WHITE" ? 7 : 0;
     const isInInitialPosition = pos.y === initialRank && pos.x === 4;
 
-    // If king is in initial position, only add castling moves or moves to escape check
+    // If king is in initial position, only add castling moves or moves to escape
     if (isInInitialPosition) {
       // Check if king is in check
       const inCheck = isSquareAttacked(board, pos, opponentPrefix);
