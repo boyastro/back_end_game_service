@@ -513,27 +513,44 @@ function cleanTranspositionTable() {
 
 // Kiểm tra nếu nước đi là ăn quân
 function isCaptureMove(board: ChessBoard, move: ChessMove): boolean {
+  // Kiểm tra hợp lệ đầu vào
+  if (
+    !board ||
+    !move ||
+    typeof move.to?.x !== "number" ||
+    typeof move.to?.y !== "number"
+  )
+    return false;
+  // Kiểm tra vị trí nằm trong bàn cờ
+  if (move.to.x < 0 || move.to.x > 7 || move.to.y < 0 || move.to.y > 7)
+    return false;
+  // Kiểm tra có quân ở vị trí đích
   return board[move.to.y][move.to.x] !== null;
 }
 
 // Cập nhật killer moves
 function updateKillerMoves(move: ChessMove, depth: number): void {
-  // Không thêm nếu đã có trong danh sách
+  // Kiểm tra hợp lệ đầu vào
   if (
-    !killerMoves[depth].some(
-      (m) =>
-        m.from.x === move.from.x &&
-        m.from.y === move.from.y &&
-        m.to.x === move.to.x &&
-        m.to.y === move.to.y
-    )
-  ) {
-    // Giới hạn số lượng killer moves ở mỗi độ sâu
-    if (killerMoves[depth].length >= 2) {
-      killerMoves[depth].pop(); // Loại bỏ nước cũ nhất
-    }
-
-    killerMoves[depth].unshift(move); // Thêm vào đầu danh sách
+    !move ||
+    typeof depth !== "number" ||
+    depth < 0 ||
+    depth >= killerMoves.length
+  )
+    return;
+  // Loại bỏ trùng lặp
+  killerMoves[depth] = killerMoves[depth].filter(
+    (m) =>
+      m.from.x !== move.from.x ||
+      m.from.y !== move.from.y ||
+      m.to.x !== move.to.x ||
+      m.to.y !== move.to.y
+  );
+  // Thêm vào đầu danh sách
+  killerMoves[depth].unshift(move);
+  // Giới hạn số lượng killer moves ở mỗi độ sâu
+  if (killerMoves[depth].length > 2) {
+    killerMoves[depth] = killerMoves[depth].slice(0, 2);
   }
 }
 
@@ -544,12 +561,76 @@ function orderMoves(
   depth: number,
   killers: ChessMove[]
 ): ChessMove[] {
-  // Sắp xếp các nước đi dựa trên đánh giá của evaluateBoard
+  // Ưu tiên: killer moves > nước ăn quân > nước chiếu > nước thường
   return [...moves].sort((a, b) => {
-    const scoreA = evaluateBoard(makeMove(gameState, a));
-    const scoreB = evaluateBoard(makeMove(gameState, b));
+    // Killer move ưu tiên nhất
+    const isKillerA = killers.some(
+      (m) =>
+        m.from.x === a.from.x &&
+        m.from.y === a.from.y &&
+        m.to.x === a.to.x &&
+        m.to.y === a.to.y
+    );
+    const isKillerB = killers.some(
+      (m) =>
+        m.from.x === b.from.x &&
+        m.from.y === b.from.y &&
+        m.to.x === b.to.x &&
+        m.to.y === b.to.y
+    );
+    if (isKillerA && !isKillerB) return -1;
+    if (!isKillerA && isKillerB) return 1;
+
+    // Nước ăn quân ưu tiên tiếp theo
+    const isCaptureA = isCaptureMove(gameState.board, a);
+    const isCaptureB = isCaptureMove(gameState.board, b);
+    if (isCaptureA && !isCaptureB) return -1;
+    if (!isCaptureA && isCaptureB) return 1;
+
+    // Nước chiếu (giả lập nước đi, kiểm tra vua đối phương bị chiếu)
+    const nextStateA = makeMove(gameState, a);
+    const nextStateB = makeMove(gameState, b);
+    const oppPrefix = gameState.aiColor === "WHITE" ? "b" : "w";
+    const kingPosA = findKingPosition(nextStateA.board, oppPrefix);
+    const kingPosB = findKingPosition(nextStateB.board, oppPrefix);
+    const isCheckA =
+      kingPosA &&
+      isSquareAttacked(
+        nextStateA.board,
+        kingPosA,
+        gameState.aiColor === "WHITE" ? "w" : "b"
+      );
+    const isCheckB =
+      kingPosB &&
+      isSquareAttacked(
+        nextStateB.board,
+        kingPosB,
+        gameState.aiColor === "WHITE" ? "w" : "b"
+      );
+    if (isCheckA && !isCheckB) return -1;
+    if (!isCheckA && isCheckB) return 1;
+
+    // Cuối cùng, sắp xếp theo đánh giá bàn cờ
+    const scoreA = evaluateBoard(nextStateA);
+    const scoreB = evaluateBoard(nextStateB);
     return scoreB - scoreA;
   });
+
+  // Hàm phụ tìm vị trí vua
+  function findKingPosition(
+    board: ChessBoard,
+    prefix: "w" | "b"
+  ): Position | null {
+    for (let y = 0; y < 8; y++) {
+      for (let x = 0; x < 8; x++) {
+        const piece = board[y][x];
+        if (piece && piece.startsWith(prefix) && piece[1] === "K") {
+          return { x, y };
+        }
+      }
+    }
+    return null;
+  }
 }
 
 // Hàm đánh giá bàn cờ nâng cao
