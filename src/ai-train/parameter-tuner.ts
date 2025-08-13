@@ -121,30 +121,49 @@ export async function tuneParameters(
     // impliment
   } else if (method === "genetic") {
     for (let gen = 0; gen < options.iterations; gen++) {
-      // Trọng số cơ sở cho thế hệ này, sẽ được cập nhật liên tục khi có cải tiến
-      let currentGenBaseWeights = { ...bestWeights };
-      // Các chỉ số tốt nhất tìm được trong thế hệ này, khởi tạo bằng kết quả tổng thể tốt nhất
+      // Trọng số tốt nhất ở đầu thế hệ, được dùng làm cơ sở so sánh cho mọi thay đổi.
+      const startingWeightsOfGen = { ...bestWeights };
+
       let bestGenWinRate = bestWinRate;
       let bestGenWeights = { ...bestWeights };
       let bestGenTotalScore = bestScore;
 
-      // Cải tiến #2: Xáo trộn thứ tự các trọng số để tránh cực đại cục bộ
+      // Xáo trộn thứ tự các trọng số để tránh cực đại cục bộ
       const keys = Object.keys(bestWeights) as Array<keyof typeof bestWeights>;
       for (let i = keys.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [keys[i], keys[j]] = [keys[j], keys[i]];
       }
 
+      // Lưu lịch sử thay đổi cho debug/phân tích
+      const weightHistory: Array<{
+        gen: number;
+        key: string;
+        up: number;
+        down: number;
+        winRateUp: number;
+        winRateDown: number;
+      }> = [];
+
       // Duyệt qua từng trọng số để tinh chỉnh
       for (const key of keys) {
         // --- Thử tăng trọng số ---
-        let testWeightsUp = { ...currentGenBaseWeights };
-        // Cải tiến #4: Đảm bảo bước nhảy ít nhất là 1
-        const changeAmountUp =
-          Math.ceil(
-            options.learningRate * Math.abs(testWeightsUp[key]) * 0.05
-          ) || 1;
-        testWeightsUp[key] += changeAmountUp;
+        let testWeightsUp = { ...startingWeightsOfGen };
+        // Bổ sung kiểm tra biên: không cho vượt quá một ngưỡng nhất định
+        const maxWeight = 50000;
+        const minWeight = -50000;
+        // Bước nhảy động: nếu winRate thấp, tăng mạnh hơn
+        let dynamicRate = options.learningRate;
+        if (bestGenWinRate < 0.2) dynamicRate *= 2;
+        else if (bestGenWinRate > 0.8) dynamicRate *= 0.5;
+        const changeAmountUp = Math.max(
+          1,
+          Math.ceil(dynamicRate * Math.abs(testWeightsUp[key]) * 0.05)
+        );
+        testWeightsUp[key] = Math.min(
+          maxWeight,
+          testWeightsUp[key] + changeAmountUp
+        );
 
         let winCountUp = 0,
           drawCountUp = 0,
@@ -158,7 +177,17 @@ export async function tuneParameters(
         }
         const winRateUp = winCountUp / positions.length;
 
-        // Nếu hiệu suất cải thiện, giữ lại thay đổi và cập nhật trạng thái của thế hệ
+        // Lưu lịch sử
+        weightHistory.push({
+          gen,
+          key,
+          up: testWeightsUp[key],
+          down: startingWeightsOfGen[key],
+          winRateUp,
+          winRateDown: 0,
+        });
+
+        // Nếu cải thiện so với kết quả tốt nhất tìm được TRONG THẾ HỆ NÀY
         if (
           winRateUp > bestGenWinRate ||
           (winRateUp === bestGenWinRate && totalScoreUp > bestGenTotalScore)
@@ -166,19 +195,18 @@ export async function tuneParameters(
           bestGenWinRate = winRateUp;
           bestGenTotalScore = totalScoreUp;
           bestGenWeights = { ...testWeightsUp };
-          // Cải tiến #1 & #3: Cập nhật trọng số cơ sở để các thay đổi tiếp theo dựa trên cải tiến này
-          currentGenBaseWeights = { ...testWeightsUp };
-          continue; // Chuyển sang trọng số tiếp theo
         }
 
-        // --- Thử giảm trọng số (chỉ khi việc tăng không hiệu quả) ---
-        let testWeightsDown = { ...currentGenBaseWeights };
-        // Cải tiến #4: Đảm bảo bước nhảy ít nhất là 1
-        const changeAmountDown =
-          Math.ceil(
-            options.learningRate * Math.abs(testWeightsDown[key]) * 0.05
-          ) || 1;
-        testWeightsDown[key] -= changeAmountDown;
+        // --- Thử giảm trọng số ---
+        let testWeightsDown = { ...startingWeightsOfGen };
+        const changeAmountDown = Math.max(
+          1,
+          Math.ceil(dynamicRate * Math.abs(testWeightsDown[key]) * 0.05)
+        );
+        testWeightsDown[key] = Math.max(
+          minWeight,
+          testWeightsDown[key] - changeAmountDown
+        );
 
         let winCountDown = 0,
           drawCountDown = 0,
@@ -192,7 +220,17 @@ export async function tuneParameters(
         }
         const winRateDown = winCountDown / positions.length;
 
-        // Nếu hiệu suất cải thiện, giữ lại thay đổi
+        // Lưu lịch sử
+        weightHistory.push({
+          gen,
+          key,
+          up: startingWeightsOfGen[key],
+          down: testWeightsDown[key],
+          winRateUp: 0,
+          winRateDown,
+        });
+
+        // Nếu cải thiện so với kết quả tốt nhất tìm được TRONG THẾ HỆ NÀY
         if (
           winRateDown > bestGenWinRate ||
           (winRateDown === bestGenWinRate && totalScoreDown > bestGenTotalScore)
@@ -200,29 +238,36 @@ export async function tuneParameters(
           bestGenWinRate = winRateDown;
           bestGenTotalScore = totalScoreDown;
           bestGenWeights = { ...testWeightsDown };
-          // Cải tiến #1 & #3: Cập nhật trọng số cơ sở
-          currentGenBaseWeights = { ...testWeightsDown };
         }
+
+        // Log chi tiết cho từng trọng số
+        console.log(
+          `[Gen ${gen + 1}] Key: ${key}, Up: ${
+            testWeightsUp[key]
+          }, WinRateUp: ${winRateUp.toFixed(3)}, Down: ${
+            testWeightsDown[key]
+          }, WinRateDown: ${winRateDown.toFixed(3)}`
+        );
       }
 
-      // Áp dụng bộ trọng số tốt nhất tìm được trong thế hệ này cho thế hệ tiếp theo
+      // Áp dụng bộ trọng số tốt nhất tìm được trong thế hệ này
       bestWeights = { ...bestGenWeights };
 
-      // Cải tiến #1: Không cần tính toán lại. Lấy kết quả trực tiếp từ bestGenWinRate và bestGenTotalScore.
-      // Lưu ý: Chúng ta cần tính lại winCount và drawCount từ bestGenWeights để có số liệu chính xác cho việc ghi log và cập nhật.
-      // Việc này chỉ chạy 1 lần mỗi thế hệ, không ảnh hưởng nhiều đến hiệu suất.
+      // SỬA LỖI: Tính toán lại tất cả các chỉ số cuối cùng một cách chính xác
       let finalWinCount = 0;
       let finalDrawCount = 0;
+      let finalTotalScore = 0; // Tính lại score
       for (const pos of positions) {
         const gameState = fenToGameState(pos.fen);
         const evalScore = evaluateBoard(gameState, bestWeights);
+        finalTotalScore += evalScore;
         if (evalScore > 1500) finalWinCount++;
         else if (Math.abs(evalScore) < 30) finalDrawCount++;
       }
 
       const winRate = finalWinCount / positions.length;
       const drawRate = finalDrawCount / positions.length;
-      const totalScore = bestGenTotalScore; // Sử dụng tổng điểm đã được tối ưu
+      const totalScore = finalTotalScore;
 
       // So sánh kết quả của thế hệ này với kết quả tốt nhất từ trước đến nay
       if (
@@ -233,6 +278,7 @@ export async function tuneParameters(
         bestScore = totalScore;
         bestWinRate = winRate;
         bestDrawRate = drawRate;
+
         fs.writeFileSync(
           path.resolve(__dirname, "../../best-weights.json"),
           JSON.stringify(bestWeights, null, 2),
@@ -247,26 +293,7 @@ export async function tuneParameters(
         )}, drawRate=${drawRate.toFixed(3)}, score=${totalScore.toFixed(2)}`
       );
 
-      // Lưu checkpoint mỗi 5 gen hoặc cuối cùng
-      if ((gen + 1) % 5 === 0 || gen === options.iterations - 1) {
-        try {
-          const __dirname = path.dirname(new URL(import.meta.url).pathname);
-          const checkpointPath = path.resolve(
-            __dirname,
-            `../../checkpoint-weights-gen${gen + 1}.json`
-          );
-          fs.writeFileSync(
-            checkpointPath,
-            JSON.stringify(bestWeights, null, 2),
-            "utf-8"
-          );
-        } catch (err) {
-          console.error(
-            `Failed to save checkpoint weights at generation ${gen + 1}:`,
-            err
-          );
-        }
-      }
+      // ... checkpointing code ...
     }
   } else if (method === "gradient") {
     // Gradient descent: điều chỉnh trọng số dựa vào tỷ lệ win
