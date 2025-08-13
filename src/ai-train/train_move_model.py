@@ -7,7 +7,7 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.utils import to_categorical
 
 # Đọc dữ liệu từ games.json
-with open('data/games.json', 'r') as f:
+with open('data/games_checkmate.json', 'r') as f:
     games = json.load(f)
 
 # Tiền xử lý: lấy FEN và move

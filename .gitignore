@@ -47,3 +47,4 @@ checkpoint-weights-gen20.json
 checkpoint-weights-gen25.json
 checkpoint-weights-gen30.json
 ./venv310
+data/games_checkmate.json
