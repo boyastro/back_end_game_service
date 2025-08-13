@@ -47,6 +47,7 @@ export async function tuneParameters(
   );
 
   // Khởi tạo trọng số ban đầu, tải từ file nếu có
+  const __dirname = path.dirname(new URL(import.meta.url).pathname);
   let bestWeights = {
     pawn: 100,
     knight: 320,
@@ -99,7 +100,7 @@ export async function tuneParameters(
 
   // Tải trọng số tốt nhất từ file nếu có
   try {
-    const __dirname = path.dirname(new URL(import.meta.url).pathname);
+    // __dirname đã được khai báo ở đầu hàm
     const weightsPath = path.resolve(__dirname, "../../best-weights.json");
     if (fs.existsSync(weightsPath)) {
       const savedWeights = JSON.parse(fs.readFileSync(weightsPath, "utf-8"));
@@ -214,7 +215,7 @@ export async function tuneParameters(
           }
         }
       }
-      // Cập nhật bestScore, bestWinRate, bestDrawRate nếu cải thiện
+      // Chỉ cập nhật bestWeights, bestWinRate, bestDrawRate nếu gen này thực sự cải thiện
       if (
         winRate > bestWinRate ||
         (winRate === bestWinRate && totalScore > bestScore)
@@ -222,6 +223,12 @@ export async function tuneParameters(
         bestScore = totalScore;
         bestWinRate = winRate;
         bestDrawRate = drawRate;
+        // Lưu lại bestWeights của gen tốt nhất
+        fs.writeFileSync(
+          path.resolve(__dirname, "../../best-weights.json"),
+          JSON.stringify(bestWeights, null, 2),
+          "utf-8"
+        );
       }
       console.log(
         `Gen ${gen + 1}/${options.iterations}: winRate=${winRate.toFixed(
@@ -319,7 +326,7 @@ export async function tuneParameters(
 
   // Save best weights to file
   // Fix __dirname for ES modules
-  const __dirname = path.dirname(new URL(import.meta.url).pathname);
+  // __dirname đã được khai báo ở đầu hàm
   const weightsPath = path.resolve(__dirname, "../../best-weights.json");
   try {
     fs.writeFileSync(
