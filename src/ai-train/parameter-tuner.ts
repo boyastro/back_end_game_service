@@ -120,24 +120,32 @@ export async function tuneParameters(
   if (method === "random") {
     // impliment
   } else if (method === "genetic") {
-    // Đơn giản hóa: chỉ tăng/giảm trọng số dựa trên tỷ lệ win, không lai tạo/crossover
     for (let gen = 0; gen < options.iterations; gen++) {
-      let winCount = 0;
-      let drawCount = 0;
-      let totalScore = 0;
-      // ...existing code...
-      // Gradient/Random Search: thử tăng/giảm từng trọng số một cách riêng biệt
-      const initialWeights = { ...bestWeights };
+      // Trọng số cơ sở cho thế hệ này, sẽ được cập nhật liên tục khi có cải tiến
+      let currentGenBaseWeights = { ...bestWeights };
+      // Các chỉ số tốt nhất tìm được trong thế hệ này, khởi tạo bằng kết quả tổng thể tốt nhất
       let bestGenWinRate = bestWinRate;
       let bestGenWeights = { ...bestWeights };
-      for (const key of Object.keys(bestWeights) as Array<
-        keyof typeof bestWeights
-      >) {
-        // Thử tăng trọng số
-        let testWeightsUp = { ...bestWeights };
-        testWeightsUp[key] += Math.ceil(
-          options.learningRate * Math.abs(testWeightsUp[key]) * 0.05
-        );
+      let bestGenTotalScore = bestScore;
+
+      // Cải tiến #2: Xáo trộn thứ tự các trọng số để tránh cực đại cục bộ
+      const keys = Object.keys(bestWeights) as Array<keyof typeof bestWeights>;
+      for (let i = keys.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [keys[i], keys[j]] = [keys[j], keys[i]];
+      }
+
+      // Duyệt qua từng trọng số để tinh chỉnh
+      for (const key of keys) {
+        // --- Thử tăng trọng số ---
+        let testWeightsUp = { ...currentGenBaseWeights };
+        // Cải tiến #4: Đảm bảo bước nhảy ít nhất là 1
+        const changeAmountUp =
+          Math.ceil(
+            options.learningRate * Math.abs(testWeightsUp[key]) * 0.05
+          ) || 1;
+        testWeightsUp[key] += changeAmountUp;
+
         let winCountUp = 0,
           drawCountUp = 0,
           totalScoreUp = 0;
@@ -149,17 +157,29 @@ export async function tuneParameters(
           else if (Math.abs(evalScore) < 30) drawCountUp++;
         }
         const winRateUp = winCountUp / positions.length;
-        // Nếu winRateUp cải thiện, giữ lại thay đổi
-        if (winRateUp > bestGenWinRate) {
+
+        // Nếu hiệu suất cải thiện, giữ lại thay đổi và cập nhật trạng thái của thế hệ
+        if (
+          winRateUp > bestGenWinRate ||
+          (winRateUp === bestGenWinRate && totalScoreUp > bestGenTotalScore)
+        ) {
           bestGenWinRate = winRateUp;
+          bestGenTotalScore = totalScoreUp;
           bestGenWeights = { ...testWeightsUp };
-          continue;
+          // Cải tiến #1 & #3: Cập nhật trọng số cơ sở để các thay đổi tiếp theo dựa trên cải tiến này
+          currentGenBaseWeights = { ...testWeightsUp };
+          continue; // Chuyển sang trọng số tiếp theo
         }
-        // Thử giảm trọng số
-        let testWeightsDown = { ...bestWeights };
-        testWeightsDown[key] -= Math.ceil(
-          options.learningRate * Math.abs(testWeightsDown[key]) * 0.05
-        );
+
+        // --- Thử giảm trọng số (chỉ khi việc tăng không hiệu quả) ---
+        let testWeightsDown = { ...currentGenBaseWeights };
+        // Cải tiến #4: Đảm bảo bước nhảy ít nhất là 1
+        const changeAmountDown =
+          Math.ceil(
+            options.learningRate * Math.abs(testWeightsDown[key]) * 0.05
+          ) || 1;
+        testWeightsDown[key] -= changeAmountDown;
+
         let winCountDown = 0,
           drawCountDown = 0,
           totalScoreDown = 0;
@@ -171,45 +191,62 @@ export async function tuneParameters(
           else if (Math.abs(evalScore) < 30) drawCountDown++;
         }
         const winRateDown = winCountDown / positions.length;
-        // Nếu winRateDown cải thiện, giữ lại thay đổi
-        if (winRateDown > bestGenWinRate) {
+
+        // Nếu hiệu suất cải thiện, giữ lại thay đổi
+        if (
+          winRateDown > bestGenWinRate ||
+          (winRateDown === bestGenWinRate && totalScoreDown > bestGenTotalScore)
+        ) {
           bestGenWinRate = winRateDown;
+          bestGenTotalScore = totalScoreDown;
           bestGenWeights = { ...testWeightsDown };
+          // Cải tiến #1 & #3: Cập nhật trọng số cơ sở
+          currentGenBaseWeights = { ...testWeightsDown };
         }
       }
-      // Áp dụng bestGenWeights cho gen tiếp theo
+
+      // Áp dụng bộ trọng số tốt nhất tìm được trong thế hệ này cho thế hệ tiếp theo
       bestWeights = { ...bestGenWeights };
-      // Tính lại winCount, drawCount, totalScore cho gen này
-      // ...existing code...
+
+      // Cải tiến #1: Không cần tính toán lại. Lấy kết quả trực tiếp từ bestGenWinRate và bestGenTotalScore.
+      // Lưu ý: Chúng ta cần tính lại winCount và drawCount từ bestGenWeights để có số liệu chính xác cho việc ghi log và cập nhật.
+      // Việc này chỉ chạy 1 lần mỗi thế hệ, không ảnh hưởng nhiều đến hiệu suất.
+      let finalWinCount = 0;
+      let finalDrawCount = 0;
       for (const pos of positions) {
         const gameState = fenToGameState(pos.fen);
         const evalScore = evaluateBoard(gameState, bestWeights);
-        totalScore += evalScore;
-        if (evalScore > 1500) winCount++;
-        else if (Math.abs(evalScore) < 30) drawCount++;
+        if (evalScore > 1500) finalWinCount++;
+        else if (Math.abs(evalScore) < 30) finalDrawCount++;
       }
-      const winRate = winCount / positions.length;
-      const drawRate = drawCount / positions.length;
-      // Chỉ cập nhật bestWeights, bestWinRate, bestDrawRate nếu gen này thực sự cải thiện
+
+      const winRate = finalWinCount / positions.length;
+      const drawRate = finalDrawCount / positions.length;
+      const totalScore = bestGenTotalScore; // Sử dụng tổng điểm đã được tối ưu
+
+      // So sánh kết quả của thế hệ này với kết quả tốt nhất từ trước đến nay
       if (
         winRate > bestWinRate ||
         (winRate === bestWinRate && totalScore > bestScore)
       ) {
+        console.log(`\n--- NEW BEST FOUND at Gen ${gen + 1} ---`);
         bestScore = totalScore;
         bestWinRate = winRate;
         bestDrawRate = drawRate;
-        // Lưu lại bestWeights của gen tốt nhất
         fs.writeFileSync(
           path.resolve(__dirname, "../../best-weights.json"),
           JSON.stringify(bestWeights, null, 2),
           "utf-8"
         );
+        console.log("Saved new best weights to best-weights.json");
       }
+
       console.log(
         `Gen ${gen + 1}/${options.iterations}: winRate=${winRate.toFixed(
           3
         )}, drawRate=${drawRate.toFixed(3)}, score=${totalScore.toFixed(2)}`
       );
+
       // Lưu checkpoint mỗi 5 gen hoặc cuối cùng
       if ((gen + 1) % 5 === 0 || gen === options.iterations - 1) {
         try {
