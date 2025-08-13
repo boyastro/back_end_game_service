@@ -146,7 +146,7 @@ async function generateSelfPlayGame(
       const scores = evaluatedMoves.map((m) => m.score);
       const maxScore = Math.max(...scores);
       // Để tránh tràn số, trừ maxScore trước khi exp
-      const expScores = scores.map((s) => Math.exp((s - maxScore) / 100));
+      const expScores = scores.map((s) => Math.exp((s - maxScore) / 500));
       const sumExp = expScores.reduce((a, b) => a + b, 0);
       const probs = expScores.map((e) => e / sumExp);
       // Chọn theo phân phối xác suất

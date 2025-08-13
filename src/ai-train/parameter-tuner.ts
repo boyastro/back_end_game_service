@@ -122,7 +122,7 @@ export async function tuneParameters(
   } else if (method === "genetic") {
     // Simulated Annealing
     let temperature = 1.0;
-    const coolingRate = 0.97; // Giảm nhiệt độ mỗi thế hệ
+    const coolingRate = 0.98; // Giảm nhiệt độ mỗi thế hệ
     const minTemperature = 0.001;
     const maxWeight = 50000;
     const minWeight = -50000;
