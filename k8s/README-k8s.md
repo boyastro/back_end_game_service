@@ -417,12 +417,12 @@ scp -i my-ec2-key.pem ec2-user@54.179.50.108:~/\*.yaml ~/Desktop/
 
 # Copy file từ local lên Ec2
 
-scp -i my-ec2-key.pem ./k3s/haproxy-deployment.yaml ec2-user@54.179.50.108:/home/ec2-user/
+scp -i my-ec2-key.pem ./k3s/app-deployment.yaml ec2-user@54.179.50.108:/home/ec2-user/
 
 # Copy file từ Modal từ local lên Ec2
 
-scp -i my-ec2-key.pem ./tfjs_model/model.json ec2-user@54.179.50.108:/home/ec2-user/
-scp -i my-ec2-key.pem ./tfjs_model/group1-shard1of1.bin ec2-user@54.179.50.108:/home/ec2-user/
+scp -i my-ec2-key.pem ./tfjs_model/model.json ec2-user@54.179.50.108:/home/ec2-user/model
+scp -i my-ec2-key.pem ./tfjs_model/group1-shard1of1.bin ec2-user@54.179.50.108:/home/ec2-user/model
 
 # Tạo Docker mới chạy trên linux(t2.micro)
 

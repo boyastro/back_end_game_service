@@ -45,7 +45,7 @@ spec:
       volumes:
         - name: model-volume
           hostPath:
-            path: /home/ec2-user
+            path: /home/ec2-user/model
             type: Directory
 ---
 apiVersion: v1
