@@ -3,7 +3,7 @@ import { Chess } from "chess.js";
 
 // Load model (async)
 export async function predictMoveQuality(fen: string): Promise<number> {
-  const model = await tf.loadLayersModel("file://app/model/model.json");
+  const model = await tf.loadLayersModel("file://model/model.json");
 
   function fenToMatrix(fen: string): number[] {
     const board = new Chess(fen);
