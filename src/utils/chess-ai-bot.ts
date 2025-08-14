@@ -1,4 +1,4 @@
-import { generateAIMoveWithPythonModel } from "./python-move-quality";
+import { generateAIMoveWithTSModel } from "./python-move-quality";
 /**
  * Sử dụng mô hình Python để chọn nước đi tốt nhất
  * @param gameState trạng thái ván cờ
@@ -8,7 +8,7 @@ export async function generateAIMovePythonModel(
   gameState: GameState
 ): Promise<ChessMove | null> {
   // Sử dụng hàm getAllPossibleMoves và mô hình Python
-  return await generateAIMoveWithPythonModel(gameState, getAllPossibleMoves);
+  return await generateAIMoveWithTSModel(gameState, getAllPossibleMoves);
 }
 
 import { loadBestWeights } from "./load-weights.js";
