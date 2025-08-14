@@ -1,3 +1,16 @@
+import { generateAIMoveWithTSModel } from "./python-move-quality.js";
+/**
+ * Sử dụng mô hình Python để chọn nước đi tốt nhất
+ * @param gameState trạng thái ván cờ
+ * @returns Promise<ChessMove | null>
+ */
+export async function generateAIMovePythonModel(
+  gameState: GameState
+): Promise<ChessMove | null> {
+  // Sử dụng hàm getAllPossibleMoves và mô hình Python
+  return await generateAIMoveWithTSModel(gameState, getAllPossibleMoves);
+}
+
 import { loadBestWeights } from "./load-weights.js";
 import {
   evaluateMissingWeights,

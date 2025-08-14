@@ -419,6 +419,10 @@ scp -i my-ec2-key.pem ec2-user@54.179.50.108:~/\*.yaml ~/Desktop/
 
 scp -i my-ec2-key.pem ./k3s/haproxy-deployment.yaml ec2-user@54.179.50.108:/home/ec2-user/
 
+# Copy file từ Modal từ local lên Ec2
+
+scp -i my-ec2-key.pem ./tfjs_model/model.json ec2-user@54.179.50.108:/home/ec2-user/
+
 # Tạo Docker mới chạy trên linux(t2.micro)
 
 docker buildx build --platform linux/amd64 -t boyastro/app:latest . --push

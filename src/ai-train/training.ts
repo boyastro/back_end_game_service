@@ -180,9 +180,9 @@ export async function runTrainingCycle(
 export async function quickTrain(): Promise<EvaluationMetrics> {
   return runTrainingCycle({
     selfPlayGames: 100,
-    positionsPerGame: 100000,
+    positionsPerGame: 1,
     maxDepth: 4,
-    iterations: 3, // Tăng từ 10 lên 30 thế hệ
+    iterations: 1, // Tăng từ 10 lên 30 thế hệ
     learningRate: 0.00001,
   });
 }
