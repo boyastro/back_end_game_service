@@ -1,4 +1,4 @@
-import { generateAIMoveWithTSModel } from "./python-move-quality";
+import { generateAIMoveWithTSModel } from "./python-move-quality.js";
 /**
  * Sử dụng mô hình Python để chọn nước đi tốt nhất
  * @param gameState trạng thái ván cờ
