@@ -10,7 +10,6 @@ export async function generateAIMovePythonModel(
   // Sử dụng hàm getAllPossibleMoves và mô hình Python
   return await generateAIMoveWithPythonModel(gameState, getAllPossibleMoves);
 }
-
 import { loadBestWeights } from "./load-weights.js";
 import {
   evaluateMissingWeights,

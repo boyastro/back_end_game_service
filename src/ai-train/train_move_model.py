@@ -58,8 +58,13 @@ model = Sequential([
 ])
 
 model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
 model.fit(X_train, y_train, epochs=10, batch_size=64, validation_split=0.1)
 
 # Đánh giá mô hình
 loss, acc = model.evaluate(X_test, y_test)
 print(f"Neural Network move quality classification accuracy: {acc:.4f}")
+
+# Lưu mô hình sau khi huấn luyện
+model.save('model_move_quality.h5')
+print("Đã lưu mô hình vào file model_move_quality.h5")

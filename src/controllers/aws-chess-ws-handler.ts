@@ -6,7 +6,10 @@ import {
 
 import { Request, Response } from "express";
 import redisClient from "../utils/redisClient.js";
-import { generateAIMove } from "../utils/chess-ai-bot.js";
+import {
+  generateAIMove,
+  generateAIMovePythonModel,
+} from "../utils/chess-ai-bot.js";
 
 interface GameState {
   board: (string | null)[][];
@@ -1030,17 +1033,34 @@ export const moveHandler = async (req: any, res: any) => {
       // Đợi một chút để tạo cảm giác AI đang "suy nghĩ"
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Xác định màu của AI (ngược với người chơi hiện tại)
-      const aiColor = game.currentPlayer; // Lúc này currentPlayer đã được chuyển sang đối thủ      // Tạo nước đi cho AI - truyền một đối tượng GameState như định nghĩa trong chess-ai-bot.ts
-      const aiMove = generateAIMove({
-        board: game.board,
-        aiColor: aiColor as "WHITE" | "BLACK", // Ép kiểu để phù hợp với định nghĩa GameState
-        castlingRights: {
-          w: { k: true, q: true },
-          b: { k: true, q: true },
-        },
-        enPassantTarget: null,
-      });
+      // Tuỳ chọn sử dụng AI truyền thống hoặc AI học sâu
+      // Có thể lấy từ biến môi trường, config, hoặc truyền từ client
+      const usePythonModel = true;
+      const aiColor = game.currentPlayer;
+      let aiMove;
+      if (usePythonModel) {
+        // Sử dụng AI học sâu (Python)
+        aiMove = await generateAIMovePythonModel({
+          board: game.board,
+          aiColor: aiColor as "WHITE" | "BLACK",
+          castlingRights: {
+            w: { k: true, q: true },
+            b: { k: true, q: true },
+          },
+          enPassantTarget: null,
+        });
+      } else {
+        // Sử dụng AI truyền thống
+        aiMove = generateAIMove({
+          board: game.board,
+          aiColor: aiColor as "WHITE" | "BLACK",
+          castlingRights: {
+            w: { k: true, q: true },
+            b: { k: true, q: true },
+          },
+          enPassantTarget: null,
+        });
+      }
 
       if (aiMove) {
         console.log(
