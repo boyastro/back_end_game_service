@@ -428,3 +428,12 @@ scp -i my-ec2-key.pem ./tfjs_model/group1-shard1of1.bin ec2-user@54.179.50.108:/
 # Tạo Docker mới chạy trên linux(t2.micro)
 
 docker buildx build --platform linux/amd64 -t boyastro/app:latest . --push
+
+# Gỡ cài đặt K3s
+
+sudo /usr/local/bin/k3s-uninstall.sh
+
+# Xóa dữ liệu cũ (nếu muốn sạch hoàn toàn)
+
+sudo rm -rf /etc/rancher/k3s
+sudo rm -rf /var/lib/rancher/k3s
