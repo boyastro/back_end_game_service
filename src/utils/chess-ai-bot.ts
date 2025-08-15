@@ -1,3 +1,16 @@
+import { generateAIMoveWithTSModel } from "./python-move-quality.js";
+/**
+ * Sử dụng mô hình Python để chọn nước đi tốt nhất
+ * @param gameState trạng thái ván cờ
+ * @returns Promise<ChessMove | null>
+ */
+export async function generateAIMovePythonModel(
+  gameState: GameState
+): Promise<ChessMove | null> {
+  // Sử dụng hàm getAllPossibleMoves và mô hình Python
+  return await generateAIMoveWithTSModel(gameState, getAllPossibleMoves);
+}
+
 import { loadBestWeights } from "./load-weights.js";
 import {
   evaluateMissingWeights,
@@ -2264,12 +2277,7 @@ export function evaluateBoard(gameState: GameState, weights?: any): number {
     score = Math.round(score / 10) * 10;
   }
 
-  // Chuẩn hóa: Scale điểm số về khoảng [-1000, 1000] để dễ so sánh các trạng thái
-  // Nếu điểm quá lớn (ví dụ chiếu hết), giữ nguyên
-  if (score > 100000 || score < -100000) return score;
-  // Scale về [-1000, 1000]
-  const scaledScore = Math.max(-1000, Math.min(1000, score));
-  return scaledScore;
+  return score;
 }
 
 // Kiểm tra một ô có bị tấn công bởi màu nào đó không

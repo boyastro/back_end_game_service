@@ -1,6 +1,6 @@
 // Chess AI Training Coordinator
 
-import { resetSelfPlayDataset, generateSelfPlayGames } from "./self-play.js";
+import { generateSelfPlayGames } from "./self-play.js";
 import { evaluatePositions } from "./evaluator.js";
 import { tuneParameters } from "./parameter-tuner.js";
 import { getOpeningPositions, getEndgamePositions } from "./utils.js";
@@ -37,7 +37,6 @@ export async function runTrainingCycle(
 
   // Step 1: Generate self-play games
   console.log(`Generating ${fullConfig.selfPlayGames} self-play games...`);
-  await resetSelfPlayDataset();
   const gameIds = await generateSelfPlayGames(fullConfig.selfPlayGames, {
     maxDepth: fullConfig.maxDepth,
   });
@@ -181,9 +180,9 @@ export async function runTrainingCycle(
 export async function quickTrain(): Promise<EvaluationMetrics> {
   return runTrainingCycle({
     selfPlayGames: 100,
-    positionsPerGame: 100000,
+    positionsPerGame: 1,
     maxDepth: 4,
-    iterations: 3, // Tăng từ 10 lên 30 thế hệ
+    iterations: 1, // Tăng từ 10 lên 30 thế hệ
     learningRate: 0.00001,
   });
 }
