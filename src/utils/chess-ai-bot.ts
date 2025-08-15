@@ -8,7 +8,7 @@ export async function generateAIMovePythonModel(
   gameState: GameState
 ): Promise<ChessMove | null> {
   // Sử dụng hàm getAllPossibleMoves và mô hình Python
-  return await generateAIMoveWithTSModel(gameState, getAllPossibleMoves);
+  return await generateAIMoveWithTSModel(gameState);
 }
 
 import { loadBestWeights } from "./load-weights.js";
@@ -3121,7 +3121,11 @@ function addCastlingMoves(
 // Chuyển bàn cờ sang FEN đơn giản (chỉ dùng cho kiểm tra lặp lại)
 export function boardToFEN(
   board: ChessBoard,
-  aiColor: "WHITE" | "BLACK"
+  aiColor: "WHITE" | "BLACK",
+  castlingRights?: string,
+  enPassantTarget?: string,
+  halfmove?: number,
+  fullmove?: number
 ): string {
   let fen = "";
   for (let y = 0; y < 8; y++) {
@@ -3135,13 +3139,30 @@ export function boardToFEN(
           fen += empty;
           empty = 0;
         }
-        fen += piece;
+        // Chuyển ký hiệu quân cờ về chuẩn FEN
+        // "wP" -> "P", "bK" -> "k"
+        if (typeof piece === "string" && piece.length === 2) {
+          const color = piece[0];
+          const type = piece[1];
+          fen += color === "w" ? type.toUpperCase() : type.toLowerCase();
+        } else {
+          fen += piece;
+        }
       }
     }
     if (empty > 0) fen += empty;
     if (y < 7) fen += "/";
   }
+  // Lượt đi
   fen += " " + (aiColor === "WHITE" ? "w" : "b");
+  // Quyền nhập thành
+  fen += " " + (castlingRights ?? "KQkq");
+  // En passant
+  fen += " " + (enPassantTarget ?? "-");
+  // Halfmove clock
+  fen += " " + (typeof halfmove === "number" ? halfmove : 0);
+  // Fullmove number
+  fen += " " + (typeof fullmove === "number" ? fullmove : 1);
   return fen;
 }
 
