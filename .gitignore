@@ -38,6 +38,7 @@ data/games.json
 data/positions.json
 best-weights.json
 checkpoint-weights-gen5.json
+venv310/
 .gitignore
 checkpoint-weights-gen15.json
 checkpoint-weights-gen10.json
@@ -45,3 +46,7 @@ src/ai-train/training.ts
 checkpoint-weights-gen20.json
 checkpoint-weights-gen25.json
 checkpoint-weights-gen30.json
+./venv310
+data/games_checkmate.json
+model_move_quality.h5
+tfjs_model/
