@@ -39,6 +39,7 @@
     "@types/mongoose": "^5.11.96",
     "@types/stripe": "^8.0.416",
     "bcrypt": "^6.0.0",
+    "chess.js": "^1.4.0",
     "dotenv": "^17.0.1",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",

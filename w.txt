@@ -41,3 +41,5 @@
   "pawnStructure": 25,
   "centralPawnDuo": 30
 }
+
+source venv310/bin/activate
