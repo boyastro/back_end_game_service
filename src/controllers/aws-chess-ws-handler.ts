@@ -1035,7 +1035,7 @@ export const moveHandler = async (req: any, res: any) => {
 
       // Tuỳ chọn sử dụng AI truyền thống hoặc AI học sâu
       // Có thể lấy từ biến môi trường, config, hoặc truyền từ client
-      const usePythonModel = true;
+      const usePythonModel = false;
       const aiColor = game.currentPlayer;
       let aiMove;
       if (usePythonModel) {

@@ -34,7 +34,6 @@
   "dependencies": {
     "@aws-sdk/client-apigatewaymanagementapi": "^3.840.0",
     "@socket.io/redis-adapter": "^8.3.0",
-    "@tensorflow/tfjs-node": "^4.22.0",
     "@types/bcrypt": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/mongoose": "^5.11.96",

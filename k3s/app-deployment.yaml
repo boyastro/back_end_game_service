@@ -39,14 +39,6 @@ spec:
               value: "EfjklV94q5tHIzOFMYKFf5SQUEelV1SIgvpPbcDZ"
             - name: AWS_REGION
               value: "ap-southeast-1"
-          volumeMounts:
-            - name: model-volume
-              mountPath: /app/model
-      volumes:
-        - name: model-volume
-          hostPath:
-            path: /home/ec2-user/model
-            type: Directory
 ---
 apiVersion: v1
 kind: Service
