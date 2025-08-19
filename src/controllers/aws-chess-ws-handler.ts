@@ -173,18 +173,46 @@ function isValidMove(
   return true;
 }
 
+// Checkmate logic: return "WHITE" if black is checkmated, "BLACK" if white is checkmated, null otherwise
+import { fenToGameState, boardToFEN } from "../ai-train/utils";
+import { getAllPossibleMoves, isSquareAttacked } from "../utils/chess-ai-bot";
+
 function checkWinner(board: (string | null)[][]): string | null {
-  // TODO: Implement real chess checkmate/stalemate detection. For demo, just check if one king is missing.
-  let whiteKing = false,
-    blackKing = false;
+  // Check for checkmate for both sides
+  // Assume white = "w", black = "b"
+  // Find both kings
+  let whiteKing = null,
+    blackKing = null;
   for (let y = 0; y < 8; y++) {
     for (let x = 0; x < 8; x++) {
-      if (board[y][x] === "wK") whiteKing = true;
-      if (board[y][x] === "bK") blackKing = true;
+      if (board[y][x] === "wK") whiteKing = { x, y };
+      if (board[y][x] === "bK") blackKing = { x, y };
     }
   }
-  if (!whiteKing) return "BLACK";
-  if (!blackKing) return "WHITE";
+  if (!whiteKing || !blackKing) return null; // If a king is missing, invalid state
+
+  // Check if black is checkmated
+  const blackState = {
+    board,
+    aiColor: "BLACK" as "BLACK",
+    castlingRights: { w: { k: true, q: true }, b: { k: true, q: true } },
+    enPassantTarget: null,
+  };
+  const blackMoves = getAllPossibleMoves(blackState);
+  const blackInCheck = isSquareAttacked(board, blackKing, "w");
+  if (blackMoves.length === 0 && blackInCheck) return "WHITE";
+
+  // Check if white is checkmated
+  const whiteState = {
+    board,
+    aiColor: "WHITE" as "WHITE",
+    castlingRights: { w: { k: true, q: true }, b: { k: true, q: true } },
+    enPassantTarget: null,
+  };
+  const whiteMoves = getAllPossibleMoves(whiteState);
+  const whiteInCheck = isSquareAttacked(board, whiteKing, "b");
+  if (whiteMoves.length === 0 && whiteInCheck) return "BLACK";
+
   return null;
 }
 
