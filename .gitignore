@@ -50,3 +50,4 @@ checkpoint-weights-gen30.json
 data/games_checkmate.json
 model_move_quality.h5
 tfjs_model/
+k3s/
