@@ -414,6 +414,11 @@ kubectl apply -f redis-deployment.yaml
 kubectl apply -f app-deployment.yaml
 kubectl apply -f nginx-configmap.yaml
 kubectl apply -f nginx-deployment.yaml
+
+# Quan trọng cài cái này trước Haproxy
+
+kubectl create secret generic haproxy-ssl --from-file=haproxy.pem=/home/ec2-user/haproxy.pem
+
 kubectl apply -f haproxy-deployment.yaml
 
 # Copy file từ server về Destop

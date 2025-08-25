@@ -45,9 +45,10 @@ kind: Service
 metadata:
   name: app
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: app
   ports:
     - port: 3000
       targetPort: 3000
+      nodePort: 30081
