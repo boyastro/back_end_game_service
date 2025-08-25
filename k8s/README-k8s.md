@@ -399,6 +399,7 @@ kubectl logs -l app=app -f
 
 kubectl delete -f app-deployment.yaml
 kubectl apply -f app-deployment.yaml
+
 kubectl delete pod --all
 
 # Khởi động lại k3s
@@ -408,8 +409,12 @@ sudo systemctl restart k3s
 # Áp dụng cho Folder hiện tại
 
 kubectl apply -f .
-
-test
+sudo /usr/local/bin/k3s kubectl get pods
+kubectl apply -f redis-deployment.yaml
+kubectl apply -f app-deployment.yaml
+kubectl apply -f nginx-configmap.yaml
+kubectl apply -f nginx-deployment.yaml
+kubectl apply -f haproxy-deployment.yaml
 
 # Copy file từ server về Destop
 
@@ -433,7 +438,15 @@ docker buildx build --platform linux/amd64 -t boyastro/app:latest . --push
 
 sudo /usr/local/bin/k3s-uninstall.sh
 
+# Cài đặt K3s
+
+curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_SELINUX_RPM=true sh -
+
 # Xóa dữ liệu cũ (nếu muốn sạch hoàn toàn)
 
 sudo rm -rf /etc/rancher/k3s
 sudo rm -rf /var/lib/rancher/k3s
+
+# Kiểm tra sự kiện (events) liên quan đến Redis:
+
+kubectl describe pod -l app=redis
